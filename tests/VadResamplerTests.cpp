@@ -1,6 +1,7 @@
 #include "VadResampler.h"
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace {
@@ -46,7 +47,8 @@ void runVadResamplerTests() {
     resampler.reset();
     requireResampler(!resampler.processSample(0.5f, output),
                      "First sample after reset establishes interpolation history");
-    requireResampler(resampler.processSample(std::numeric_limits<float>::quiet_NaN(), output)
-                     || std::isfinite(output),
-                     "Non-finite input must not contaminate resampler state");
+    (void) resampler.processSample(std::numeric_limits<float>::quiet_NaN(), output);
+    (void) resampler.processSample(0.0f, output);
+    requireResampler(resampler.processSample(0.0f, output) && std::isfinite(output),
+                     "Non-finite input must be sanitized before interpolation");
 }
