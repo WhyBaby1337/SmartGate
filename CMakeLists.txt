@@ -10,7 +10,10 @@ include(CTest)
 add_library(smartgate_dsp INTERFACE)
 target_include_directories(smartgate_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
 
-add_executable(SmartGateDspTests tests/main.cpp tests/GateEnvelopeTests.cpp)
+add_executable(SmartGateDspTests
+    tests/main.cpp
+    tests/GateEnvelopeTests.cpp
+    tests/TargetProfileTests.cpp)
 target_link_libraries(SmartGateDspTests PRIVATE smartgate_dsp)
 add_test(NAME SmartGateDspTests COMMAND SmartGateDspTests)
 
