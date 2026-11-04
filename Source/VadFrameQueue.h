@@ -16,6 +16,8 @@ class VadFrameQueue {
     static_assert(FrameSize > 0, "FrameSize must be non-zero");
     static_assert(Capacity >= 2 && (Capacity & (Capacity - 1)) == 0,
                   "Capacity must be a power of two");
+    static_assert(Capacity <= (std::uint64_t{1} << 31),
+                  "Capacity must fit the unambiguous uint32_t ring-index range");
     static_assert(std::atomic<std::uint32_t>::is_always_lock_free,
                   "The real-time queue requires lock-free 32-bit atomics");
 

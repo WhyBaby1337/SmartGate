@@ -42,4 +42,15 @@ void runVadFrameAssemblerTests() {
         (void) overflowAssembler.processSample(0.25f);
     requireAssembler(overflowAssembler.droppedFrames() == 1,
                      "A full queue should count and drop the newest completed frame");
+
+    // A failed re-prepare must disable the assembler, not leave the previous
+    // sample-rate configuration active and continue queuing stale-rate frames.
+    requireAssembler(!overflowAssembler.prepare(8000.0),
+                     "Assembler must reject unsupported upsampling");
+    for (int i = 0; i < 4800; ++i)
+        (void) overflowAssembler.processSample(0.5f);
+    requireAssembler(overflowAssembler.pendingSamples() == 0,
+                     "Unprepared assembler must not accumulate partial frames");
+    requireAssembler(overflowAssembler.droppedFrames() == 0,
+                     "Unprepared assembler must not attempt to queue frames");
 }
