@@ -18,7 +18,7 @@ public:
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
 
     juce::AudioProcessorEditor* createEditor() override;
-    bool hasEditor() const override { return false; }
+    bool hasEditor() const override { return true; }
     const juce::String getName() const override { return "Smart Gate"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }

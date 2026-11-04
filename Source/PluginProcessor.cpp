@@ -158,7 +158,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 }
 
 juce::AudioProcessorEditor* SmartGateAudioProcessor::createEditor() {
-    return nullptr;
+    return new juce::GenericAudioProcessorEditor(*this);
 }
 
 void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination) {
