@@ -10,6 +10,23 @@ void requireResampler(bool condition, const char* message) {
     if (!condition)
         throw std::runtime_error(message);
 }
+
+double measureRms(smartgate::VadResampler& resampler, double frequency,
+                  double sampleRate, int sampleCount) {
+    double sumSquares = 0.0;
+    int outputCount = 0;
+    float output = 0.0f;
+    for (int i = 0; i < sampleCount; ++i) {
+        const float input = static_cast<float>(
+            std::sin(2.0 * 3.14159265358979323846 * frequency
+                     * static_cast<double>(i) / sampleRate));
+        if (resampler.processSample(input, output) && i > 200) {
+            sumSquares += static_cast<double>(output) * output;
+            ++outputCount;
+        }
+    }
+    return outputCount > 0 ? std::sqrt(sumSquares / outputCount) : 0.0;
+}
 }
 
 void runVadResamplerTests() {
@@ -33,8 +50,6 @@ void runVadResamplerTests() {
     requireResampler(outputCount == 1599,
                      "Streaming 48 kHz conversion should emit one sample per three input intervals");
 
-    // A failed re-prepare must invalidate the old configuration instead of
-    // silently continuing to process at the previous sample rate.
     requireResampler(!resampler.prepare(8000.0, 16000.0) && !resampler.isPrepared(),
                      "A failed re-prepare must leave the converter unprepared");
     output = 123.0f;
@@ -44,7 +59,6 @@ void runVadResamplerTests() {
     requireResampler(resampler.prepare(44100.0, 16000.0),
                      "44.1 kHz to 16 kHz preparation should succeed");
     outputCount = 0;
-    // Feed in two conceptual host blocks without resetting the converter.
     for (int i = 0; i < 2205; ++i)
         if (resampler.processSample(std::sin(static_cast<float>(i) * 0.01f), output))
             ++outputCount;
@@ -55,11 +69,25 @@ void runVadResamplerTests() {
         throw std::runtime_error("44.1 kHz conversion emitted " + std::to_string(outputCount)
                                  + " samples; expected 1599 across host block boundaries");
 
+    // The FIR must preserve speech-band content while rejecting frequencies
+    // above the 8 kHz destination Nyquist limit before they can alias.
+    requireResampler(resampler.prepare(48000.0, 16000.0),
+                     "Resampler should re-prepare for frequency-response tests");
+    const double passbandRms = measureRms(resampler, 1000.0, 48000.0, 48000);
+    requireResampler(passbandRms > 0.60 && passbandRms < 0.80,
+                     "Low-pass filter should preserve a 1 kHz passband tone");
+
+    requireResampler(resampler.prepare(48000.0, 16000.0),
+                     "Resampler should re-prepare before alias rejection test");
+    const double stopbandRms = measureRms(resampler, 12000.0, 48000.0, 48000);
+    requireResampler(stopbandRms < 0.025,
+                     "Low-pass filter should strongly attenuate a 12 kHz tone before decimation");
+
     resampler.reset();
     requireResampler(!resampler.processSample(0.5f, output),
                      "First sample after reset establishes interpolation history");
     (void) resampler.processSample(std::numeric_limits<float>::quiet_NaN(), output);
     (void) resampler.processSample(0.0f, output);
     requireResampler(resampler.processSample(0.0f, output) && std::isfinite(output),
-                     "Non-finite input must be sanitized before interpolation");
+                     "Non-finite input must be sanitized before filtering");
 }
