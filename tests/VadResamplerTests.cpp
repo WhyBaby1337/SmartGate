@@ -33,7 +33,8 @@ void runVadResamplerTests() {
     requireResampler(outputCount == 1599,
                      "Streaming 48 kHz conversion should emit one sample per three input intervals");
 
-    resampler.reset();
+    requireResampler(resampler.prepare(44100.0, 16000.0),
+                     "44.1 kHz to 16 kHz preparation should succeed");
     outputCount = 0;
     // Feed in two conceptual host blocks without resetting the converter.
     for (int i = 0; i < 2205; ++i)
