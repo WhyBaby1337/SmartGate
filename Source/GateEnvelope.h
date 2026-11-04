@@ -18,6 +18,7 @@ public:
         detectorLevel_ = 0.0f;
         gain_ = 1.0f;
         holdRemainingSamples_ = 0;
+        gateOpen_ = false;
     }
 
     void setTimes(float attackMs, float releaseMs) noexcept {
@@ -37,7 +38,14 @@ public:
         const float safeDb = std::isfinite(thresholdDb)
             ? std::clamp(thresholdDb, -100.0f, 0.0f)
             : -36.0f;
-        thresholdLinear_ = std::pow(10.0f, safeDb / 20.0f);
+        thresholdDb_ = safeDb;
+        updateThresholds();
+    }
+
+    void setHysteresisDb(float hysteresisDb) noexcept {
+        hysteresisDb_ = std::isfinite(hysteresisDb)
+            ? std::clamp(hysteresisDb, 0.0f, 12.0f) : 3.0f;
+        updateThresholds();
     }
 
     float process(float inputLevel) noexcept {
@@ -50,12 +58,18 @@ public:
             : detectorReleaseCoefficient_;
         detectorLevel_ = safeLevel + detectorCoefficient * (detectorLevel_ - safeLevel);
 
-        const bool aboveThreshold = detectorLevel_ >= thresholdLinear_;
-        if (aboveThreshold)
+        // Separate opening and closing thresholds provide hysteresis: once
+        // open, small level fluctuations around the threshold cannot chatter.
+        if (detectorLevel_ >= thresholdLinear_)
+            gateOpen_ = true;
+        else if (detectorLevel_ < closeThresholdLinear_)
+            gateOpen_ = false;
+
+        if (gateOpen_)
             holdRemainingSamples_ = holdSamples_;
         else if (holdRemainingSamples_ > 0)
             --holdRemainingSamples_;
-        const float target = (aboveThreshold || holdRemainingSamples_ > 0) ? 1.0f : 0.0f;
+        const float target = (gateOpen_ || holdRemainingSamples_ > 0) ? 1.0f : 0.0f;
         const float gainCoefficient = target > gain_ ? attackCoefficient_ : releaseCoefficient_;
         gain_ = target + gainCoefficient * (gain_ - target);
         gain_ = std::clamp(gain_, 0.0f, 1.0f);
@@ -70,6 +84,11 @@ private:
         return std::exp(-1.0f / (0.001f * timeMs * sampleRate));
     }
 
+    void updateThresholds() noexcept {
+        thresholdLinear_ = std::pow(10.0f, thresholdDb_ / 20.0f);
+        closeThresholdLinear_ = std::pow(10.0f, (thresholdDb_ - hysteresisDb_) / 20.0f);
+    }
+
     void updateCoefficients() noexcept {
         const auto rate = static_cast<float>(sampleRate_);
         attackCoefficient_ = coefficientFor(attackMs_, rate);
@@ -81,7 +100,11 @@ private:
     double sampleRate_ = 44100.0;
     float attackMs_ = 5.0f;
     float releaseMs_ = 120.0f;
+    float thresholdDb_ = -36.0f;
+    float hysteresisDb_ = 3.0f;
     float thresholdLinear_ = 0.0158489f;
+    float closeThresholdLinear_ = 0.0112202f;
+    bool gateOpen_ = false;
     float attackCoefficient_ = 0.0f;
     float releaseCoefficient_ = 0.0f;
     float detectorAttackCoefficient_ = 0.0f;

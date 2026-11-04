@@ -32,6 +32,24 @@ void runGateEnvelopeTests() {
     require(envelope.getGain() > 0.95f,
             "Gate should remain open across waveform gaps");
 
+    // Once opened above -40 dB, the gate should stay open in the -40 to
+    // -46 dB hysteresis band instead of toggling around the opening point.
+    envelope.reset();
+    envelope.setThresholdDb(-40.0f);
+    envelope.setHysteresisDb(6.0f);
+    envelope.setTimes(1.0f, 1.0f);
+    envelope.setHoldTime(0.0f);
+    for (int i = 0; i < 1200; ++i)
+        envelope.process(0.02f);
+    for (int i = 0; i < 6000; ++i)
+        envelope.process(0.007f);
+    require(envelope.getGain() > 0.9f,
+            "Hysteresis band should preserve an already-open gate");
+    for (int i = 0; i < 30000; ++i)
+        envelope.process(0.0f);
+    require(envelope.getGain() < 0.01f,
+            "Signal below the closing threshold should close the gate");
+
     envelope.reset();
     float previous = envelope.getGain();
     for (int i = 0; i < 2000; ++i) {
