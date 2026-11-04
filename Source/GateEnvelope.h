@@ -22,8 +22,12 @@ public:
     }
 
     void setTimes(float attackMs, float releaseMs) noexcept {
-        attackMs_ = std::isfinite(attackMs) ? std::clamp(attackMs, 0.1f, 500.0f) : 5.0f;
-        releaseMs_ = std::isfinite(releaseMs) ? std::clamp(releaseMs, 1.0f, 2000.0f) : 120.0f;
+        const float safeAttack = std::isfinite(attackMs) ? std::clamp(attackMs, 0.1f, 500.0f) : 5.0f;
+        const float safeRelease = std::isfinite(releaseMs) ? std::clamp(releaseMs, 1.0f, 2000.0f) : 120.0f;
+        if (safeAttack == attackMs_ && safeRelease == releaseMs_)
+            return;
+        attackMs_ = safeAttack;
+        releaseMs_ = safeRelease;
         updateCoefficients();
     }
 
@@ -38,13 +42,18 @@ public:
         const float safeDb = std::isfinite(thresholdDb)
             ? std::clamp(thresholdDb, -100.0f, 0.0f)
             : -36.0f;
+        if (safeDb == thresholdDb_)
+            return;
         thresholdDb_ = safeDb;
         updateThresholds();
     }
 
     void setHysteresisDb(float hysteresisDb) noexcept {
-        hysteresisDb_ = std::isfinite(hysteresisDb)
+        const float safeDb = std::isfinite(hysteresisDb)
             ? std::clamp(hysteresisDb, 0.0f, 12.0f) : 3.0f;
+        if (safeDb == hysteresisDb_)
+            return;
+        hysteresisDb_ = safeDb;
         updateThresholds();
     }
 
@@ -53,6 +62,9 @@ public:
     void setRangeDb(float rangeDb) noexcept {
         const float safeDb = std::isfinite(rangeDb)
             ? std::clamp(rangeDb, -80.0f, 0.0f) : -80.0f;
+        if (safeDb == rangeDb_)
+            return;
+        rangeDb_ = safeDb;
         closedGain_ = std::pow(10.0f, safeDb / 20.0f);
     }
 
@@ -111,6 +123,7 @@ private:
     float releaseMs_ = 120.0f;
     float thresholdDb_ = -36.0f;
     float hysteresisDb_ = 3.0f;
+    float rangeDb_ = -80.0f;
     float closedGain_ = 0.0001f;
     float thresholdLinear_ = 0.0158489f;
     float closeThresholdLinear_ = 0.0112202f;
