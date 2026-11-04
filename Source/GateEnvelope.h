@@ -13,7 +13,10 @@ public:
         reset();
     }
 
-    void reset() noexcept { gain_ = 1.0f; }
+    void reset() noexcept {
+        detectorLevel_ = 0.0f;
+        gain_ = 1.0f;
+    }
 
     void setTimes(float attackMs, float releaseMs) noexcept {
         attackMs_ = std::isfinite(attackMs) ? std::clamp(attackMs, 0.1f, 500.0f) : 5.0f;
@@ -30,20 +33,35 @@ public:
 
     float process(float inputLevel) noexcept {
         const float safeLevel = std::isfinite(inputLevel) ? std::max(0.0f, inputLevel) : 0.0f;
-        const float target = safeLevel >= thresholdLinear_ ? 1.0f : 0.0f;
-        const float coefficient = target > gain_ ? attackCoefficient_ : releaseCoefficient_;
-        gain_ = target + coefficient * (gain_ - target);
+
+        // Smooth the rectified detector signal so waveform zero-crossings do not
+        // repeatedly toggle the gate around the threshold.
+        const float detectorCoefficient = safeLevel > detectorLevel_
+            ? detectorAttackCoefficient_
+            : detectorReleaseCoefficient_;
+        detectorLevel_ = safeLevel + detectorCoefficient * (detectorLevel_ - safeLevel);
+
+        const float target = detectorLevel_ >= thresholdLinear_ ? 1.0f : 0.0f;
+        const float gainCoefficient = target > gain_ ? attackCoefficient_ : releaseCoefficient_;
+        gain_ = target + gainCoefficient * (gain_ - target);
         gain_ = std::clamp(gain_, 0.0f, 1.0f);
         return gain_;
     }
 
     float getGain() const noexcept { return gain_; }
+    float getDetectorLevel() const noexcept { return detectorLevel_; }
 
 private:
+    static float coefficientFor(float timeMs, float sampleRate) noexcept {
+        return std::exp(-1.0f / (0.001f * timeMs * sampleRate));
+    }
+
     void updateCoefficients() noexcept {
         const auto rate = static_cast<float>(sampleRate_);
-        attackCoefficient_ = std::exp(-1.0f / (0.001f * attackMs_ * rate));
-        releaseCoefficient_ = std::exp(-1.0f / (0.001f * releaseMs_ * rate));
+        attackCoefficient_ = coefficientFor(attackMs_, rate);
+        releaseCoefficient_ = coefficientFor(releaseMs_, rate);
+        detectorAttackCoefficient_ = coefficientFor(0.1f, rate);
+        detectorReleaseCoefficient_ = coefficientFor(20.0f, rate);
     }
 
     double sampleRate_ = 44100.0;
@@ -52,6 +70,9 @@ private:
     float thresholdLinear_ = 0.0158489f;
     float attackCoefficient_ = 0.0f;
     float releaseCoefficient_ = 0.0f;
+    float detectorAttackCoefficient_ = 0.0f;
+    float detectorReleaseCoefficient_ = 0.0f;
+    float detectorLevel_ = 0.0f;
     float gain_ = 1.0f;
 };
 

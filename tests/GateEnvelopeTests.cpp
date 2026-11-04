@@ -21,6 +21,17 @@ void runGateEnvelopeTests() {
     require(firstClosedSample < 1.0f && firstClosedSample > 0.0f,
             "Closing must be smoothed rather than an instantaneous hard mute");
 
+    // A rectified periodic waveform must not chatter at every zero crossing.
+    envelope.reset();
+    for (int i = 0; i < 1200; ++i) {
+        const float sample = (i % 48) < 24 ? 0.08f : 0.0f;
+        envelope.process(sample);
+    }
+    require(envelope.getDetectorLevel() > 0.04f,
+            "Detector should follow a periodic waveform's amplitude envelope");
+    require(envelope.getGain() > 0.95f,
+            "Gate should remain open across waveform gaps");
+
     envelope.reset();
     float previous = envelope.getGain();
     for (int i = 0; i < 2000; ++i) {
