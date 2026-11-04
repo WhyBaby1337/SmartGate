@@ -38,9 +38,14 @@ public:
 
     void setHoldTime(float holdMs) noexcept {
         const float safeMs = std::isfinite(holdMs) ? std::clamp(holdMs, 0.0f, 1000.0f) : 80.0f;
-        holdSamples_ = static_cast<std::uint64_t>(std::llround(
+        const auto newHoldSamples = static_cast<std::uint64_t>(std::llround(
             static_cast<double>(safeMs) * 0.001 * sampleRate_));
-        holdRemainingSamples_ = std::min(holdRemainingSamples_, holdSamples_);
+        if (newHoldSamples != holdSamples_) {
+            holdSamples_ = newHoldSamples;
+            // Clamp only when the user actually changes the base Hold. Calling
+            // this setter every audio block must not erase adaptive extension.
+            holdRemainingSamples_ = std::min(holdRemainingSamples_, holdSamples_);
+        }
     }
 
     // 0 disables adaptation. At 1.0, sustained open periods can add up to

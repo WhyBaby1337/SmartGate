@@ -97,8 +97,13 @@ void runGateEnvelopeTests() {
     envelope.setAdaptiveHoldAmount(1.0f);
     for (int i = 0; i < 48000; ++i)
         envelope.process(0.2f);
-    for (int i = 0; i < 4700; ++i)
+    for (int i = 0; i < 4700; ++i) {
         envelope.process(0.0f);
+        // The processor updates parameters each block. Reapplying an unchanged
+        // base Hold must preserve the adaptive extension already in progress.
+        if ((i % 64) == 0)
+            envelope.setHoldTime(20.0f);
+    }
     require(envelope.getGain() > 0.9f,
             "Adaptive Hold should preserve a sustained phrase beyond base Hold");
     for (int i = 0; i < 12000; ++i)
