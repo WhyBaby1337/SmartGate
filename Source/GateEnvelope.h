@@ -30,6 +30,7 @@ public:
         const float safeMs = std::isfinite(holdMs) ? std::clamp(holdMs, 0.0f, 1000.0f) : 80.0f;
         holdSamples_ = static_cast<std::uint64_t>(std::llround(
             static_cast<double>(safeMs) * 0.001 * sampleRate_));
+        holdRemainingSamples_ = std::min(holdRemainingSamples_, holdSamples_);
     }
 
     void setThresholdDb(float thresholdDb) noexcept {

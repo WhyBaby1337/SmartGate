@@ -96,8 +96,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     gateEnvelope_.setHoldTime(*parameters_.getRawParameterValue("hold"));
 
     const bool aiEnabled = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
-    const bool learningTarget = aiEnabled
-        && *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
+    const bool learningRequested = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
 
     // AI OFF is a true bypass: no feature extraction or target inference is
     // performed. Re-entry starts with a clean frame to avoid stale samples.
@@ -109,18 +108,23 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         wasAiEnabled_ = aiEnabled;
     }
 
-    if (learningTarget && !wasLearningTarget_) {
-        // A new Learn Target session starts with a clean profile. All profile
-        // access stays on the audio thread, so no locks or cross-thread copies
-        // are needed in processBlock.
+    if (learningRequested && !wasLearningTarget_)
+        pendingLearningStart_ = true;
+    if (!learningRequested)
+        pendingLearningStart_ = false;
+
+    // A requested Learn Target transition is remembered while AI is disabled.
+    // Turning AI off pauses analysis without silently erasing an existing model.
+    if (aiEnabled && pendingLearningStart_) {
         targetProfile_.clear();
         publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
         featureExtractor_.reset();
         featureFramePosition_ = 0;
         targetConfidenceTarget_ = 1.0f;
         targetConfidenceSmoothed_ = 1.0f;
+        pendingLearningStart_ = false;
     }
-    wasLearningTarget_ = learningTarget;
+    wasLearningTarget_ = learningRequested;
 
     smartgate::TargetProfile::Snapshot restored;
     std::uint64_t restoredVersion = 0;

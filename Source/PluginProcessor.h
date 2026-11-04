@@ -56,6 +56,7 @@ private:
     float targetConfidenceSmoothingCoefficient_ = 0.0f;
     float keyboardConfidence_ = 0.0f;
     bool wasLearningTarget_ = false;
+    bool pendingLearningStart_ = false;
     bool wasAiEnabled_ = true;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SmartGateAudioProcessor)
