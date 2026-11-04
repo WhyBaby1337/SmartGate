@@ -6,6 +6,7 @@
 #include <chrono>
 #include <stdexcept>
 #include <thread>
+#include <limits>
 
 namespace {
 void requireWorker(bool condition, const char* message) {
@@ -107,6 +108,33 @@ void runVadInferenceWorkerTests() {
                   "Stopped worker must still reject a null callback");
     requireWorker(worker.start(&fakeInference, &probe, 12),
                   "Worker should be restartable after a completed stop");
+
+    std::array<float, 8> aboveRangeFrame{};
+    aboveRangeFrame.fill(2.0f);
+    requireWorker(queue.push(aboveRangeFrame.data(), 12),
+                  "Queue should accept a frame used to test probability clamping");
+    requireWorker(waitForCalls(probe, 3),
+                  "Restarted worker should process the clamping test frame");
+    const auto clampDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (worker.latestProbability(12) != 1.0f
+           && std::chrono::steady_clock::now() < clampDeadline)
+        std::this_thread::yield();
+    requireWorker(worker.latestProbability(12) == 1.0f,
+                  "Worker must clamp probabilities above one");
+
+    std::array<float, 8> nonFiniteFrame{};
+    nonFiniteFrame.fill(std::numeric_limits<float>::quiet_NaN());
+    requireWorker(queue.push(nonFiniteFrame.data(), 12),
+                  "Queue should accept a frame used to test non-finite probabilities");
+    requireWorker(waitForCalls(probe, 4),
+                  "Worker should process the non-finite probability test frame");
+    const auto finiteDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (probe.calls.load(std::memory_order_acquire) < 4
+           && std::chrono::steady_clock::now() < finiteDeadline)
+        std::this_thread::yield();
+    requireWorker(worker.latestProbability(12) == 0.0f,
+                  "Worker must convert non-finite probabilities to zero");
+
     worker.stop();
     requireWorker(!worker.isRunning(), "Restarted worker should also stop cleanly");
 
@@ -126,7 +154,10 @@ void runVadInferenceWorkerTests() {
     while (!blockingProbe.entered.load(std::memory_order_acquire)
            && std::chrono::steady_clock::now() < enteredDeadline)
         std::this_thread::yield();
-    requireWorker(blockingProbe.entered.load(std::memory_order_acquire),
+    const bool inferenceEntered = blockingProbe.entered.load(std::memory_order_acquire);
+    if (!inferenceEntered)
+        blockingProbe.release.store(true, std::memory_order_release);
+    requireWorker(inferenceEntered,
                   "Inference callback should begin before generation changes");
 
     raceWorker.setGeneration(21);

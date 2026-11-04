@@ -74,7 +74,7 @@ public:
         const auto publishedGeneration =
             publishedGeneration_.load(std::memory_order_seq_cst);
         const auto probability = publishedProbability_.load(std::memory_order_seq_cst);
-        const auto sequenceAfter = resultSequence_.load(std::memory_order_acquire);
+        const auto sequenceAfter = resultSequence_.load(std::memory_order_seq_cst);
 
         if (sequenceBefore != sequenceAfter || (sequenceAfter & 1u) != 0u
             || publishedGeneration != generation)
