@@ -33,6 +33,10 @@ SmartGateAudioProcessor::createParameterLayout() {
         juce::ParameterID{"hysteresis", 1}, "Hysteresis",
         juce::NormalisableRange<float>{0.0f, 12.0f, 0.1f}, 3.0f,
         juce::AudioParameterFloatAttributes{}.withLabel("dB")));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"range", 1}, "Range",
+        juce::NormalisableRange<float>{0.0f, 80.0f, 0.1f}, 80.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("dB")));
     layout.add(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{"aiEnabled", 1}, "AI Engine", true));
     layout.add(std::make_unique<juce::AudioParameterBool>(
@@ -99,6 +103,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                            *parameters_.getRawParameterValue("release"));
     gateEnvelope_.setHoldTime(*parameters_.getRawParameterValue("hold"));
     gateEnvelope_.setHysteresisDb(*parameters_.getRawParameterValue("hysteresis"));
+    gateEnvelope_.setRangeDb(*parameters_.getRawParameterValue("range"));
 
     const bool aiEnabled = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
     const bool learningRequested = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;

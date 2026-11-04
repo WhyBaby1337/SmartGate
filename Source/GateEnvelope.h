@@ -48,6 +48,14 @@ public:
         updateThresholds();
     }
 
+    // Range is the maximum attenuation applied while the gate is closed.
+    // 80 dB approximates a hard mute; smaller values retain room tone.
+    void setRangeDb(float rangeDb) noexcept {
+        const float safeDb = std::isfinite(rangeDb)
+            ? std::clamp(rangeDb, 0.0f, 80.0f) : 80.0f;
+        closedGain_ = std::pow(10.0f, -safeDb / 20.0f);
+    }
+
     float process(float inputLevel) noexcept {
         const float safeLevel = std::isfinite(inputLevel) ? std::max(0.0f, inputLevel) : 0.0f;
 
@@ -69,7 +77,8 @@ public:
             holdRemainingSamples_ = holdSamples_;
         else if (holdRemainingSamples_ > 0)
             --holdRemainingSamples_;
-        const float target = (gateOpen_ || holdRemainingSamples_ > 0) ? 1.0f : 0.0f;
+        const float target = (gateOpen_ || holdRemainingSamples_ > 0)
+            ? 1.0f : closedGain_;
         const float gainCoefficient = target > gain_ ? attackCoefficient_ : releaseCoefficient_;
         gain_ = target + gainCoefficient * (gain_ - target);
         gain_ = std::clamp(gain_, 0.0f, 1.0f);
@@ -102,6 +111,7 @@ private:
     float releaseMs_ = 120.0f;
     float thresholdDb_ = -36.0f;
     float hysteresisDb_ = 3.0f;
+    float closedGain_ = 0.0001f;
     float thresholdLinear_ = 0.0158489f;
     float closeThresholdLinear_ = 0.0112202f;
     bool gateOpen_ = false;
