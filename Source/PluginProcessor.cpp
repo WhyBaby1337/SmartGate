@@ -167,7 +167,7 @@ void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination
         std::uint64_t version = 0;
         if (publishedTargetProfile_.read(snapshot, version)) {
             auto* node = xml->createNewChildElement("TARGET_PROFILE");
-            node->setAttribute("count", static_cast<juce::int64>(snapshot.count));
+            node->setAttribute("count", static_cast<int>(snapshot.count));
             for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
                 const auto index = juce::String(static_cast<int>(i));
                 node->setAttribute("mean" + index, snapshot.mean[i]);
