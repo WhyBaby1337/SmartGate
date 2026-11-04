@@ -32,12 +32,20 @@ SmartGateAudioProcessor::createParameterLayout() {
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"targetAmount", 1}, "Target Influence",
         juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.5f));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"keyboardMode", 1}, "Keyboard Type",
+        juce::StringArray{"Universal", "Mechanical", "Membrane"}, 0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"keyboardReduction", 1}, "Keyboard Reduction",
+        juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.0f));
     return layout;
 }
 
 void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     gateEnvelope_.prepare(sampleRate);
     featureExtractor_.prepare(sampleRate);
+    keyboardDetector_.prepare(sampleRate);
+    keyboardConfidence_ = 0.0f;
     featureFramePosition_ = 0;
     featureFrame_.fill(0.0f);
     targetConfidenceTarget_ = 1.0f;
@@ -121,6 +129,12 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     const float targetAmount = juce::jlimit(
         0.0f, 1.0f, parameters_.getRawParameterValue("targetAmount")->load(std::memory_order_relaxed));
+    const float keyboardReduction = juce::jlimit(
+        0.0f, 1.0f, parameters_.getRawParameterValue("keyboardReduction")->load(std::memory_order_relaxed));
+    const int keyboardMode = juce::jlimit(0, 2, static_cast<int>(std::lround(
+        parameters_.getRawParameterValue("keyboardMode")->load(std::memory_order_relaxed))));
+    keyboardDetector_.setMode(static_cast<smartgate::AdaptiveKeyboardDetector::Mode>(keyboardMode));
+
     const int channels = buffer.getNumChannels();
     const int samples = buffer.getNumSamples();
 
@@ -136,12 +150,15 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
         mono /= static_cast<float>(juce::jmax(1, channels));
 
-        if (aiEnabled) {
-            featureFrame_[featureFramePosition_++] = mono;
-            if (featureFramePosition_ == featureFrameSize_) {
+        // The keyboard classifier is a DSP subsystem and keeps running even
+        // when the optional AI/target-analysis engine is disabled.
+        featureFrame_[featureFramePosition_++] = mono;
+        if (featureFramePosition_ == featureFrameSize_) {
+            keyboardConfidence_ = keyboardDetector_.processFrame(
+                featureFrame_.data(), featureFrame_.size());
+            if (aiEnabled)
                 finishFeatureFrame();
-                featureFramePosition_ = 0;
-            }
+            featureFramePosition_ = 0;
         }
 
         targetConfidenceSmoothed_ = targetConfidenceTarget_
@@ -150,7 +167,10 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float targetGain = aiEnabled
             ? (1.0f - targetAmount) + targetAmount * targetConfidenceSmoothed_
             : 1.0f;
-        const float gain = gateEnvelope_.process(linkedPeak * targetGain);
+        const float keyboardDetectorGain = 1.0f
+            - keyboardReduction * keyboardConfidence_;
+        const float gain = gateEnvelope_.process(
+            linkedPeak * targetGain * keyboardDetectorGain);
 
         for (int channel = 0; channel < channels; ++channel)
             buffer.setSample(channel, sample, buffer.getSample(channel, sample) * gain);

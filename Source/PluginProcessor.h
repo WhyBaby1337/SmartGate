@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "AdaptiveKeyboardDetector.h"
 #include "AudioFeatures.h"
 #include "GateEnvelope.h"
 #include "TargetProfile.h"
@@ -41,6 +42,7 @@ private:
     juce::AudioProcessorValueTreeState parameters_;
     smartgate::GateEnvelope gateEnvelope_;
     smartgate::FeatureExtractor featureExtractor_;
+    smartgate::AdaptiveKeyboardDetector keyboardDetector_;
     smartgate::TargetProfile targetProfile_;
     smartgate::AtomicTargetProfileSnapshot publishedTargetProfile_;
     smartgate::AtomicTargetProfileSnapshot pendingTargetProfile_;
@@ -52,6 +54,7 @@ private:
     float targetConfidenceTarget_ = 1.0f;
     float targetConfidenceSmoothed_ = 1.0f;
     float targetConfidenceSmoothingCoefficient_ = 0.0f;
+    float keyboardConfidence_ = 0.0f;
     bool wasLearningTarget_ = false;
     bool wasAiEnabled_ = true;
 
