@@ -63,9 +63,8 @@ void SmartGateAudioProcessor::finishFeatureFrame() noexcept {
 
     const bool learning = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
     // Ignore silence and heavily clipped frames during target acquisition.
-    if (learning && features.logRms > -2.5f && features.logRms < -0.03f)
-        targetProfile_.learn(features);
-    if (learning)
+    if (learning && features.logRms > -2.5f && features.logRms < -0.03f
+        && targetProfile_.learn(features))
         publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
 
     targetConfidenceTarget_ = targetProfile_.isReady()
@@ -80,16 +79,6 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     gateEnvelope_.setTimes(*parameters_.getRawParameterValue("attack"),
                            *parameters_.getRawParameterValue("release"));
 
-    smartgate::TargetProfile::Snapshot restored;
-    std::uint64_t restoredVersion = 0;
-    if (pendingTargetProfile_.read(restored, restoredVersion)
-        && restoredVersion != lastAppliedTargetProfileVersion_
-        && targetProfile_.restore(restored)) {
-        lastAppliedTargetProfileVersion_ = restoredVersion;
-        publishedTargetProfile_.publish(restored);
-        targetConfidenceTarget_ = targetConfidenceSmoothed_ = 1.0f;
-    }
-
     const bool learningTarget = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
     if (learningTarget && !wasLearningTarget_) {
         // A new Learn Target session starts with a clean profile. All profile
@@ -103,6 +92,16 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         targetConfidenceSmoothed_ = 1.0f;
     }
     wasLearningTarget_ = learningTarget;
+
+    smartgate::TargetProfile::Snapshot restored;
+    std::uint64_t restoredVersion = 0;
+    if (pendingTargetProfile_.read(restored, restoredVersion)
+        && restoredVersion != lastAppliedTargetProfileVersion_
+        && targetProfile_.restore(restored)) {
+        lastAppliedTargetProfileVersion_ = restoredVersion;
+        publishedTargetProfile_.publish(restored);
+        targetConfidenceTarget_ = targetConfidenceSmoothed_ = 1.0f;
+    }
 
     const float targetAmount = juce::jlimit(
         0.0f, 1.0f, parameters_.getRawParameterValue("targetAmount")->load(std::memory_order_relaxed));
@@ -182,6 +181,12 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
             smartgate::TargetProfile validator;
             if (validator.restore(snapshot))
                 pendingTargetProfile_.publish(snapshot);
+            else
+                pendingTargetProfile_.publish(smartgate::TargetProfile::Snapshot{});
+        } else {
+            // Older sessions have no target profile; clear any profile left
+            // from the currently loaded instance.
+            pendingTargetProfile_.publish(smartgate::TargetProfile::Snapshot{});
         }
     }
 }
