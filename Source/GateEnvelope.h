@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace smartgate {
 
@@ -16,12 +17,19 @@ public:
     void reset() noexcept {
         detectorLevel_ = 0.0f;
         gain_ = 1.0f;
+        holdRemainingSamples_ = 0;
     }
 
     void setTimes(float attackMs, float releaseMs) noexcept {
         attackMs_ = std::isfinite(attackMs) ? std::clamp(attackMs, 0.1f, 500.0f) : 5.0f;
         releaseMs_ = std::isfinite(releaseMs) ? std::clamp(releaseMs, 1.0f, 2000.0f) : 120.0f;
         updateCoefficients();
+    }
+
+    void setHoldTime(float holdMs) noexcept {
+        const float safeMs = std::isfinite(holdMs) ? std::clamp(holdMs, 0.0f, 1000.0f) : 80.0f;
+        holdSamples_ = static_cast<std::uint64_t>(std::llround(
+            static_cast<double>(safeMs) * 0.001 * sampleRate_));
     }
 
     void setThresholdDb(float thresholdDb) noexcept {
@@ -41,7 +49,12 @@ public:
             : detectorReleaseCoefficient_;
         detectorLevel_ = safeLevel + detectorCoefficient * (detectorLevel_ - safeLevel);
 
-        const float target = detectorLevel_ >= thresholdLinear_ ? 1.0f : 0.0f;
+        const bool aboveThreshold = detectorLevel_ >= thresholdLinear_;
+        if (aboveThreshold)
+            holdRemainingSamples_ = holdSamples_;
+        else if (holdRemainingSamples_ > 0)
+            --holdRemainingSamples_;
+        const float target = (aboveThreshold || holdRemainingSamples_ > 0) ? 1.0f : 0.0f;
         const float gainCoefficient = target > gain_ ? attackCoefficient_ : releaseCoefficient_;
         gain_ = target + gainCoefficient * (gain_ - target);
         gain_ = std::clamp(gain_, 0.0f, 1.0f);
@@ -73,6 +86,8 @@ private:
     float detectorAttackCoefficient_ = 0.0f;
     float detectorReleaseCoefficient_ = 0.0f;
     float detectorLevel_ = 0.0f;
+    std::uint64_t holdSamples_ = 0;
+    std::uint64_t holdRemainingSamples_ = 0;
     float gain_ = 1.0f;
 };
 
