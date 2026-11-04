@@ -42,7 +42,9 @@ void runGateEnvelopeTests() {
     require(envelope.getGain() > 0.99f, "Above-threshold input should open envelope");
 
     previous = envelope.getGain();
-    for (int i = 0; i < 20000; ++i) {
+    // Detector smoothing must first decay below threshold; then the 80 ms
+    // gain release needs additional time to reach the 1% closed-state target.
+    for (int i = 0; i < 30000; ++i) {
         const float gain = envelope.process(0.0f);
         require(gain <= previous, "Release gain must be monotonic");
         previous = gain;
