@@ -56,6 +56,22 @@ void runTargetProfileTests() {
     requireFeature(profile.frameCount() == 32,
                    "Rejected frames must not modify profile statistics");
 
+    smartgate::AtomicTargetProfileSnapshot mailbox;
+    std::uint64_t mailboxVersion = 0;
+    smartgate::TargetProfile::Snapshot mailboxCopy;
+    requireFeature(!mailbox.read(mailboxCopy, mailboxVersion),
+                   "An unpublished mailbox must not expose a snapshot");
+    mailbox.publish(profile.makeSnapshot());
+    requireFeature(mailbox.read(mailboxCopy, mailboxVersion),
+                   "A published mailbox snapshot must be readable");
+    requireFeature(mailboxVersion != 0 && mailboxCopy.count == profile.frameCount(),
+                   "Mailbox must preserve profile version and frame count");
+    smartgate::TargetProfile mailboxRestored;
+    requireFeature(mailboxRestored.restore(mailboxCopy)
+                   && std::abs(mailboxRestored.confidence(extracted)
+                               - profile.confidence(extracted)) < 1.0e-6f,
+                   "Mailbox snapshot must preserve profile statistics");
+
     const auto saved = profile.makeSnapshot();
     smartgate::TargetProfile restored;
     requireFeature(restored.restore(saved), "A valid profile snapshot must restore");
