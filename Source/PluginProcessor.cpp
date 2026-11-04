@@ -171,18 +171,23 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     const int channels = buffer.getNumChannels();
     const int samples = buffer.getNumSamples();
+    if (channels <= 0 || samples <= 0)
+        return;
 
-    // Peak-linked detector keeps the stereo image centered and stable. Target
-    // features are extracted from a mono average in fixed-size frames.
+    // This processor only advertises mono and stereo layouts. Cache raw
+    // channel pointers once per block to avoid repeated AudioBuffer accessor
+    // calls and bounds checks in the per-sample real-time loop.
+    float* const left = buffer.getWritePointer(0);
+    float* const right = channels > 1 ? buffer.getWritePointer(1) : nullptr;
+
+    // Peak-linked detection keeps the stereo image centered and stable.
+    // Target features are extracted from a mono average in fixed-size frames.
     for (int sample = 0; sample < samples; ++sample) {
-        float linkedPeak = 0.0f;
-        float mono = 0.0f;
-        for (int channel = 0; channel < channels; ++channel) {
-            const float value = buffer.getSample(channel, sample);
-            linkedPeak = juce::jmax(linkedPeak, std::abs(value));
-            mono += value;
-        }
-        mono /= static_cast<float>(juce::jmax(1, channels));
+        const float leftSample = left[sample];
+        const float rightSample = right != nullptr ? right[sample] : leftSample;
+        const float linkedPeak = juce::jmax(std::abs(leftSample), std::abs(rightSample));
+        const float mono = right != nullptr
+            ? 0.5f * (leftSample + rightSample) : leftSample;
 
         // Share one low-rate mono frame between the optional target analyzer
         // and keyboard classifier. If both are inactive, skip frame assembly
@@ -211,8 +216,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float gain = gateEnvelope_.process(
             linkedPeak * targetGain * keyboardDetectorGain);
 
-        for (int channel = 0; channel < channels; ++channel)
-            buffer.setSample(channel, sample, buffer.getSample(channel, sample) * gain);
+        left[sample] = leftSample * gain;
+        if (right != nullptr)
+            right[sample] = rightSample * gain;
     }
 }
 
