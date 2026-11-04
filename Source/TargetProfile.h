@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cstring>
 #include <cmath>
 #include <cstdint>
 
@@ -108,6 +110,56 @@ private:
     std::uint64_t count_ = 0;
     std::array<double, 5> mean_{};
     std::array<double, 5> m2_{};
+};
+
+class AtomicTargetProfileSnapshot {
+public:
+    static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
+                  "Requires lock-free 64-bit atomics");
+
+    void publish(const TargetProfile::Snapshot& s) noexcept {
+        sequence_.fetch_add(1, std::memory_order_acq_rel);
+        count_.store(s.count, std::memory_order_relaxed);
+        for (std::size_t i = 0; i < 5; ++i) {
+            mean_[i].store(bits(s.mean[i]), std::memory_order_relaxed);
+            m2_[i].store(bits(s.m2[i]), std::memory_order_relaxed);
+        }
+        sequence_.fetch_add(1, std::memory_order_release);
+    }
+
+    bool read(TargetProfile::Snapshot& s, std::uint64_t& version) const noexcept {
+        for (int attempt = 0; attempt < 8; ++attempt) {
+            const auto first = sequence_.load(std::memory_order_acquire);
+            if (first == 0 || (first & 1U)) continue;
+            TargetProfile::Snapshot copy;
+            copy.count = count_.load(std::memory_order_relaxed);
+            for (std::size_t i = 0; i < 5; ++i) {
+                copy.mean[i] = value(mean_[i].load(std::memory_order_relaxed));
+                copy.m2[i] = value(m2_[i].load(std::memory_order_relaxed));
+            }
+            const auto last = sequence_.load(std::memory_order_acquire);
+            if (first == last && !(last & 1U)) {
+                s = copy;
+                version = last;
+                return true;
+            }
+        }
+        return false;
+    }
+
+private:
+    static std::uint64_t bits(double x) noexcept {
+        std::uint64_t v;
+        std::memcpy(&v, &x, sizeof(v));
+        return v;
+    }
+    static double value(std::uint64_t v) noexcept {
+        double x;
+        std::memcpy(&x, &v, sizeof(x));
+        return x;
+    }
+    std::atomic<std::uint64_t> sequence_{0}, count_{0};
+    std::array<std::atomic<std::uint64_t>, 5> mean_{}, m2_{};
 };
 
 } // namespace smartgate
