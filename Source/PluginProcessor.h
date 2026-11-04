@@ -1,7 +1,12 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "AudioFeatures.h"
 #include "GateEnvelope.h"
+#include "TargetProfile.h"
+
+#include <array>
+#include <cstddef>
 
 class SmartGateAudioProcessor final : public juce::AudioProcessor {
 public:
@@ -31,9 +36,20 @@ public:
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    void finishFeatureFrame() noexcept;
 
     juce::AudioProcessorValueTreeState parameters_;
     smartgate::GateEnvelope gateEnvelope_;
+    smartgate::FeatureExtractor featureExtractor_;
+    smartgate::TargetProfile targetProfile_;
+
+    static constexpr std::size_t featureFrameSize_ = 256;
+    std::array<float, featureFrameSize_> featureFrame_{};
+    std::size_t featureFramePosition_ = 0;
+    float targetConfidenceTarget_ = 1.0f;
+    float targetConfidenceSmoothed_ = 1.0f;
+    float targetConfidenceSmoothingCoefficient_ = 0.0f;
+    bool wasLearningTarget_ = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SmartGateAudioProcessor)
 };
