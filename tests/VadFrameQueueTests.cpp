@@ -17,14 +17,15 @@ void runVadFrameQueueTests() {
     Queue queue;
     Queue::Frame output{};
 
-    requireQueue(!queue.pop(output), "An empty VAD queue must not produce a frame");
+    std::uint64_t outputGeneration = 999;
+    requireQueue(!queue.pop(output, outputGeneration), "An empty VAD queue must not produce a frame");
     requireQueue(!queue.push(nullptr), "A null frame must be rejected");
 
     for (int frame = 0; frame < 4; ++frame) {
         std::array<float, 4> input{
             static_cast<float>(frame), static_cast<float>(frame + 1),
             static_cast<float>(frame + 2), static_cast<float>(frame + 3)};
-        requireQueue(queue.push(input.data()), "Queue should accept frames while capacity remains");
+        requireQueue(queue.push(input.data(), static_cast<std::uint64_t>(100 + frame)), "Queue should accept frames while capacity remains");
     }
 
     const std::array<float, 4> overflow{9.0f, 9.0f, 9.0f, 9.0f};
@@ -32,7 +33,9 @@ void runVadFrameQueueTests() {
                  "A full real-time queue must drop the newest frame without waiting");
 
     for (int frame = 0; frame < 4; ++frame) {
-        requireQueue(queue.pop(output), "Queued frame should be available");
+        requireQueue(queue.pop(output, outputGeneration), "Queued frame should be available");
+        requireQueue(outputGeneration == static_cast<std::uint64_t>(100 + frame),
+                     "Queue must preserve frame generation metadata");
         requireQueue(output[0] == static_cast<float>(frame)
                      && output[3] == static_cast<float>(frame + 3),
                      "VAD frames must be delivered in FIFO order without corruption");
@@ -41,7 +44,9 @@ void runVadFrameQueueTests() {
 
     const std::array<float, 4> wrapped{20.0f, 21.0f, 22.0f, 23.0f};
     requireQueue(queue.push(wrapped.data()), "Queue should accept frames after index wrap");
-    requireQueue(queue.pop(output) && output == wrapped,
+    requireQueue(queue.push(wrapped.data(), 777), "Queue should accept generation-tagged frame");
+    requireQueue(queue.pop(output, outputGeneration) && output == wrapped
+                 && outputGeneration == 777,
                  "Queue should preserve frames after ring-buffer wraparound");
 
     // Exercise the SPSC contract with producer and consumer running at the
@@ -89,6 +94,19 @@ void runVadFrameQueueTests() {
         requireQueue(!concurrentQueue.pop(drained),
                      "Concurrent SPSC stress test must drain the queue");
     }
+
+    // The assembler tags each completed frame with its active generation.
+    using TaggedQueue = smartgate::VadFrameQueue<512, 4>;
+    TaggedQueue taggedQueue;
+    smartgate::VadFrameAssembler<TaggedQueue> assembler(taggedQueue);
+    requireQueue(assembler.prepare(48000.0, 16000.0, 42),
+                 "Generation-tagged assembler should prepare");
+    for (int i = 0; i < 1600; ++i)
+        (void) assembler.processSample(0.1f);
+    TaggedQueue::Frame taggedFrame{};
+    std::uint64_t taggedGeneration = 0;
+    requireQueue(taggedQueue.pop(taggedFrame, taggedGeneration) && taggedGeneration == 42,
+                 "Assembler must attach the active generation to queued frames");
 
     queue.reset();
     requireQueue(!queue.pop(output), "Reset should empty the queue while threads are stopped");

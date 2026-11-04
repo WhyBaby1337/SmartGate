@@ -24,7 +24,7 @@ class VadFrameQueue {
 public:
     using Frame = std::array<float, FrameSize>;
 
-    bool push(const float* samples) noexcept {
+    bool push(const float* samples, std::uint64_t generation = 0) noexcept {
         if (samples == nullptr)
             return false;
 
@@ -37,17 +37,25 @@ public:
         for (std::size_t i = 0; i < FrameSize; ++i)
             destination[i] = samples[i];
 
+        generations_[write & indexMask].store(generation, std::memory_order_relaxed);
         writeIndex_.store(write + 1, std::memory_order_release);
         return true;
     }
 
     bool pop(Frame& destination) noexcept {
+        std::uint64_t ignoredGeneration = 0;
+        return pop(destination, ignoredGeneration);
+    }
+
+    bool pop(Frame& destination, std::uint64_t& generation) noexcept {
         const auto read = readIndex_.load(std::memory_order_relaxed);
         const auto write = writeIndex_.load(std::memory_order_acquire);
         if (read == write)
             return false;
 
-        destination = frames_[read & indexMask];
+        const auto slot = read & indexMask;
+        destination = frames_[slot];
+        generation = generations_[slot].load(std::memory_order_relaxed);
         readIndex_.store(read + 1, std::memory_order_release);
         return true;
     }
@@ -66,6 +74,7 @@ private:
         static_cast<std::uint32_t>(Capacity - 1);
 
     alignas(64) std::array<Frame, Capacity> frames_{};
+    std::array<std::atomic<std::uint64_t>, Capacity> generations_{};
     alignas(64) std::atomic<std::uint32_t> writeIndex_{0};
     alignas(64) std::atomic<std::uint32_t> readIndex_{0};
 };

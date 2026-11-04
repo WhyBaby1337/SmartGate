@@ -17,7 +17,9 @@ public:
 
     explicit VadFrameAssembler(Queue& queue) noexcept : queue_(queue) {}
 
-    bool prepare(double inputRate, double outputRate = 16000.0) noexcept {
+    bool prepare(double inputRate, double outputRate = 16000.0,
+                 std::uint64_t generation = 0) noexcept {
+        generation_ = generation;
         frame_.fill(0.0f);
         framePosition_ = 0;
         droppedFrames_ = 0;
@@ -34,11 +36,18 @@ public:
         if (framePosition_ != frameSize)
             return false;
 
-        const bool queued = queue_.push(frame_.data());
+        const bool queued = queue_.push(frame_.data(), generation_);
         if (!queued)
             ++droppedFrames_;
         framePosition_ = 0;
         return queued;
+    }
+
+    void setGeneration(std::uint64_t generation) noexcept {
+        generation_ = generation;
+        frame_.fill(0.0f);
+        framePosition_ = 0;
+        resampler_.reset();
     }
 
     std::uint64_t droppedFrames() const noexcept { return droppedFrames_; }
@@ -58,6 +67,7 @@ private:
     std::array<float, frameSize> frame_{};
     std::size_t framePosition_ = 0;
     std::uint64_t droppedFrames_ = 0;
+    std::uint64_t generation_ = 0;
 };
 
 } // namespace smartgate
