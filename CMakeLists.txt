@@ -35,7 +35,11 @@ if(SMARTGATE_BUILD_PLUGIN)
         IS_MIDI_EFFECT FALSE COPY_PLUGIN_AFTER_BUILD FALSE)
 
     target_sources(SmartGate PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h)
-    target_compile_definitions(SmartGate PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    # This is a new VST3-only product; it has no released VST2 identity to replace.
+    target_compile_definitions(SmartGate PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(SmartGate PRIVATE smartgate_dsp juce::juce_audio_utils juce::juce_dsp
         PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags
                juce::juce_recommended_warning_flags)

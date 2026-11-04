@@ -11,13 +11,16 @@ SmartGateAudioProcessor::createParameterLayout() {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"threshold", 1}, "Threshold",
-        juce::NormalisableRange<float>{-80.0f, 0.0f, 0.1f}, -36.0f, "dB"));
+        juce::NormalisableRange<float>{-80.0f, 0.0f, 0.1f}, -36.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("dB")));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"attack", 1}, "Attack",
-        juce::NormalisableRange<float>{0.1f, 100.0f, 0.1f, 0.5f}, 5.0f, "ms"));
+        juce::NormalisableRange<float>{0.1f, 100.0f, 0.1f, 0.5f}, 5.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("ms")));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"release", 1}, "Release",
-        juce::NormalisableRange<float>{1.0f, 1000.0f, 1.0f, 0.5f}, 120.0f, "ms"));
+        juce::NormalisableRange<float>{1.0f, 1000.0f, 1.0f, 0.5f}, 120.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("ms")));
     return layout;
 }
 
