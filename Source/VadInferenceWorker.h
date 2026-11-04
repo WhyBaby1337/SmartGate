@@ -46,6 +46,7 @@ public:
         resultSequence_.store(0, std::memory_order_relaxed);
         publishedGeneration_.store(~std::uint64_t{0}, std::memory_order_relaxed);
         publishedProbability_.store(0.0f, std::memory_order_relaxed);
+        publishedResultCount_.store(0, std::memory_order_relaxed);
         stopRequested_.store(false, std::memory_order_release);
 
         try {
@@ -84,6 +85,12 @@ public:
 
     bool isRunning() const noexcept {
         return running_.load(std::memory_order_acquire);
+    }
+
+    // Monotonic diagnostic counter; incremented only after a complete result
+    // snapshot has been published. Useful to observe worker progress off-thread.
+    std::uint64_t publishedResultCount() const noexcept {
+        return publishedResultCount_.load(std::memory_order_acquire);
     }
 
     // Stop/join only from a non-audio thread. In-flight inference may finish,
@@ -127,6 +134,7 @@ private:
             publishedProbability_.store(probability, std::memory_order_seq_cst);
             publishedGeneration_.store(frameGeneration, std::memory_order_seq_cst);
             resultSequence_.fetch_add(1, std::memory_order_seq_cst);
+            publishedResultCount_.fetch_add(1, std::memory_order_release);
         }
         running_.store(false, std::memory_order_release);
     }
@@ -141,6 +149,7 @@ private:
     std::atomic<std::uint32_t> resultSequence_{0};
     std::atomic<std::uint64_t> publishedGeneration_{~std::uint64_t{0}};
     std::atomic<float> publishedProbability_{0.0f};
+    std::atomic<std::uint64_t> publishedResultCount_{0};
 };
 
 } // namespace smartgate

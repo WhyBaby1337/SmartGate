@@ -109,6 +109,7 @@ void runVadInferenceWorkerTests() {
     requireWorker(worker.start(&fakeInference, &probe, 12),
                   "Worker should be restartable after a completed stop");
 
+    const auto resultsBeforeClamp = worker.publishedResultCount();
     std::array<float, 8> aboveRangeFrame{};
     aboveRangeFrame.fill(2.0f);
     requireWorker(queue.push(aboveRangeFrame.data(), 12),
@@ -116,12 +117,15 @@ void runVadInferenceWorkerTests() {
     requireWorker(waitForCalls(probe, 3),
                   "Restarted worker should process the clamping test frame");
     const auto clampDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (worker.latestProbability(12) != 1.0f
+    while (worker.publishedResultCount() == resultsBeforeClamp
            && std::chrono::steady_clock::now() < clampDeadline)
         std::this_thread::yield();
+    requireWorker(worker.publishedResultCount() > resultsBeforeClamp,
+                  "Worker should finish publishing the clamping test result");
     requireWorker(worker.latestProbability(12) == 1.0f,
                   "Worker must clamp probabilities above one");
 
+    const auto resultsBeforeNonFinite = worker.publishedResultCount();
     std::array<float, 8> nonFiniteFrame{};
     nonFiniteFrame.fill(std::numeric_limits<float>::quiet_NaN());
     requireWorker(queue.push(nonFiniteFrame.data(), 12),
@@ -129,9 +133,11 @@ void runVadInferenceWorkerTests() {
     requireWorker(waitForCalls(probe, 4),
                   "Worker should process the non-finite probability test frame");
     const auto finiteDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (probe.calls.load(std::memory_order_acquire) < 4
+    while (worker.publishedResultCount() == resultsBeforeNonFinite
            && std::chrono::steady_clock::now() < finiteDeadline)
         std::this_thread::yield();
+    requireWorker(worker.publishedResultCount() > resultsBeforeNonFinite,
+                  "Worker should finish publishing the non-finite test result");
     requireWorker(worker.latestProbability(12) == 0.0f,
                   "Worker must convert non-finite probabilities to zero");
 
