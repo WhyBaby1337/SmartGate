@@ -38,6 +38,28 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(detector.getConfidence() < 0.2f,
                     "A stable low-frequency tone should not look like keyboard clicks");
 
+    // Sustained broadband noise is bright, but it is not a sequence of
+    // keyboard-like transients. The classifier must not rely on brightness
+    // alone to create a high confidence score.
+    detector.reset();
+    std::uint32_t randomState = 0x12345678u;
+    std::vector<float> broadbandNoise(frameSize);
+    for (int frame = 0; frame < 40; ++frame) {
+        for (std::size_t i = 0; i < frameSize; ++i) {
+            float gaussianLike = 0.0f;
+            for (int k = 0; k < 6; ++k) {
+                randomState ^= randomState << 13;
+                randomState ^= randomState >> 17;
+                randomState ^= randomState << 5;
+                gaussianLike += static_cast<float>(randomState & 0xffffu) / 65535.0f;
+            }
+            broadbandNoise[i] = (gaussianLike - 3.0f) * 0.045f;
+        }
+        detector.processFrame(broadbandNoise.data(), broadbandNoise.size());
+    }
+    requireKeyboard(detector.getConfidence() < 0.35f,
+                    "Sustained broadband noise must not look strongly like keyboard clicks");
+
     detector.setMode(smartgate::AdaptiveKeyboardDetector::Mode::Mechanical);
     detector.reset();
     requireKeyboard(detector.processFrame(nullptr, frameSize) == 0.0f,

@@ -51,12 +51,15 @@ public:
         const float onset = hasReference_
             ? rms / std::max(referenceRms_, 0.005f) : 1.0f;
 
-        float mechanical = 0.40f * unit((crest - 2.5f) / 7.0f)
-                         + 0.40f * unit((highRatio - 0.04f) / 0.45f)
-                         + 0.20f * unit((onset - 1.3f) / 4.0f);
-        float membrane = 0.35f * unit((crest - 1.8f) / 5.0f)
-                        + 0.25f * unit((highRatio - 0.015f) / 0.25f)
-                        + 0.40f * unit((onset - 1.2f) / 3.0f);
+        // Broadband energy alone is not enough: sustained hiss/noise must
+        // score lower than a short, high-crest transient. Keep onset and
+        // crest factor dominant, with spectral brightness as supporting data.
+        const float mechanical = 0.55f * unit((crest - 2.5f) / 7.0f)
+                               + 0.15f * unit((highRatio - 0.04f) / 0.45f)
+                               + 0.30f * unit((onset - 1.3f) / 4.0f);
+        const float membrane = 0.50f * unit((crest - 1.8f) / 5.0f)
+                             + 0.10f * unit((highRatio - 0.015f) / 0.25f)
+                             + 0.40f * unit((onset - 1.2f) / 3.0f);
 
         float target = 0.0f;
         switch (mode_) {
