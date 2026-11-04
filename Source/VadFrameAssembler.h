@@ -17,34 +17,39 @@ public:
 
     explicit VadFrameAssembler(Queue& queue) noexcept : queue_(queue) {}
 
-    bool prepare(double inputRate, double outputRate = 16000.0) noexcept {
+    bool prepare(double inputRate, double outputRate = 16000.0,
+                 std::uint64_t generation = 0) noexcept {
+        generation_ = generation;
         frame_.fill(0.0f);
         framePosition_ = 0;
-        frameGeneration_ = 0;
         droppedFrames_ = 0;
         return resampler_.prepare(inputRate, outputRate);
     }
 
     // Returns true only when a complete frame was successfully queued.
-    // Generation is captured on the first sample, so a transition never
-    // relabels a partially assembled frame as belonging to the new session.
-    bool processSample(float input, std::uint32_t generation = 0) noexcept {
+    bool processSample(float input) noexcept {
         float converted = 0.0f;
         if (!resampler_.processSample(input, converted))
             return false;
-
-        if (framePosition_ == 0)
-            frameGeneration_ = generation;
 
         frame_[framePosition_++] = converted;
         if (framePosition_ != frameSize)
             return false;
 
-        const bool queued = queue_.push(frame_.data(), frameGeneration_);
+        const bool queued = queue_.push(frame_.data(), generation_);
         if (!queued)
             ++droppedFrames_;
         framePosition_ = 0;
         return queued;
+    }
+
+    // Called on the audio thread at an AI enable/disable boundary. A partial
+    // frame and resampler history are discarded so no frame straddles sessions.
+    void setGeneration(std::uint64_t generation) noexcept {
+        generation_ = generation;
+        frame_.fill(0.0f);
+        framePosition_ = 0;
+        resampler_.reset();
     }
 
     std::uint64_t droppedFrames() const noexcept { return droppedFrames_; }
@@ -55,7 +60,6 @@ public:
         resampler_.reset();
         frame_.fill(0.0f);
         framePosition_ = 0;
-        frameGeneration_ = 0;
         droppedFrames_ = 0;
     }
 
@@ -64,8 +68,8 @@ private:
     VadResampler resampler_;
     std::array<float, frameSize> frame_{};
     std::size_t framePosition_ = 0;
-    std::uint32_t frameGeneration_ = 0;
     std::uint64_t droppedFrames_ = 0;
+    std::uint64_t generation_ = 0;
 };
 
 } // namespace smartgate

@@ -24,7 +24,7 @@ void runVadFrameQueueTests() {
         std::array<float, 4> input{
             static_cast<float>(frame), static_cast<float>(frame + 1),
             static_cast<float>(frame + 2), static_cast<float>(frame + 3)};
-        requireQueue(queue.push(input.data(), static_cast<std::uint32_t>(100 + frame)),
+        requireQueue(queue.push(input.data(), static_cast<std::uint64_t>(100 + frame)),
                      "Queue should accept frames while capacity remains");
     }
 
@@ -33,25 +33,23 @@ void runVadFrameQueueTests() {
                  "A full real-time queue must drop the newest frame without waiting");
 
     for (int frame = 0; frame < 4; ++frame) {
-        std::uint32_t generation = 0;
+        std::uint64_t generation = 0;
         requireQueue(queue.pop(output, generation), "Queued frame should be available");
         requireQueue(output[0] == static_cast<float>(frame)
                      && output[3] == static_cast<float>(frame + 3),
                      "VAD frames must be delivered in FIFO order without corruption");
-        requireQueue(generation == static_cast<std::uint32_t>(100 + frame),
+        requireQueue(generation == static_cast<std::uint64_t>(100 + frame),
                      "VAD frames must preserve their generation metadata");
     }
     requireQueue(!queue.pop(output), "Queue should be empty after consuming all frames");
 
     const std::array<float, 4> wrapped{20.0f, 21.0f, 22.0f, 23.0f};
     requireQueue(queue.push(wrapped.data(), 777), "Queue should accept frames after index wrap");
-    std::uint32_t wrappedGeneration = 0;
+    std::uint64_t wrappedGeneration = 0;
     requireQueue(queue.pop(output, wrappedGeneration) && output == wrapped
                  && wrappedGeneration == 777,
                  "Queue should preserve samples and generation after ring-buffer wraparound");
 
-    // Exercise the SPSC contract with producer and consumer running at the
-    // same time. The producer retries on full; the queue itself never waits.
     {
         using ConcurrentQueue = smartgate::VadFrameQueue<8, 64>;
         ConcurrentQueue concurrentQueue;
@@ -64,7 +62,7 @@ void runVadFrameQueueTests() {
             for (int sequence = 0; sequence < frameCount; ++sequence) {
                 input.fill(static_cast<float>(sequence));
                 while (!concurrentQueue.push(input.data(),
-                       static_cast<std::uint32_t>(sequence / 1000)))
+                       static_cast<std::uint64_t>(sequence / 1000)))
                     std::this_thread::yield();
             }
             producerDone.store(true, std::memory_order_release);
@@ -74,13 +72,13 @@ void runVadFrameQueueTests() {
             ConcurrentQueue::Frame received{};
             int expected = 0;
             while (expected < frameCount) {
-                std::uint32_t generation = 0;
+                std::uint64_t generation = 0;
                 if (concurrentQueue.pop(received, generation)) {
                     for (const float sample : received) {
                         if (sample != static_cast<float>(expected))
                             fifoIntact = false;
                     }
-                    if (generation != static_cast<std::uint32_t>(expected / 1000))
+                    if (generation != static_cast<std::uint64_t>(expected / 1000))
                         fifoIntact = false;
                     ++expected;
                 } else if (producerDone.load(std::memory_order_acquire)) {

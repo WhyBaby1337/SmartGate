@@ -10,7 +10,7 @@ namespace smartgate {
 // Single-producer/single-consumer queue for fixed-size audio frames.
 // The audio callback is the only producer; a dedicated inference worker is
 // the only consumer. push() never waits and drops the newest frame when full.
-// Each frame carries the generation active when its first sample was assembled.
+// Slot metadata is published with the same release/acquire handoff as samples.
 template <std::size_t FrameSize, std::size_t Capacity>
 class VadFrameQueue {
     static_assert(FrameSize > 0, "FrameSize must be non-zero");
@@ -24,9 +24,7 @@ class VadFrameQueue {
 public:
     using Frame = std::array<float, FrameSize>;
 
-    bool push(const float* samples) noexcept { return push(samples, 0); }
-
-    bool push(const float* samples, std::uint32_t generation) noexcept {
+    bool push(const float* samples, std::uint64_t generation = 0) noexcept {
         if (samples == nullptr)
             return false;
 
@@ -35,29 +33,28 @@ public:
         if (static_cast<std::uint32_t>(write - read) >= Capacity)
             return false;
 
-        auto& destination = frames_[write & indexMask];
+        const auto slot = write & indexMask;
         for (std::size_t i = 0; i < FrameSize; ++i)
-            destination.samples[i] = samples[i];
-        destination.generation = generation;
-
+            frames_[slot][i] = samples[i];
+        generations_[slot] = generation;
         writeIndex_.store(write + 1, std::memory_order_release);
         return true;
     }
 
     bool pop(Frame& destination) noexcept {
-        std::uint32_t ignoredGeneration = 0;
+        std::uint64_t ignoredGeneration = 0;
         return pop(destination, ignoredGeneration);
     }
 
-    bool pop(Frame& destination, std::uint32_t& generation) noexcept {
+    bool pop(Frame& destination, std::uint64_t& generation) noexcept {
         const auto read = readIndex_.load(std::memory_order_relaxed);
         const auto write = writeIndex_.load(std::memory_order_acquire);
         if (read == write)
             return false;
 
-        const auto& source = frames_[read & indexMask];
-        destination = source.samples;
-        generation = source.generation;
+        const auto slot = read & indexMask;
+        destination = frames_[slot];
+        generation = generations_[slot];
         readIndex_.store(read + 1, std::memory_order_release);
         return true;
     }
@@ -72,15 +69,11 @@ public:
     static constexpr std::size_t capacity = Capacity;
 
 private:
-    struct Slot {
-        Frame samples{};
-        std::uint32_t generation = 0;
-    };
-
     static constexpr std::uint32_t indexMask =
         static_cast<std::uint32_t>(Capacity - 1);
 
-    alignas(64) std::array<Slot, Capacity> frames_{};
+    alignas(64) std::array<Frame, Capacity> frames_{};
+    std::array<std::uint64_t, Capacity> generations_{};
     alignas(64) std::atomic<std::uint32_t> writeIndex_{0};
     alignas(64) std::atomic<std::uint32_t> readIndex_{0};
 };
