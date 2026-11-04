@@ -4,6 +4,7 @@
 void runGateEnvelopeTests();
 void runTargetProfileTests();
 void runAdaptiveKeyboardDetectorTests();
+void runVadFrameQueueTests();
 
 int main() {
     try {

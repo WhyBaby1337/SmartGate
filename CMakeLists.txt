@@ -14,7 +14,8 @@ add_executable(SmartGateDspTests
     tests/main.cpp
     tests/GateEnvelopeTests.cpp
     tests/TargetProfileTests.cpp
-    tests/AdaptiveKeyboardDetectorTests.cpp)
+    tests/AdaptiveKeyboardDetectorTests.cpp
+    tests/VadFrameQueueTests.cpp)
 target_link_libraries(SmartGateDspTests PRIVATE smartgate_dsp)
 add_test(NAME SmartGateDspTests COMMAND SmartGateDspTests)
 
