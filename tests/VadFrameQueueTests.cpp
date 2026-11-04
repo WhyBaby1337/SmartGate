@@ -85,7 +85,8 @@ void runVadFrameQueueTests() {
         consumer.join();
         requireQueue(fifoIntact,
                      "Concurrent SPSC producer/consumer must preserve FIFO frames");
-        requireQueue(!concurrentQueue.pop(output),
+        ConcurrentQueue::Frame drained{};
+        requireQueue(!concurrentQueue.pop(drained),
                      "Concurrent SPSC stress test must drain the queue");
     }
 
