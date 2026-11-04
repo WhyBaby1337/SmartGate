@@ -56,6 +56,27 @@ void runTargetProfileTests() {
     requireFeature(profile.frameCount() == 32,
                    "Rejected frames must not modify profile statistics");
 
+    const auto saved = profile.makeSnapshot();
+    smartgate::TargetProfile restored;
+    requireFeature(restored.restore(saved), "A valid profile snapshot must restore");
+    requireFeature(restored.frameCount() == profile.frameCount() && restored.isReady(),
+                   "Restored profile must preserve training progress");
+    requireFeature(std::abs(restored.confidence(extracted) - profile.confidence(extracted)) < 1.0e-6f,
+                   "Restored profile must preserve confidence");
+
+    auto corrupt = saved;
+    corrupt.m2[2] = -1.0;
+    requireFeature(!restored.restore(corrupt),
+                   "Negative accumulated variance must be rejected");
+    corrupt = saved;
+    corrupt.mean[0] = std::numeric_limits<double>::infinity();
+    requireFeature(!restored.restore(corrupt),
+                   "Non-finite profile values must be rejected");
+    corrupt = saved;
+    corrupt.count = smartgate::TargetProfile::maximumRestoredFrames + 1;
+    requireFeature(!restored.restore(corrupt),
+                   "Unreasonably large restored frame counts must be rejected");
+
     profile.clear();
     requireFeature(!profile.isReady() && profile.frameCount() == 0,
                    "Clearing profile must reset training state");

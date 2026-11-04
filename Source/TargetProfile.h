@@ -14,6 +14,40 @@ namespace smartgate {
 class TargetProfile {
 public:
     static constexpr std::uint64_t minimumFrames = 8;
+    static constexpr std::uint64_t maximumRestoredFrames = 1000000000ULL;
+
+    struct Snapshot {
+        std::uint64_t count = 0;
+        std::array<double, 5> mean{};
+        std::array<double, 5> m2{};
+    };
+
+    Snapshot makeSnapshot() const noexcept {
+        return {count_, mean_, m2_};
+    }
+
+    // Restore is intended for validated, non-real-time state loading. The
+    // caller must ensure this object is not accessed concurrently.
+    bool restore(const Snapshot& snapshot) noexcept {
+        if (snapshot.count > maximumRestoredFrames)
+            return false;
+
+        for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
+            if (!std::isfinite(snapshot.mean[i])
+                || !std::isfinite(snapshot.m2[i])
+                || snapshot.m2[i] < 0.0)
+                return false;
+        }
+
+        count_ = snapshot.count;
+        mean_ = snapshot.mean;
+        m2_ = snapshot.m2;
+        if (count_ == 0) {
+            mean_.fill(0.0);
+            m2_.fill(0.0);
+        }
+        return true;
+    }
 
     void clear() noexcept {
         count_ = 0;
