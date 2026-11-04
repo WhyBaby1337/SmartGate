@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(CTest)
+find_package(Threads REQUIRED)
 
 add_library(smartgate_dsp INTERFACE)
 target_include_directories(smartgate_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
@@ -18,7 +19,7 @@ add_executable(SmartGateDspTests
     tests/VadFrameQueueTests.cpp
     tests/VadResamplerTests.cpp
     tests/VadFrameAssemblerTests.cpp)
-target_link_libraries(SmartGateDspTests PRIVATE smartgate_dsp)
+target_link_libraries(SmartGateDspTests PRIVATE smartgate_dsp Threads::Threads)
 add_test(NAME SmartGateDspTests COMMAND SmartGateDspTests)
 
 add_executable(SmartGateDspBenchmark tests/DspBenchmark.cpp)

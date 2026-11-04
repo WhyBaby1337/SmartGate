@@ -1,7 +1,9 @@
 #include "VadFrameQueue.h"
 
 #include <array>
+#include <atomic>
 #include <stdexcept>
+#include <thread>
 
 namespace {
 void requireQueue(bool condition, const char* message) {
@@ -41,6 +43,51 @@ void runVadFrameQueueTests() {
     requireQueue(queue.push(wrapped.data()), "Queue should accept frames after index wrap");
     requireQueue(queue.pop(output) && output == wrapped,
                  "Queue should preserve frames after ring-buffer wraparound");
+
+    // Exercise the SPSC contract with producer and consumer running at the
+    // same time. The producer retries on full; the queue itself never waits.
+    {
+        using ConcurrentQueue = smartgate::VadFrameQueue<8, 64>;
+        ConcurrentQueue concurrentQueue;
+        constexpr int frameCount = 20000;
+        std::atomic<bool> producerDone{false};
+        bool fifoIntact = true;
+
+        std::thread producer([&] {
+            std::array<float, 8> input{};
+            for (int sequence = 0; sequence < frameCount; ++sequence) {
+                input.fill(static_cast<float>(sequence));
+                while (!concurrentQueue.push(input.data()))
+                    std::this_thread::yield();
+            }
+            producerDone.store(true, std::memory_order_release);
+        });
+
+        std::thread consumer([&] {
+            ConcurrentQueue::Frame received{};
+            int expected = 0;
+            while (expected < frameCount) {
+                if (concurrentQueue.pop(received)) {
+                    for (const float sample : received) {
+                        if (sample != static_cast<float>(expected))
+                            fifoIntact = false;
+                    }
+                    ++expected;
+                } else if (producerDone.load(std::memory_order_acquire)) {
+                    // The producer can only finish after every frame was
+                    // accepted; keep draining until the expected count lands.
+                    std::this_thread::yield();
+                }
+            }
+        });
+
+        producer.join();
+        consumer.join();
+        requireQueue(fifoIntact,
+                     "Concurrent SPSC producer/consumer must preserve FIFO frames");
+        requireQueue(!concurrentQueue.pop(output),
+                     "Concurrent SPSC stress test must drain the queue");
+    }
 
     queue.reset();
     requireQueue(!queue.pop(output), "Reset should empty the queue while threads are stopped");
