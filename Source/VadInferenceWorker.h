@@ -43,6 +43,7 @@ public:
         inference_ = inference;
         context_ = context;
         activeGeneration_.store(generation, std::memory_order_release);
+        resultSequence_.store(0, std::memory_order_relaxed);
         publishedGeneration_.store(~std::uint64_t{0}, std::memory_order_relaxed);
         publishedProbability_.store(0.0f, std::memory_order_relaxed);
         stopRequested_.store(false, std::memory_order_release);
@@ -66,13 +67,13 @@ public:
 
     // Returns zero until a result for the requested active generation exists.
     float latestProbability(std::uint64_t generation) const noexcept {
-        const auto sequenceBefore = resultSequence_.load(std::memory_order_acquire);
+        const auto sequenceBefore = resultSequence_.load(std::memory_order_seq_cst);
         if ((sequenceBefore & 1u) != 0u)
             return 0.0f;
 
         const auto publishedGeneration =
-            publishedGeneration_.load(std::memory_order_relaxed);
-        const auto probability = publishedProbability_.load(std::memory_order_relaxed);
+            publishedGeneration_.load(std::memory_order_seq_cst);
+        const auto probability = publishedProbability_.load(std::memory_order_seq_cst);
         const auto sequenceAfter = resultSequence_.load(std::memory_order_acquire);
 
         if (sequenceBefore != sequenceAfter || (sequenceAfter & 1u) != 0u
@@ -122,10 +123,10 @@ private:
             // Publish the generation/probability pair as one bounded snapshot.
             // The audio reader never spins: an in-progress or changing snapshot
             // simply produces a neutral result for this block.
-            resultSequence_.fetch_add(1, std::memory_order_acq_rel);
-            publishedProbability_.store(probability, std::memory_order_relaxed);
-            publishedGeneration_.store(frameGeneration, std::memory_order_relaxed);
-            resultSequence_.fetch_add(1, std::memory_order_release);
+            resultSequence_.fetch_add(1, std::memory_order_seq_cst);
+            publishedProbability_.store(probability, std::memory_order_seq_cst);
+            publishedGeneration_.store(frameGeneration, std::memory_order_seq_cst);
+            resultSequence_.fetch_add(1, std::memory_order_seq_cst);
         }
         running_.store(false, std::memory_order_release);
     }

@@ -10,6 +10,7 @@ permissions:
 concurrency:
   group: smartgate-${{ github.ref }}
   cancel-in-progress: false
+  queue: max
 jobs:
   windows:
     runs-on: windows-2022
