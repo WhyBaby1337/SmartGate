@@ -1,6 +1,7 @@
 #include "AdaptiveKeyboardDetector.h"
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -41,4 +42,21 @@ void runAdaptiveKeyboardDetectorTests() {
     detector.reset();
     requireKeyboard(detector.processFrame(nullptr, frameSize) == 0.0f,
                     "Null frames must not produce a false positive");
+
+    std::vector<float> invalidFrame(frameSize,
+        std::numeric_limits<float>::quiet_NaN());
+    const float invalidConfidence = detector.processFrame(
+        invalidFrame.data(), invalidFrame.size());
+    requireKeyboard(std::isfinite(invalidConfidence),
+                    "NaN samples must not poison keyboard confidence");
+
+    invalidFrame[17] = std::numeric_limits<float>::infinity();
+    const float infiniteConfidence = detector.processFrame(
+        invalidFrame.data(), invalidFrame.size());
+    requireKeyboard(std::isfinite(infiniteConfidence),
+                    "Infinite samples must not poison keyboard confidence");
+
+    detector.reset();
+    requireKeyboard(detector.getConfidence() == 0.0f,
+                    "Reset must clear accumulated keyboard confidence");
 }
