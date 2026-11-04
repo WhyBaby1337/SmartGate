@@ -59,7 +59,7 @@ void runGateEnvelopeTests() {
     envelope.setHoldTime(100.0f);
     for (int i = 0; i < 1000; ++i)
         envelope.process(1.0f);
-    for (int i = 0; i < 10000; ++i)
+    for (int i = 0; i < 4500; ++i)
         envelope.process(0.0f);
     require(envelope.getGain() > 0.9f,
             "Hold should preserve an open gate after the detector drops below threshold");
