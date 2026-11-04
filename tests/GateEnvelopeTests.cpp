@@ -87,6 +87,25 @@ void runGateEnvelopeTests() {
             "Gate should close after the configured hold interval expires");
     envelope.setHoldTime(0.0f);
 
+    // Adaptive Hold adds a bounded extension after sustained gate activity.
+    // A short transient should receive less extension than a long open phrase.
+    envelope.reset();
+    envelope.setThresholdDb(-40.0f);
+    envelope.setHysteresisDb(3.0f);
+    envelope.setTimes(1.0f, 1.0f);
+    envelope.setHoldTime(20.0f);
+    envelope.setAdaptiveHoldAmount(1.0f);
+    for (int i = 0; i < 48000; ++i)
+        envelope.process(0.2f);
+    for (int i = 0; i < 4700; ++i)
+        envelope.process(0.0f);
+    require(envelope.getGain() > 0.9f,
+            "Adaptive Hold should preserve a sustained phrase beyond base Hold");
+    for (int i = 0; i < 12000; ++i)
+        envelope.process(0.0f);
+    require(envelope.getGain() < 0.1f,
+            "Adaptive Hold must remain bounded and eventually close");
+
     // Range controls attenuation instead of forcing every closed state to
     // silence. A 12 dB range should settle close to -12 dB gain.
     envelope.reset();

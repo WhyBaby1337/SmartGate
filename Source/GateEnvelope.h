@@ -10,6 +10,10 @@ class GateEnvelope {
 public:
     void prepare(double sampleRate) noexcept {
         sampleRate_ = std::isfinite(sampleRate) ? std::max(1.0, sampleRate) : 44100.0;
+        maximumAdaptiveHoldSamples_ = static_cast<std::uint64_t>(
+            std::llround(0.150 * sampleRate_));
+        maximumAdaptiveDurationSamples_ = static_cast<std::uint64_t>(
+            std::llround(2.0 * sampleRate_));
         updateCoefficients();
         reset();
     }
@@ -18,6 +22,7 @@ public:
         detectorLevel_ = 0.0f;
         gain_ = 1.0f;
         holdRemainingSamples_ = 0;
+        openDurationSamples_ = 0;
         gateOpen_ = false;
     }
 
@@ -36,6 +41,13 @@ public:
         holdSamples_ = static_cast<std::uint64_t>(std::llround(
             static_cast<double>(safeMs) * 0.001 * sampleRate_));
         holdRemainingSamples_ = std::min(holdRemainingSamples_, holdSamples_);
+    }
+
+    // 0 disables adaptation. At 1.0, sustained open periods can add up to
+    // 150 ms to the configured base Hold, helping preserve phrase endings.
+    void setAdaptiveHoldAmount(float amount) noexcept {
+        adaptiveHoldAmount_ = std::isfinite(amount)
+            ? std::clamp(amount, 0.0f, 1.0f) : 0.0f;
     }
 
     void setThresholdDb(float thresholdDb) noexcept {
@@ -80,15 +92,29 @@ public:
 
         // Separate opening and closing thresholds provide hysteresis: once
         // open, small level fluctuations around the threshold cannot chatter.
+        const bool wasGateOpen = gateOpen_;
         if (detectorLevel_ >= thresholdLinear_)
             gateOpen_ = true;
         else if (detectorLevel_ < closeThresholdLinear_)
             gateOpen_ = false;
 
-        if (gateOpen_)
+        if (gateOpen_) {
+            if (openDurationSamples_ < maximumAdaptiveDurationSamples_)
+                ++openDurationSamples_;
             holdRemainingSamples_ = holdSamples_;
-        else if (holdRemainingSamples_ > 0)
-            --holdRemainingSamples_;
+        } else {
+            if (wasGateOpen) {
+                const auto adaptiveExtra = static_cast<std::uint64_t>(
+                    static_cast<double>(openDurationSamples_)
+                    * adaptiveHoldAmount_ * 0.10);
+                holdRemainingSamples_ = std::min(
+                    holdSamples_ + adaptiveExtra,
+                    holdSamples_ + maximumAdaptiveHoldSamples_);
+                openDurationSamples_ = 0;
+            } else if (holdRemainingSamples_ > 0) {
+                --holdRemainingSamples_;
+            }
+        }
         const float target = (gateOpen_ || holdRemainingSamples_ > 0)
             ? 1.0f : closedGain_;
         const float gainCoefficient = target > gain_ ? attackCoefficient_ : releaseCoefficient_;
@@ -135,6 +161,10 @@ private:
     float detectorLevel_ = 0.0f;
     std::uint64_t holdSamples_ = 0;
     std::uint64_t holdRemainingSamples_ = 0;
+    std::uint64_t openDurationSamples_ = 0;
+    std::uint64_t maximumAdaptiveHoldSamples_ = 0;
+    std::uint64_t maximumAdaptiveDurationSamples_ = 0;
+    float adaptiveHoldAmount_ = 0.0f;
     float gain_ = 1.0f;
 };
 
