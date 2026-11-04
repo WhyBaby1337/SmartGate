@@ -6,6 +6,7 @@ void runTargetProfileTests();
 void runAdaptiveKeyboardDetectorTests();
 void runVadFrameQueueTests();
 void runVadResamplerTests();
+void runVadFrameAssemblerTests();
 
 int main() {
     try {
@@ -14,6 +15,7 @@ int main() {
         runAdaptiveKeyboardDetectorTests();
         runVadFrameQueueTests();
         runVadResamplerTests();
+        runVadFrameAssemblerTests();
         std::cout << "All SmartGate DSP tests passed.\n";
         return 0;
     } catch (const std::exception& e) {
