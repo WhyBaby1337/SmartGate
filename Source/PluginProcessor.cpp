@@ -35,7 +35,7 @@ SmartGateAudioProcessor::createParameterLayout() {
         juce::AudioParameterFloatAttributes{}.withLabel("dB")));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"range", 1}, "Range",
-        juce::NormalisableRange<float>{0.0f, 80.0f, 0.1f}, 80.0f,
+        juce::NormalisableRange<float>{-80.0f, 0.0f, 0.1f}, -80.0f,
         juce::AudioParameterFloatAttributes{}.withLabel("dB")));
     layout.add(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{"aiEnabled", 1}, "AI Engine", true));

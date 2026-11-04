@@ -90,7 +90,7 @@ void runGateEnvelopeTests() {
     // Range controls attenuation instead of forcing every closed state to
     // silence. A 12 dB range should settle close to -12 dB gain.
     envelope.reset();
-    envelope.setRangeDb(12.0f);
+    envelope.setRangeDb(-12.0f);
     envelope.setThresholdDb(-40.0f);
     envelope.setHysteresisDb(3.0f);
     envelope.setHoldTime(0.0f);
@@ -100,7 +100,7 @@ void runGateEnvelopeTests() {
     require(std::abs(envelope.getGain() - 0.2511886f) < 0.01f,
             "Closed gate gain should match the configured Range attenuation");
 
-    envelope.setRangeDb(80.0f);
+    envelope.setRangeDb(-80.0f);
     for (int i = 0; i < 30000; ++i)
         envelope.process(0.0f);
     require(envelope.getGain() < 0.0002f,

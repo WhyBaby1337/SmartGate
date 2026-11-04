@@ -52,8 +52,8 @@ public:
     // 80 dB approximates a hard mute; smaller values retain room tone.
     void setRangeDb(float rangeDb) noexcept {
         const float safeDb = std::isfinite(rangeDb)
-            ? std::clamp(rangeDb, 0.0f, 80.0f) : 80.0f;
-        closedGain_ = std::pow(10.0f, -safeDb / 20.0f);
+            ? std::clamp(rangeDb, -80.0f, 0.0f) : -80.0f;
+        closedGain_ = std::pow(10.0f, safeDb / 20.0f);
     }
 
     float process(float inputLevel) noexcept {
