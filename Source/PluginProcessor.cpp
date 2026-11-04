@@ -156,7 +156,18 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         0.0f, 1.0f, parameters_.getRawParameterValue("keyboardReduction")->load(std::memory_order_relaxed));
     const int keyboardMode = juce::jlimit(0, 2, static_cast<int>(std::lround(
         parameters_.getRawParameterValue("keyboardMode")->load(std::memory_order_relaxed))));
-    keyboardDetector_.setMode(static_cast<smartgate::AdaptiveKeyboardDetector::Mode>(keyboardMode));
+    // Do not run the keyboard classifier when its reduction is zero.
+    // This keeps the default path lean, including when the optional AI engine
+    // is disabled. Re-enable it only when the user requests keyboard cleanup.
+    if (keyboardReduction > 0.0f) {
+        keyboardDetector_.setMode(static_cast<smartgate::AdaptiveKeyboardDetector::Mode>(keyboardMode));
+    } else {
+        keyboardConfidence_ = 0.0f;
+    }
+
+    const bool analyzeTarget = aiEnabled;
+    const bool analyzeKeyboard = keyboardReduction > 0.0f;
+    const bool analyzeFrames = analyzeTarget || analyzeKeyboard;
 
     const int channels = buffer.getNumChannels();
     const int samples = buffer.getNumSamples();
@@ -173,15 +184,20 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
         mono /= static_cast<float>(juce::jmax(1, channels));
 
-        // The keyboard classifier is a DSP subsystem and keeps running even
-        // when the optional AI/target-analysis engine is disabled.
-        featureFrame_[featureFramePosition_++] = mono;
-        if (featureFramePosition_ == featureFrameSize_) {
-            keyboardConfidence_ = keyboardDetector_.processFrame(
-                featureFrame_.data(), featureFrame_.size());
-            if (aiEnabled)
-                finishFeatureFrame();
-            featureFramePosition_ = 0;
+        // Share one low-rate mono frame between the optional target analyzer
+        // and keyboard classifier. If both are inactive, skip frame assembly
+        // and all classifier work rather than burning CPU on unused features.
+        if (analyzeFrames) {
+            featureFrame_[featureFramePosition_++] = mono;
+            if (featureFramePosition_ == featureFrameSize_) {
+                if (analyzeKeyboard) {
+                    keyboardConfidence_ = keyboardDetector_.processFrame(
+                        featureFrame_.data(), featureFrame_.size());
+                }
+                if (analyzeTarget)
+                    finishFeatureFrame();
+                featureFramePosition_ = 0;
+            }
         }
 
         targetConfidenceSmoothed_ = targetConfidenceTarget_

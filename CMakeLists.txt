@@ -18,6 +18,9 @@ add_executable(SmartGateDspTests
 target_link_libraries(SmartGateDspTests PRIVATE smartgate_dsp)
 add_test(NAME SmartGateDspTests COMMAND SmartGateDspTests)
 
+add_executable(SmartGateDspBenchmark tests/DspBenchmark.cpp)
+target_link_libraries(SmartGateDspBenchmark PRIVATE smartgate_dsp)
+
 option(SMARTGATE_BUILD_PLUGIN "Build the JUCE VST3 plugin" ON)
 if(SMARTGATE_BUILD_PLUGIN)
     include(FetchContent)

@@ -21,6 +21,8 @@ jobs:
         run: cmake --build build --config Release --parallel 2
       - name: Run DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Measure DSP CPU budget
+        run: .\\build\\Release\\SmartGateDspBenchmark.exe
       - name: Upload VST3
         uses: actions/upload-artifact@v4
         with:
