@@ -89,7 +89,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     wasLearningTarget_ = learningTarget;
 
     const float targetAmount = juce::jlimit(
-        0.0f, 1.0f, *parameters_.getRawParameterValue("targetAmount"));
+        0.0f, 1.0f, parameters_.getRawParameterValue("targetAmount")->load(std::memory_order_relaxed));
     const int channels = buffer.getNumChannels();
     const int samples = buffer.getNumSamples();
 
