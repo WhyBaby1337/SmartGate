@@ -13,7 +13,8 @@ target_include_directories(smartgate_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/S
 add_executable(SmartGateDspTests
     tests/main.cpp
     tests/GateEnvelopeTests.cpp
-    tests/TargetProfileTests.cpp)
+    tests/TargetProfileTests.cpp
+    tests/AdaptiveKeyboardDetectorTests.cpp)
 target_link_libraries(SmartGateDspTests PRIVATE smartgate_dsp)
 add_test(NAME SmartGateDspTests COMMAND SmartGateDspTests)
 
