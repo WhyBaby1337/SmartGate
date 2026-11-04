@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <vector>
 
 namespace {
 constexpr double sampleRate = 48000.0;
@@ -22,7 +23,7 @@ struct Result {
 };
 
 template <bool targetEnabled, bool keyboardEnabled>
-Result runScenario(const std::array<float, sampleCount>& input) {
+Result runScenario(const std::vector<float>& input) {
     smartgate::GateEnvelope gate;
     smartgate::FeatureExtractor features;
     smartgate::AdaptiveKeyboardDetector keyboard;
@@ -65,7 +66,7 @@ Result runScenario(const std::array<float, sampleCount>& input) {
 }
 
 int main() {
-    std::array<float, sampleCount> input{};
+    // Keep the multi-megabyte signal buffer off the Windows process stack.\n    std::vector<float> input(sampleCount, 0.0f);
     // Prepare deterministic speech-like test material outside the timed region.
     for (std::size_t i = 0; i < input.size(); ++i) {
         const double t = static_cast<double>(i) / sampleRate;
