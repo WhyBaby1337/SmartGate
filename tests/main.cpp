@@ -11,10 +11,11 @@ int main() {
         runGateEnvelopeTests();
         runTargetProfileTests();
         runAdaptiveKeyboardDetectorTests();
-        std::cout << "All SmartGate DSP tests passed.\n";
+        runVadFrameQueueTests();
+        std::cout << "All SmartGate DSP tests passed.\\n";
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "TEST FAILURE: " << e.what() << '\n';
+        std::cerr << "TEST FAILURE: " << e.what() << '\\n';
         return 1;
     }
 }
