@@ -33,6 +33,14 @@ void runVadResamplerTests() {
     requireResampler(outputCount == 1599,
                      "Streaming 48 kHz conversion should emit one sample per three input intervals");
 
+    // A failed re-prepare must invalidate the old configuration instead of
+    // silently continuing to process at the previous sample rate.
+    requireResampler(!resampler.prepare(8000.0, 16000.0) && !resampler.isPrepared(),
+                     "A failed re-prepare must leave the converter unprepared");
+    output = 123.0f;
+    requireResampler(!resampler.processSample(0.25f, output) && output == 123.0f,
+                     "An unprepared converter must not emit or modify output");
+
     requireResampler(resampler.prepare(44100.0, 16000.0),
                      "44.1 kHz to 16 kHz preparation should succeed");
     outputCount = 0;

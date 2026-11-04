@@ -12,13 +12,20 @@ namespace smartgate {
 class VadResampler {
 public:
     bool prepare(double inputRate, double outputRate = 16000.0) noexcept {
+        // Invalidate the previous configuration first. A failed re-prepare
+        // must never leave an old sample rate active by accident.
+        prepared_ = false;
+        inputRate_ = 0.0;
+        outputRate_ = 16000.0;
+        reset();
+
         if (!std::isfinite(inputRate) || !std::isfinite(outputRate)
             || inputRate < outputRate || outputRate <= 0.0)
             return false;
 
         inputRate_ = inputRate;
         outputRate_ = outputRate;
-        reset();
+        prepared_ = true;
         return true;
     }
 
@@ -29,7 +36,11 @@ public:
     }
 
     // Returns true when one output sample is ready. No allocation or locking.
+    // Calls before a successful prepare() are harmless and produce no output.
     bool processSample(float input, float& output) noexcept {
+        if (!prepared_)
+            return false;
+
         const float current = std::isfinite(input) ? input : 0.0f;
         if (!hasPrevious_) {
             previous_ = current;
@@ -53,6 +64,7 @@ public:
 
     double inputRate() const noexcept { return inputRate_; }
     double outputRate() const noexcept { return outputRate_; }
+    bool isPrepared() const noexcept { return prepared_; }
 
 private:
     double inputRate_ = 0.0;
@@ -60,6 +72,7 @@ private:
     double phase_ = 0.0;
     float previous_ = 0.0f;
     bool hasPrevious_ = false;
+    bool prepared_ = false;
 };
 
 } // namespace smartgate
