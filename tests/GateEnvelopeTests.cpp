@@ -51,6 +51,24 @@ void runGateEnvelopeTests() {
     }
     require(envelope.getGain() < 0.01f, "Release should eventually close envelope");
 
+    // Hold keeps the gate open briefly after the detector falls below
+    // threshold, independently of the gain release time.
+    envelope.reset();
+    envelope.setThresholdDb(-40.0f);
+    envelope.setTimes(1.0f, 1.0f);
+    envelope.setHoldTime(100.0f);
+    for (int i = 0; i < 1000; ++i)
+        envelope.process(1.0f);
+    for (int i = 0; i < 10000; ++i)
+        envelope.process(0.0f);
+    require(envelope.getGain() > 0.9f,
+            "Hold should preserve an open gate after the detector drops below threshold");
+    for (int i = 0; i < 7000; ++i)
+        envelope.process(0.0f);
+    require(envelope.getGain() < 0.1f,
+            "Gate should close after the configured hold interval expires");
+    envelope.setHoldTime(0.0f);
+
     envelope.setThresholdDb(0.0f);
     require(std::isfinite(envelope.process(0.5f)),
             "Envelope output must remain finite");
