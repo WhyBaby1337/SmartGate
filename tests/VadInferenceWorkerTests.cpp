@@ -58,6 +58,10 @@ void runVadInferenceWorkerTests() {
     requireWorker(waitForCalls(probe, 1), "Worker should process the current-generation frame");
     requireWorker(probe.lastGeneration.load(std::memory_order_relaxed) == 10,
                   "Worker must discard queued frames from an earlier generation");
+    const auto firstDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (worker.latestProbability(10) != 0.65f
+           && std::chrono::steady_clock::now() < firstDeadline)
+        std::this_thread::yield();
     requireWorker(worker.latestProbability(10) == 0.65f,
                   "Worker should publish the inference probability for its generation");
 
@@ -74,6 +78,10 @@ void runVadInferenceWorkerTests() {
                   "Worker should skip stale data and process the new generation");
     requireWorker(probe.lastGeneration.load(std::memory_order_relaxed) == 11,
                   "Inference callback must receive the frame's active generation");
+    const auto secondDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (worker.latestProbability(11) != 0.25f
+           && std::chrono::steady_clock::now() < secondDeadline)
+        std::this_thread::yield();
     requireWorker(worker.latestProbability(11) == 0.25f,
                   "Worker should publish only the current generation's result");
 
