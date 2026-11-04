@@ -2,6 +2,7 @@
 #include "AudioFeatures.h"
 #include "GateEnvelope.h"
 #include "TargetProfile.h"
+#include "VadResampler.h"
 
 #include <array>
 #include <chrono>
@@ -63,12 +64,28 @@ Result runScenario(const std::vector<float>& input) {
     (void) outputSink;
     return {elapsed, elapsed / (static_cast<double>(measuredSeconds) * 1000.0) * 100.0};
 }
+
+Result runVadResamplerScenario(const std::vector<float>& input) {
+    smartgate::VadResampler resampler;
+    if (!resampler.prepare(sampleRate, 16000.0))
+        return {};
+    volatile float outputSink = 0.0f;
+    float output = 0.0f;
+
+    const auto start = std::chrono::steady_clock::now();
+    for (const auto sample : input) {
+        if (resampler.processSample(sample, output))
+            outputSink = outputSink + output;
+    }
+    const auto end = std::chrono::steady_clock::now();
+    const double elapsed = std::chrono::duration<double, std::milli>(end - start).count();
+    (void) outputSink;
+    return {elapsed, elapsed / (static_cast<double>(measuredSeconds) * 1000.0) * 100.0};
+}
 }
 
 int main() {
-    // Keep the multi-megabyte signal buffer off the Windows process stack.
     std::vector<float> input(sampleCount, 0.0f);
-    // Prepare deterministic speech-like test material outside the timed region.
     for (std::size_t i = 0; i < input.size(); ++i) {
         const double t = static_cast<double>(i) / sampleRate;
         const double envelope = 0.25 + 0.20 * std::sin(2.0 * 3.141592653589793 * 2.3 * t);
@@ -81,6 +98,7 @@ int main() {
     const auto gateOnly = runScenario<false, false>(input);
     const auto target = runScenario<true, false>(input);
     const auto targetAndKeyboard = runScenario<true, true>(input);
+    const auto vadResampler = runVadResamplerScenario(input);
 
     std::cout << "SmartGate DSP microbenchmark (48 kHz mono analysis, 8 s simulated audio)\n"
               << "Gate only: " << gateOnly.elapsedMs << " ms, "
@@ -89,6 +107,8 @@ int main() {
               << target.realtimePercent << "% of one logical core\n"
               << "Target + keyboard classifier: " << targetAndKeyboard.elapsedMs << " ms, "
               << targetAndKeyboard.realtimePercent << "% of one logical core\n"
-              << "Note: excludes JUCE host overhead and any neural VAD inference.\n";
+              << "VAD resampler (FIR 48->16 kHz): " << vadResampler.elapsedMs << " ms, "
+              << vadResampler.realtimePercent << "% of one logical core\n"
+              << "Note: excludes JUCE host overhead and neural VAD inference.\n";
     return 0;
 }
