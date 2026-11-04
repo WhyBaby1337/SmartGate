@@ -26,6 +26,8 @@ SmartGateAudioProcessor::createParameterLayout() {
         juce::NormalisableRange<float>{1.0f, 1000.0f, 1.0f, 0.5f}, 120.0f,
         juce::AudioParameterFloatAttributes{}.withLabel("ms")));
     layout.add(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{"aiEnabled", 1}, "AI Engine", true));
+    layout.add(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{"learnTarget", 1}, "Learn Target", false));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"targetAmount", 1}, "Target Influence",
@@ -43,6 +45,7 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     targetConfidenceSmoothingCoefficient_ = static_cast<float>(
         std::exp(-1.0 / (0.030 * (std::isfinite(sampleRate) ? sampleRate : 44100.0))));
     wasLearningTarget_ = false;
+    wasAiEnabled_ = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
     publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
 }
 
@@ -79,7 +82,20 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     gateEnvelope_.setTimes(*parameters_.getRawParameterValue("attack"),
                            *parameters_.getRawParameterValue("release"));
 
-    const bool learningTarget = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
+    const bool aiEnabled = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
+    const bool learningTarget = aiEnabled
+        && *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
+
+    // AI OFF is a true bypass: no feature extraction or target inference is
+    // performed. Re-entry starts with a clean frame to avoid stale samples.
+    if (aiEnabled != wasAiEnabled_) {
+        featureExtractor_.reset();
+        featureFramePosition_ = 0;
+        targetConfidenceTarget_ = 1.0f;
+        targetConfidenceSmoothed_ = 1.0f;
+        wasAiEnabled_ = aiEnabled;
+    }
+
     if (learningTarget && !wasLearningTarget_) {
         // A new Learn Target session starts with a clean profile. All profile
         // access stays on the audio thread, so no locks or cross-thread copies
@@ -120,17 +136,20 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
         mono /= static_cast<float>(juce::jmax(1, channels));
 
-        featureFrame_[featureFramePosition_++] = mono;
-        if (featureFramePosition_ == featureFrameSize_) {
-            finishFeatureFrame();
-            featureFramePosition_ = 0;
+        if (aiEnabled) {
+            featureFrame_[featureFramePosition_++] = mono;
+            if (featureFramePosition_ == featureFrameSize_) {
+                finishFeatureFrame();
+                featureFramePosition_ = 0;
+            }
         }
 
         targetConfidenceSmoothed_ = targetConfidenceTarget_
             + targetConfidenceSmoothingCoefficient_
                 * (targetConfidenceSmoothed_ - targetConfidenceTarget_);
-        const float targetGain = (1.0f - targetAmount)
-            + targetAmount * targetConfidenceSmoothed_;
+        const float targetGain = aiEnabled
+            ? (1.0f - targetAmount) + targetAmount * targetConfidenceSmoothed_
+            : 1.0f;
         const float gain = gateEnvelope_.process(linkedPeak * targetGain);
 
         for (int channel = 0; channel < channels; ++channel)
@@ -168,21 +187,24 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
         if (auto* node = xml->getChildByName("TARGET_PROFILE")) {
             smartgate::TargetProfile::Snapshot snapshot;
             const auto count = node->getIntAttribute("count", -1);
-            if (count < 0)
-                return;
-            snapshot.count = static_cast<std::uint64_t>(count);
-            for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
-                const auto index = juce::String(static_cast<int>(i));
-                snapshot.mean[i] = node->getDoubleAttribute("mean" + index,
-                    std::numeric_limits<double>::quiet_NaN());
-                snapshot.m2[i] = node->getDoubleAttribute("m2_" + index,
-                    std::numeric_limits<double>::quiet_NaN());
+            bool valid = count >= 0;
+            if (valid) {
+                snapshot.count = static_cast<std::uint64_t>(count);
+                for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
+                    const auto index = juce::String(static_cast<int>(i));
+                    snapshot.mean[i] = node->getDoubleAttribute("mean" + index,
+                        std::numeric_limits<double>::quiet_NaN());
+                    snapshot.m2[i] = node->getDoubleAttribute("m2_" + index,
+                        std::numeric_limits<double>::quiet_NaN());
+                }
+                smartgate::TargetProfile validator;
+                valid = validator.restore(snapshot);
             }
-            smartgate::TargetProfile validator;
-            if (validator.restore(snapshot))
-                pendingTargetProfile_.publish(snapshot);
-            else
-                pendingTargetProfile_.publish(smartgate::TargetProfile::Snapshot{});
+
+            // Invalid or incomplete profile data must clear the previous
+            // profile instead of leaving stale training from another session.
+            pendingTargetProfile_.publish(valid
+                ? snapshot : smartgate::TargetProfile::Snapshot{});
         } else {
             // Older sessions have no target profile; clear any profile left
             // from the currently loaded instance.

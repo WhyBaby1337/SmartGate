@@ -53,6 +53,7 @@ private:
     float targetConfidenceSmoothed_ = 1.0f;
     float targetConfidenceSmoothingCoefficient_ = 0.0f;
     bool wasLearningTarget_ = false;
+    bool wasAiEnabled_ = true;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SmartGateAudioProcessor)
 };
