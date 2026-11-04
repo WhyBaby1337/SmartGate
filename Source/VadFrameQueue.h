@@ -37,7 +37,7 @@ public:
         for (std::size_t i = 0; i < FrameSize; ++i)
             destination[i] = samples[i];
 
-        generations_[write & indexMask].store(generation, std::memory_order_relaxed);
+        generations_[write & indexMask] = generation;
         writeIndex_.store(write + 1, std::memory_order_release);
         return true;
     }
@@ -55,7 +55,7 @@ public:
 
         const auto slot = read & indexMask;
         destination = frames_[slot];
-        generation = generations_[slot].load(std::memory_order_relaxed);
+        generation = generations_[slot];
         readIndex_.store(read + 1, std::memory_order_release);
         return true;
     }
@@ -74,7 +74,9 @@ private:
         static_cast<std::uint32_t>(Capacity - 1);
 
     alignas(64) std::array<Frame, Capacity> frames_{};
-    std::array<std::atomic<std::uint64_t>, Capacity> generations_{};
+    // Protected by the write/read index release-acquire handoff; no 64-bit
+    // atomic is needed on the real-time producer or consumer.
+    std::array<std::uint64_t, Capacity> generations_{};
     alignas(64) std::atomic<std::uint32_t> writeIndex_{0};
     alignas(64) std::atomic<std::uint32_t> readIndex_{0};
 };

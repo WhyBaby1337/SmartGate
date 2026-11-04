@@ -43,7 +43,6 @@ void runVadFrameQueueTests() {
     requireQueue(!queue.pop(output), "Queue should be empty after consuming all frames");
 
     const std::array<float, 4> wrapped{20.0f, 21.0f, 22.0f, 23.0f};
-    requireQueue(queue.push(wrapped.data()), "Queue should accept frames after index wrap");
     requireQueue(queue.push(wrapped.data(), 777), "Queue should accept generation-tagged frame");
     requireQueue(queue.pop(output, outputGeneration) && output == wrapped
                  && outputGeneration == 777,
@@ -107,6 +106,18 @@ void runVadFrameQueueTests() {
     std::uint64_t taggedGeneration = 0;
     requireQueue(taggedQueue.pop(taggedFrame, taggedGeneration) && taggedGeneration == 42,
                  "Assembler must attach the active generation to queued frames");
+
+    // Switching generation discards a partial model frame and resets the
+    // resampler history so samples from two AI sessions can never be mixed.
+    for (int i = 0; i < 400; ++i)
+        (void) assembler.processSample(0.2f);
+    assembler.setGeneration(43);
+    requireQueue(assembler.pendingSamples() == 0,
+                 "Generation change must discard an incomplete frame");
+    for (int i = 0; i < 1600; ++i)
+        (void) assembler.processSample(0.3f);
+    requireQueue(taggedQueue.pop(taggedFrame, taggedGeneration) && taggedGeneration == 43,
+                 "Frames after generation change must carry the new generation");
 
     queue.reset();
     requireQueue(!queue.pop(output), "Reset should empty the queue while threads are stopped");
