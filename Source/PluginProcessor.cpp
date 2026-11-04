@@ -1,6 +1,8 @@
 #include "PluginProcessor.h"
 
 #include <cmath>
+#include <cstdint>
+#include <limits>
 
 SmartGateAudioProcessor::SmartGateAudioProcessor()
     : AudioProcessor(BusesProperties()
@@ -41,6 +43,7 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     targetConfidenceSmoothingCoefficient_ = static_cast<float>(
         std::exp(-1.0 / (0.030 * (std::isfinite(sampleRate) ? sampleRate : 44100.0))));
     wasLearningTarget_ = false;
+    publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
 }
 
 void SmartGateAudioProcessor::releaseResources() {}
@@ -62,6 +65,8 @@ void SmartGateAudioProcessor::finishFeatureFrame() noexcept {
     // Ignore silence and heavily clipped frames during target acquisition.
     if (learning && features.logRms > -2.5f && features.logRms < -0.03f)
         targetProfile_.learn(features);
+    if (learning)
+        publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
 
     targetConfidenceTarget_ = targetProfile_.isReady()
         ? targetProfile_.confidence(features) : 1.0f;
@@ -75,12 +80,23 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     gateEnvelope_.setTimes(*parameters_.getRawParameterValue("attack"),
                            *parameters_.getRawParameterValue("release"));
 
+    smartgate::TargetProfile::Snapshot restored;
+    std::uint64_t restoredVersion = 0;
+    if (pendingTargetProfile_.read(restored, restoredVersion)
+        && restoredVersion != lastAppliedTargetProfileVersion_
+        && targetProfile_.restore(restored)) {
+        lastAppliedTargetProfileVersion_ = restoredVersion;
+        publishedTargetProfile_.publish(restored);
+        targetConfidenceTarget_ = targetConfidenceSmoothed_ = 1.0f;
+    }
+
     const bool learningTarget = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
     if (learningTarget && !wasLearningTarget_) {
         // A new Learn Target session starts with a clean profile. All profile
         // access stays on the audio thread, so no locks or cross-thread copies
         // are needed in processBlock.
         targetProfile_.clear();
+        publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
         featureExtractor_.reset();
         featureFramePosition_ = 0;
         targetConfidenceTarget_ = 1.0f;
@@ -128,14 +144,45 @@ juce::AudioProcessorEditor* SmartGateAudioProcessor::createEditor() {
 }
 
 void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination) {
-    if (auto xml = parameters_.copyState().createXml())
+    if (auto xml = parameters_.copyState().createXml()) {
+        smartgate::TargetProfile::Snapshot snapshot;
+        std::uint64_t version = 0;
+        if (publishedTargetProfile_.read(snapshot, version)) {
+            auto* node = xml->createNewChildElement("TARGET_PROFILE");
+            node->setAttribute("count", static_cast<juce::int64>(snapshot.count));
+            for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
+                const auto index = juce::String(static_cast<int>(i));
+                node->setAttribute("mean" + index, snapshot.mean[i]);
+                node->setAttribute("m2_" + index, snapshot.m2[i]);
+            }
+        }
         copyXmlToBinary(*xml, destination);
+    }
 }
 
 void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBytes) {
     if (auto xml = getXmlFromBinary(data, sizeInBytes)) {
-        if (xml->hasTagName(parameters_.state.getType()))
-            parameters_.replaceState(juce::ValueTree::fromXml(*xml));
+        if (!xml->hasTagName(parameters_.state.getType()))
+            return;
+        parameters_.replaceState(juce::ValueTree::fromXml(*xml));
+
+        if (auto* node = xml->getChildByName("TARGET_PROFILE")) {
+            smartgate::TargetProfile::Snapshot snapshot;
+            const auto count = node->getIntAttribute("count", -1);
+            if (count < 0)
+                return;
+            snapshot.count = static_cast<std::uint64_t>(count);
+            for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
+                const auto index = juce::String(static_cast<int>(i));
+                snapshot.mean[i] = node->getDoubleAttribute("mean" + index,
+                    std::numeric_limits<double>::quiet_NaN());
+                snapshot.m2[i] = node->getDoubleAttribute("m2_" + index,
+                    std::numeric_limits<double>::quiet_NaN());
+            }
+            smartgate::TargetProfile validator;
+            if (validator.restore(snapshot))
+                pendingTargetProfile_.publish(snapshot);
+        }
     }
 }
 

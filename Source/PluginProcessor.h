@@ -42,6 +42,9 @@ private:
     smartgate::GateEnvelope gateEnvelope_;
     smartgate::FeatureExtractor featureExtractor_;
     smartgate::TargetProfile targetProfile_;
+    smartgate::AtomicTargetProfileSnapshot publishedTargetProfile_;
+    smartgate::AtomicTargetProfileSnapshot pendingTargetProfile_;
+    std::uint64_t lastAppliedTargetProfileVersion_ = 0;
 
     static constexpr std::size_t featureFrameSize_ = 256;
     std::array<float, featureFrameSize_> featureFrame_{};
