@@ -21,6 +21,8 @@ public:
     explicit VadInferenceWorker(Queue& queue) noexcept : queue_(queue) {
         static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
                       "VAD generation checks require lock-free 64-bit atomics");
+        static_assert(std::atomic<std::uint32_t>::is_always_lock_free,
+                      "VAD result snapshots require lock-free 32-bit atomics");
         static_assert(std::atomic<float>::is_always_lock_free,
                       "VAD probability publication requires lock-free float atomics");
     }
@@ -64,9 +66,19 @@ public:
 
     // Returns zero until a result for the requested active generation exists.
     float latestProbability(std::uint64_t generation) const noexcept {
-        if (publishedGeneration_.load(std::memory_order_acquire) != generation)
+        const auto sequenceBefore = resultSequence_.load(std::memory_order_acquire);
+        if ((sequenceBefore & 1u) != 0u)
             return 0.0f;
-        return publishedProbability_.load(std::memory_order_relaxed);
+
+        const auto publishedGeneration =
+            publishedGeneration_.load(std::memory_order_relaxed);
+        const auto probability = publishedProbability_.load(std::memory_order_relaxed);
+        const auto sequenceAfter = resultSequence_.load(std::memory_order_acquire);
+
+        if (sequenceBefore != sequenceAfter || (sequenceAfter & 1u) != 0u
+            || publishedGeneration != generation)
+            return 0.0f;
+        return probability;
     }
 
     bool isRunning() const noexcept {
@@ -107,8 +119,13 @@ private:
 
             const float probability = std::isfinite(rawProbability)
                 ? std::max(0.0f, std::min(1.0f, rawProbability)) : 0.0f;
+            // Publish the generation/probability pair as one bounded snapshot.
+            // The audio reader never spins: an in-progress or changing snapshot
+            // simply produces a neutral result for this block.
+            resultSequence_.fetch_add(1, std::memory_order_acq_rel);
             publishedProbability_.store(probability, std::memory_order_relaxed);
-            publishedGeneration_.store(frameGeneration, std::memory_order_release);
+            publishedGeneration_.store(frameGeneration, std::memory_order_relaxed);
+            resultSequence_.fetch_add(1, std::memory_order_release);
         }
         running_.store(false, std::memory_order_release);
     }
@@ -120,6 +137,7 @@ private:
     std::atomic<bool> stopRequested_{true};
     std::atomic<bool> running_{false};
     std::atomic<std::uint64_t> activeGeneration_{0};
+    std::atomic<std::uint32_t> resultSequence_{0};
     std::atomic<std::uint64_t> publishedGeneration_{~std::uint64_t{0}};
     std::atomic<float> publishedProbability_{0.0f};
 };

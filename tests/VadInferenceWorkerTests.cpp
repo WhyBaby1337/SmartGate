@@ -18,6 +18,22 @@ struct InferenceProbe {
     std::atomic<std::uint64_t> lastGeneration{0};
 };
 
+struct BlockingProbe {
+    std::atomic<bool> entered{false};
+    std::atomic<bool> release{false};
+    std::atomic<int> calls{0};
+};
+
+float blockingInference(const std::array<float, 8>& frame, std::uint64_t,
+                       void* opaque) noexcept {
+    auto& probe = *static_cast<BlockingProbe*>(opaque);
+    probe.entered.store(true, std::memory_order_release);
+    while (!probe.release.load(std::memory_order_acquire))
+        std::this_thread::yield();
+    probe.calls.fetch_add(1, std::memory_order_release);
+    return frame[0];
+}
+
 float fakeInference(const std::array<float, 8>& frame, std::uint64_t generation,
                     void* opaque) noexcept {
     auto& probe = *static_cast<InferenceProbe*>(opaque);
@@ -93,4 +109,49 @@ void runVadInferenceWorkerTests() {
                   "Worker should be restartable after a completed stop");
     worker.stop();
     requireWorker(!worker.isRunning(), "Restarted worker should also stop cleanly");
+
+    // Force an inference to overlap an AI generation change. Its result must
+    // not be published after the audio thread has moved to the new generation.
+    Queue raceQueue;
+    BlockingProbe blockingProbe;
+    smartgate::VadInferenceWorker<Queue> raceWorker(raceQueue);
+    requireWorker(raceWorker.start(&blockingInference, &blockingProbe, 20),
+                  "Worker should start for the in-flight generation test");
+    std::array<float, 8> inFlightFrame{};
+    inFlightFrame.fill(0.8f);
+    requireWorker(raceQueue.push(inFlightFrame.data(), 20),
+                  "In-flight test frame should be queued");
+    const auto enteredDeadline = std::chrono::steady_clock::now()
+        + std::chrono::seconds(2);
+    while (!blockingProbe.entered.load(std::memory_order_acquire)
+           && std::chrono::steady_clock::now() < enteredDeadline)
+        std::this_thread::yield();
+    requireWorker(blockingProbe.entered.load(std::memory_order_acquire),
+                  "Inference callback should begin before generation changes");
+
+    raceWorker.setGeneration(21);
+    blockingProbe.release.store(true, std::memory_order_release);
+    const auto completedDeadline = std::chrono::steady_clock::now()
+        + std::chrono::seconds(2);
+    while (blockingProbe.calls.load(std::memory_order_acquire) == 0
+           && std::chrono::steady_clock::now() < completedDeadline)
+        std::this_thread::yield();
+    requireWorker(blockingProbe.calls.load(std::memory_order_acquire) == 1,
+                  "In-flight inference callback should complete");
+    requireWorker(raceWorker.latestProbability(20) == 0.0f
+                  && raceWorker.latestProbability(21) == 0.0f,
+                  "Inference completed for an old generation must not be published");
+
+    std::array<float, 8> freshFrame{};
+    freshFrame.fill(0.4f);
+    requireWorker(raceQueue.push(freshFrame.data(), 21),
+                  "Fresh generation frame should be queued after stale inference");
+    const auto freshDeadline = std::chrono::steady_clock::now()
+        + std::chrono::seconds(2);
+    while (raceWorker.latestProbability(21) != 0.4f
+           && std::chrono::steady_clock::now() < freshDeadline)
+        std::this_thread::yield();
+    requireWorker(raceWorker.latestProbability(21) == 0.4f,
+                  "Worker should resume publishing after the new generation arrives");
+    raceWorker.stop();
 }
