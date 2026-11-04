@@ -41,8 +41,9 @@ void runVadResamplerTests() {
     for (int i = 2205; i < 4410; ++i)
         if (resampler.processSample(std::sin(static_cast<float>(i) * 0.01f), output))
             ++outputCount;
-    requireResampler(outputCount == 1599,
-                     "44.1 kHz conversion must preserve phase across host block boundaries");
+    if (outputCount != 1599)
+        throw std::runtime_error("44.1 kHz conversion emitted " + std::to_string(outputCount)
+                                 + " samples; expected 1599 across host block boundaries");
 
     resampler.reset();
     requireResampler(!resampler.processSample(0.5f, output),
