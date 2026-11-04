@@ -24,6 +24,7 @@ public:
     void reset() noexcept {
         lowPassState_ = 0.0f;
         referenceRms_ = 0.005f;
+        hasReference_ = false;
         confidence_ = 0.0f;
     }
 
@@ -47,7 +48,8 @@ public:
         const float rms = static_cast<float>(std::sqrt(energy / static_cast<double>(count)));
         const float highRatio = static_cast<float>(highEnergy / std::max(energy, 1.0e-12));
         const float crest = peak / std::max(rms, 1.0e-6f);
-        const float onset = rms / std::max(referenceRms_, 0.005f);
+        const float onset = hasReference_
+            ? rms / std::max(referenceRms_, 0.005f) : 1.0f;
 
         float mechanical = 0.40f * unit((crest - 2.5f) / 7.0f)
                          + 0.40f * unit((highRatio - 0.04f) / 0.45f)
@@ -65,7 +67,12 @@ public:
 
         const float smoothing = target > confidence_ ? 0.45f : 0.08f;
         confidence_ += smoothing * (target - confidence_);
-        referenceRms_ = 0.95f * referenceRms_ + 0.05f * rms;
+        if (hasReference_)
+            referenceRms_ = 0.95f * referenceRms_ + 0.05f * rms;
+        else {
+            referenceRms_ = rms;
+            hasReference_ = true;
+        }
         return unit(confidence_);
     }
 
@@ -80,6 +87,7 @@ private:
     float lowPassCoefficient_ = 0.0f;
     float lowPassState_ = 0.0f;
     float referenceRms_ = 0.005f;
+    bool hasReference_ = false;
     float confidence_ = 0.0f;
 };
 
