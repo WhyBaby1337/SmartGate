@@ -66,7 +66,7 @@ if(SMARTGATE_BUILD_PLUGIN)
             IMPORTED_IMPLIB "${SMARTGATE_ORT_ROOT}/lib/onnxruntime.lib"
             IMPORTED_LOCATION "${SMARTGATE_ORT_ROOT}/lib/onnxruntime.dll")
 
-        set(SILERO_MODEL_PATH "${CMAKE_BINARY_DIR}/_deps/silero-vad-v6.2.3.onnx")
+        set(SILERO_MODEL_PATH "${CMAKE_BINARY_DIR}/_deps/silero_vad.onnx")
         file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/_deps")
         if(NOT EXISTS "${SILERO_MODEL_PATH}")
             file(DOWNLOAD
