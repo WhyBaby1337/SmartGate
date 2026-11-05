@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -81,8 +82,10 @@ public:
     float infer(const std::array<float, frameSize>& frame,
                 std::uint64_t generation,
                 std::uint64_t sourceSamplePosition = ~std::uint64_t{0}) noexcept {
-        if (!session_)
+        if (!session_) {
+            inferenceFailureCount_.fetch_add(1, std::memory_order_relaxed);
             return 0.0f;
+        }
 
         const bool hasSourcePosition = sourceSamplePosition != ~std::uint64_t{0};
         const bool sourceDiscontinuity = hasSourcePosition && hasSourcePosition_
@@ -125,6 +128,7 @@ public:
                 outputNames.data(), outputNames.size());
 
             if (outputs.size() != 2) {
+                recordInferenceFailure();
                 resetState();
                 return 0.0f;
             }
@@ -135,6 +139,7 @@ public:
                 || probabilityInfo.GetElementCount() < 1
                 || stateInfo.GetElementType() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT
                 || stateInfo.GetElementCount() != recurrentState_.size()) {
+                recordInferenceFailure();
                 resetState();
                 return 0.0f;
             }
@@ -142,12 +147,14 @@ public:
             const float rawProbability = outputs[0].GetTensorData<float>()[0];
             const float* nextState = outputs[1].GetTensorData<float>();
             if (!std::isfinite(rawProbability)) {
+                recordInferenceFailure();
                 resetState();
                 return 0.0f;
             }
 
             for (std::size_t i = 0; i < recurrentState_.size(); ++i) {
                 if (!std::isfinite(nextState[i])) {
+                    recordInferenceFailure();
                     resetState();
                     return 0.0f;
                 }
@@ -161,9 +168,15 @@ public:
 
             return std::max(0.0f, std::min(1.0f, rawProbability));
         } catch (...) {
+            recordInferenceFailure();
             resetState();
             return 0.0f;
         }
+    }
+
+    // Counts failed/invalid ONNX evaluations; safe to inspect from the audio thread.
+    std::uint64_t inferenceFailureCount() const noexcept {
+        return inferenceFailureCount_.load(std::memory_order_relaxed);
     }
 
     // Counts only completed ONNX Run() calls with validated probability and state.
@@ -179,6 +192,10 @@ public:
     }
 
 private:
+    void recordInferenceFailure() noexcept {
+        inferenceFailureCount_.fetch_add(1, std::memory_order_relaxed);
+    }
+
     Ort::Env env_;
     Ort::MemoryInfo memoryInfo_;
     std::unique_ptr<Ort::Session> session_;
@@ -191,6 +208,7 @@ private:
     bool hasGeneration_ = false;
     bool hasSourcePosition_ = false;
     std::uint64_t successfulInferenceCount_ = 0;
+    std::atomic<std::uint64_t> inferenceFailureCount_{0};
 };
 
 } // namespace smartgate
