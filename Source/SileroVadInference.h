@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 
 namespace smartgate {
@@ -39,6 +40,37 @@ public:
 
         if (session_->GetInputCount() != 3 || session_->GetOutputCount() != 2)
             throw Ort::Exception("Unexpected Silero ONNX input/output count", ORT_INVALID_GRAPH);
+
+        // Validate the actual graph contract at startup. Silero v5 names its
+        // recurrent-state output "stateN" (not "state"); requesting the wrong
+        // output name makes every Run() throw and can otherwise look like a
+        // valid stream of zero speech probabilities.
+        constexpr std::array<const char*, 3> expectedInputs{"input", "state", "sr"};
+        constexpr std::array<const char*, 2> expectedOutputs{"output", "stateN"};
+        Ort::AllocatorWithDefaultOptions allocator;
+        const auto hasNames = [&allocator](std::size_t count,
+                                           const auto& expected,
+                                           bool inputs) {
+            for (const auto* requiredName : expected) {
+                bool found = false;
+                for (std::size_t index = 0; index < count; ++index) {
+                    auto actualName = inputs
+                        ? session_->GetInputNameAllocated(index, allocator)
+                        : session_->GetOutputNameAllocated(index, allocator);
+                    if (actualName && std::strcmp(actualName.get(), requiredName) == 0) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    return false;
+            }
+            return true;
+        };
+        if (!hasNames(session_->GetInputCount(), expectedInputs, true)
+            || !hasNames(session_->GetOutputCount(), expectedOutputs, false))
+            throw Ort::Exception("Silero ONNX input/output names do not match the expected v5 contract",
+                                 ORT_INVALID_GRAPH);
         resetState();
     }
 
@@ -75,6 +107,7 @@ public:
             constexpr std::array<std::int64_t, 2> inputShape{1, 576};
             constexpr std::array<std::int64_t, 3> stateShape{2, 1, 128};
             std::int64_t sampleRate = 16000;
+            constexpr std::array<std::int64_t, 1> sampleRateShape{1};
 
             std::array<Ort::Value, 3> inputs{
                 Ort::Value::CreateTensor<float>(memoryInfo_, input_.data(),
@@ -82,11 +115,11 @@ public:
                 Ort::Value::CreateTensor<float>(memoryInfo_, recurrentState_.data(),
                     recurrentState_.size(), stateShape.data(), stateShape.size()),
                 Ort::Value::CreateTensor<std::int64_t>(memoryInfo_,
-                    &sampleRate, 1, nullptr, 0)
+                    &sampleRate, 1, sampleRateShape.data(), sampleRateShape.size())
             };
 
             constexpr std::array<const char*, 3> inputNames{"input", "state", "sr"};
-            constexpr std::array<const char*, 2> outputNames{"output", "state"};
+            constexpr std::array<const char*, 2> outputNames{"output", "stateN"};
             auto outputs = session_->Run(Ort::RunOptions{nullptr},
                 inputNames.data(), inputs.data(), inputs.size(),
                 outputNames.data(), outputNames.size());
