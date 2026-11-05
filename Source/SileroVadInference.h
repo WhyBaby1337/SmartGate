@@ -48,7 +48,7 @@ public:
         constexpr std::array<const char*, 3> expectedInputs{"input", "state", "sr"};
         constexpr std::array<const char*, 2> expectedOutputs{"output", "stateN"};
         Ort::AllocatorWithDefaultOptions allocator;
-        const auto hasNames = [&allocator](std::size_t count,
+        const auto hasNames = [this, &allocator](std::size_t count,
                                            const auto& expected,
                                            bool inputs) {
             for (const auto* requiredName : expected) {
