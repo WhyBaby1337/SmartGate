@@ -159,10 +159,9 @@ void SmartGateAudioProcessor::finishFeatureFrame() noexcept {
     const bool learning = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
     bool vadAllowsLearning = true;
 #if defined(SMARTGATE_HAS_SILERO)
-    // When Silero is available, only acquire target statistics from frames
-    // that it currently considers speech. The age-limited worker result is
-    // smoothed on the audio thread; a neutral/expired result pauses learning.
-    vadAllowsLearning = !vadAvailable_ || vadProbabilitySmoothed_ >= 0.50f;
+    // Stale/invalid/low-confidence Silero results pause target acquisition.
+    vadAllowsLearning = smartgate::TargetProfile::isSpeechQualifiedForLearning(
+        vadAvailable_, vadProbabilitySmoothed_);
 #endif
     if (learning && vadAllowsLearning
         && smartgate::TargetProfile::isValidLearningFrame(features)
