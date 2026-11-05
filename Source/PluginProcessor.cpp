@@ -92,7 +92,8 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     vadGeneration_ = 1;
     vadProbabilitySmoothed_ = 0.0f;
     vadAssembler_.reset();
-    if (safeSampleRate >= 16000.0) {
+    if (safeSampleRate >= 16000.0
+        && safeSampleRate <= smartgate::VadResampler::maximumInputRate) {
         try {
             sileroInference_ = std::make_unique<smartgate::SileroVadInference>(
                 BinaryData::silero_vad_onnx,
