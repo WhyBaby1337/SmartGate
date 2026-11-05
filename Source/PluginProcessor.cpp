@@ -65,9 +65,11 @@ SmartGateAudioProcessor::createParameterLayout() {
 #if defined(SMARTGATE_HAS_SILERO)
 float SmartGateAudioProcessor::runSileroInference(const VadQueue::Frame& frame,
                                                    std::uint64_t generation,
+                                                   std::uint64_t sourceSamplePosition,
                                                    void* context) noexcept {
     auto* inference = static_cast<smartgate::SileroVadInference*>(context);
-    return inference != nullptr ? inference->infer(frame, generation) : 0.0f;
+    return inference != nullptr
+        ? inference->infer(frame, generation, sourceSamplePosition) : 0.0f;
 }
 #endif
 
@@ -94,7 +96,8 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
         try {
             sileroInference_ = std::make_unique<smartgate::SileroVadInference>(
                 BinaryData::silero_vad_onnx,
-                static_cast<std::size_t>(BinaryData::silero_vad_onnxSize));
+                static_cast<std::size_t>(BinaryData::silero_vad_onnxSize),
+                safeSampleRate);
             if (vadAssembler_.prepare(safeSampleRate, 16000.0, vadGeneration_)
                 && vadWorker_.start(&SmartGateAudioProcessor::runSileroInference,
                                     sileroInference_.get(), vadGeneration_)) {
