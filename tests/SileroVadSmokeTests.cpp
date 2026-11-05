@@ -5,65 +5,113 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
 
+namespace {
+using Inference = smartgate::SileroVadInference;
+using Frame = std::array<float, Inference::frameSize>;
+
+struct LatencySummary {
+    double meanMicroseconds = 0.0;
+    double p50Microseconds = 0.0;
+    double p95Microseconds = 0.0;
+    double maxMicroseconds = 0.0;
+    float lastProbability = 0.0f;
+};
+
+LatencySummary measureCase(Inference& inference, const Frame& frame,
+                           std::uint64_t generation, const char* label) {
+    // Each case starts a fresh recurrent stream, then warms that stream before
+    // timing. This keeps silence, tonal speech-like input, and noise separate.
+    for (int i = 0; i < 12; ++i) {
+        const float probability = inference.infer(frame, generation);
+        if (!std::isfinite(probability) || probability < 0.0f || probability > 1.0f)
+            throw std::runtime_error("Silero returned an invalid warmup probability");
+    }
+
+    constexpr int measuredFrames = 128;
+    std::vector<double> timings;
+    timings.reserve(measuredFrames);
+    double totalMicroseconds = 0.0;
+    float lastProbability = 0.0f;
+    for (int i = 0; i < measuredFrames; ++i) {
+        const auto start = std::chrono::steady_clock::now();
+        lastProbability = inference.infer(frame, generation);
+        const auto elapsed = std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - start).count();
+        if (!std::isfinite(lastProbability)
+            || lastProbability < 0.0f || lastProbability > 1.0f)
+            throw std::runtime_error("Silero returned an invalid probability during timing");
+        timings.push_back(elapsed);
+        totalMicroseconds += elapsed;
+    }
+
+    std::sort(timings.begin(), timings.end());
+    const auto percentile = [&timings](double fraction) {
+        const auto index = static_cast<std::size_t>(
+            std::ceil(fraction * static_cast<double>(timings.size()))) - 1;
+        return timings[std::min(index, timings.size() - 1)];
+    };
+
+    LatencySummary summary;
+    summary.meanMicroseconds = totalMicroseconds / measuredFrames;
+    summary.p50Microseconds = percentile(0.50);
+    summary.p95Microseconds = percentile(0.95);
+    summary.maxMicroseconds = timings.back();
+    summary.lastProbability = lastProbability;
+
+    std::cout << "Silero ONNX latency [" << label << "] (128 warmed CPU frames): "
+              << "mean=" << summary.meanMicroseconds
+              << " us, p50=" << summary.p50Microseconds
+              << " us, p95=" << summary.p95Microseconds
+              << " us, max=" << summary.maxMicroseconds
+              << " us, last_probability=" << summary.lastProbability
+              << "; 32 ms frame budget=32000 us.\n";
+    return summary;
+}
+}
+
 int main() {
     try {
-        smartgate::SileroVadInference inference(BinaryData::silero_vad_onnx,
+        Inference inference(BinaryData::silero_vad_onnx,
             static_cast<std::size_t>(BinaryData::silero_vad_onnxSize));
-        std::array<float, smartgate::SileroVadInference::frameSize> frame{};
 
-        // Warm up the ONNX session before collecting timings. A 512-sample
-        // Silero frame represents 32 ms of audio at 16 kHz.
-        for (int i = 0; i < 12; ++i) {
-            const float probability = inference.infer(frame, 1);
-            if (!std::isfinite(probability) || probability < 0.0f || probability > 1.0f)
-                throw std::runtime_error("Silero returned an invalid probability");
+        Frame silence{};
+        measureCase(inference, silence, 1, "silence");
+
+        Frame speechLike{};
+        for (std::size_t i = 0; i < speechLike.size(); ++i) {
+            const double t = static_cast<double>(i) / 16000.0;
+            const double envelope = 0.75 + 0.25 * std::sin(
+                2.0 * 3.14159265358979323846 * 3.0 * t);
+            speechLike[i] = static_cast<float>(envelope * (
+                0.12 * std::sin(2.0 * 3.14159265358979323846 * 180.0 * t)
+              + 0.06 * std::sin(2.0 * 3.14159265358979323846 * 360.0 * t)
+              + 0.025 * std::sin(2.0 * 3.14159265358979323846 * 720.0 * t)
+              + 0.015 * std::sin(2.0 * 3.14159265358979323846 * 1200.0 * t)));
         }
+        measureCase(inference, speechLike, 2, "speech-like-tones");
 
-        constexpr int measuredFrames = 128;
-        std::vector<double> latencyMicroseconds;
-        latencyMicroseconds.reserve(measuredFrames);
-        double totalMicroseconds = 0.0;
-        for (int i = 0; i < measuredFrames; ++i) {
-            const auto start = std::chrono::steady_clock::now();
-            const float probability = inference.infer(frame, 1);
-            const auto elapsed = std::chrono::duration<double, std::micro>(
-                std::chrono::steady_clock::now() - start).count();
-            if (!std::isfinite(probability) || probability < 0.0f || probability > 1.0f)
-                throw std::runtime_error("Silero returned an invalid probability during timing");
-            latencyMicroseconds.push_back(elapsed);
-            totalMicroseconds += elapsed;
+        Frame deterministicNoise{};
+        std::uint32_t randomState = 0x13579BDFu;
+        for (auto& sample : deterministicNoise) {
+            randomState = randomState * 1664525u + 1013904223u;
+            const auto centered = static_cast<std::int32_t>(randomState >> 8)
+                                - static_cast<std::int32_t>(0x7FFFFFu);
+            sample = static_cast<float>(centered / 8388608.0 * 0.08);
         }
+        measureCase(inference, deterministicNoise, 3, "deterministic-noise");
 
-        std::sort(latencyMicroseconds.begin(), latencyMicroseconds.end());
-        const auto percentile = [&latencyMicroseconds](double fraction) {
-            const auto index = static_cast<std::size_t>(
-                std::ceil(fraction * static_cast<double>(latencyMicroseconds.size()))) - 1;
-            return latencyMicroseconds[std::min(index, latencyMicroseconds.size() - 1)];
-        };
-        constexpr double frameBudgetMicroseconds = 32000.0;
-        std::cout << "Silero ONNX inference latency (128 warmed CPU frames): "
-                  << "mean=" << totalMicroseconds / measuredFrames
-                  << " us, p50=" << percentile(0.50)
-                  << " us, p95=" << percentile(0.95)
-                  << " us, max=" << latencyMicroseconds.back()
-                  << " us; 32 ms frame budget="
-                  << frameBudgetMicroseconds << " us.\n";
-
-        const float afterReset = inference.infer(frame, 2);
+        // A generation change must reset recurrent state and remain usable.
+        const float afterReset = inference.infer(silence, 4);
         if (!std::isfinite(afterReset) || afterReset < 0.0f || afterReset > 1.0f)
             throw std::runtime_error("Silero failed after a generation reset");
 
-        for (std::size_t i = 0; i < frame.size(); ++i) {
-            const double t = static_cast<double>(i) / 16000.0;
-            frame[i] = static_cast<float>(0.2 * std::sin(
-                2.0 * 3.141592653589793 * 220.0 * t));
-        }
-        const float voiceBand = inference.infer(frame, 2);
-        if (!std::isfinite(voiceBand) || voiceBand < 0.0f || voiceBand > 1.0f)
+        const float speechBand = inference.infer(speechLike, 4);
+        if (!std::isfinite(speechBand) || speechBand < 0.0f || speechBand > 1.0f)
             throw std::runtime_error("Silero failed to process a finite speech-band frame");
 
         std::cout << "Silero ONNX smoke test passed.\n";
