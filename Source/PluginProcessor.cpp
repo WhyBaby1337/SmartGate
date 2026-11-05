@@ -267,6 +267,23 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     const int samples = buffer.getNumSamples();
 #if defined(SMARTGATE_HAS_SILERO)
+    // A failed ONNX evaluation must not silently masquerade as ordinary
+    // silence forever. Disable only the optional VAD path for this playback
+    // session; the conventional gate and feature-only target learning remain
+    // available. This check is an atomic read on the audio thread.
+    if (vadAvailable_ && sileroInference_ != nullptr
+        && sileroInference_->inferenceFailureCount() != 0) {
+        vadAvailable_ = false;
+        ++vadGeneration_;
+        if (vadGeneration_ == 0)
+            vadGeneration_ = 1;
+        vadWorker_.setGeneration(vadGeneration_);
+        vadAssembler_.setGeneration(vadGeneration_);
+        vadProbabilitySmoothed_ = 0.0f;
+    }
+#endif
+
+#if defined(SMARTGATE_HAS_SILERO)
     // Validate freshness through the end of this host block, not just at its
     // first sample. A very large offline/render block must not reuse a VAD
     // result that becomes stale while this block is being processed.
