@@ -157,12 +157,19 @@ public:
                       recurrentState_.begin());
             std::copy(input_.end() - static_cast<std::ptrdiff_t>(contextSize),
                       input_.end(), context_.begin());
+            ++successfulInferenceCount_;
 
             return std::max(0.0f, std::min(1.0f, rawProbability));
         } catch (...) {
             resetState();
             return 0.0f;
         }
+    }
+
+    // Counts only completed ONNX Run() calls with validated probability and state.
+    // The inference instance is worker-thread confined; no atomic is needed.
+    std::uint64_t successfulInferenceCount() const noexcept {
+        return successfulInferenceCount_;
     }
 
     void resetState() noexcept {
@@ -183,6 +190,7 @@ private:
     std::uint64_t lastSourceSamplePosition_ = 0;
     bool hasGeneration_ = false;
     bool hasSourcePosition_ = false;
+    std::uint64_t successfulInferenceCount_ = 0;
 };
 
 } // namespace smartgate
