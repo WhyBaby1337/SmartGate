@@ -265,9 +265,19 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
     wasKeyboardReductionEnabled_ = keyboardReductionEnabled;
 
+    const int samples = buffer.getNumSamples();
 #if defined(SMARTGATE_HAS_SILERO)
+    // Validate freshness through the end of this host block, not just at its
+    // first sample. A very large offline/render block must not reuse a VAD
+    // result that becomes stale while this block is being processed.
+    const auto blockSampleCount = samples > 0
+        ? static_cast<std::uint64_t>(samples) : std::uint64_t{0};
+    const auto blockEndSamplePosition =
+        blockSampleCount > std::numeric_limits<std::uint64_t>::max() - audioSamplePosition_
+            ? std::numeric_limits<std::uint64_t>::max()
+            : audioSamplePosition_ + blockSampleCount;
     const float vadProbability = aiEnabled && vadAvailable_
-        ? vadWorker_.latestProbability(vadGeneration_, audioSamplePosition_,
+        ? vadWorker_.latestProbability(vadGeneration_, blockEndSamplePosition,
                                        vadMaxAgeSamples_) : 0.0f;
 #else
     const float vadProbability = 0.0f;
@@ -285,7 +295,6 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         featureFramePosition_ = 0;
 
     const int channels = buffer.getNumChannels();
-    const int samples = buffer.getNumSamples();
     if (channels <= 0 || samples <= 0)
         return;
 
