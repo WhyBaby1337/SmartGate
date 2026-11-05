@@ -24,6 +24,20 @@ void runTargetProfileTests() {
                  + 0.04f * std::sin(2.0f * 3.14159265f * 1200.0f * t);
     }
 
+    // A non-finite first sample is sanitized to zero and must not create a
+    // spurious zero-crossing against the next positive sample.
+    smartgate::FeatureExtractor nonFiniteStartExtractor;
+    nonFiniteStartExtractor.prepare(48000.0);
+    const std::vector<float> nonFiniteStartFrame{
+        std::numeric_limits<float>::quiet_NaN(), 0.1f, 0.1f, 0.1f
+    };
+    const auto nonFiniteStartFeatures = nonFiniteStartExtractor.process(
+        nonFiniteStartFrame.data(), nonFiniteStartFrame.size());
+    requireFeature(nonFiniteStartFeatures.isFinite(),
+                   "A non-finite input sample must be sanitized");
+    requireFeature(nonFiniteStartFeatures.zeroCrossingRate == 0.0f,
+                   "Sanitized first sample must not create a false zero-crossing");
+
     const auto extracted = extractor.process(frame.data(), frame.size());
     requireFeature(extracted.isFinite(), "Extracted features must be finite");
     requireFeature(extracted.logRms < 0.0f && extracted.logRms > -2.0f,

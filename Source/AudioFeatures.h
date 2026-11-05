@@ -50,7 +50,9 @@ public:
         double midEnergy = 0.0;
         double highEnergy = 0.0;
         std::size_t crossings = 0;
-        float previous = samples[0];
+        // Match the sanitized first sample used by the loop below. Keeping a raw NaN
+        // here would create a false sign transition on the next finite sample.
+        float previous = std::isfinite(samples[0]) ? samples[0] : 0.0f;
 
         for (std::size_t i = 0; i < count; ++i) {
             const float x = std::isfinite(samples[i]) ? samples[i] : 0.0f;
