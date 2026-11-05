@@ -114,7 +114,12 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
 #if defined(SMARTGATE_HAS_SILERO)
     vadProbabilitySmoothingCoefficient_ = targetConfidenceSmoothingCoefficient_;
 #endif
-    wasLearningTarget_ = false;
+    // Match the restored APVTS toggle at the lifecycle boundary. If a session
+    // was saved with Learn Target enabled, its first audio block must continue
+    // that session rather than treating the restored value as a fresh request
+    // and clearing the target profile that was just restored.
+    wasLearningTarget_ = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
+    pendingLearningStart_ = false;
     wasAiEnabled_ = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
     publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
 }
