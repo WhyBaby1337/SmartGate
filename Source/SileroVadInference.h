@@ -18,9 +18,13 @@ public:
     static constexpr std::size_t recurrentStateSize = 2 * 128;
     static constexpr std::size_t modelInputSize = contextSize + frameSize;
 
-    SileroVadInference(const void* modelData, std::size_t modelSize)
+    SileroVadInference(const void* modelData, std::size_t modelSize,
+                       double hostSampleRate = 16000.0)
         : env_(ORT_LOGGING_LEVEL_WARNING, "SmartGate-Silero"),
           memoryInfo_(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)) {
+        expectedSourceFrameSamples_ = std::isfinite(hostSampleRate)
+            ? std::max(512.0, hostSampleRate * static_cast<double>(frameSize) / 16000.0)
+            : static_cast<double>(frameSize);
         if (modelData == nullptr || modelSize == 0)
             throw Ort::Exception("Silero model data is empty", ORT_INVALID_ARGUMENT);
 
@@ -43,14 +47,24 @@ public:
 
     // One instance belongs to one inference worker. Never call from processBlock().
     float infer(const std::array<float, frameSize>& frame,
-                std::uint64_t generation) noexcept {
+                std::uint64_t generation,
+                std::uint64_t sourceSamplePosition = ~std::uint64_t{0}) noexcept {
         if (!session_)
             return 0.0f;
 
-        if (!hasGeneration_ || generation != generation_) {
+        const bool hasSourcePosition = sourceSamplePosition != ~std::uint64_t{0};
+        const bool sourceDiscontinuity = hasSourcePosition && hasSourcePosition_
+            && (sourceSamplePosition <= lastSourceSamplePosition_
+                || static_cast<double>(sourceSamplePosition - lastSourceSamplePosition_)
+                    > expectedSourceFrameSamples_ * 1.5);
+        if (!hasGeneration_ || generation != generation_ || sourceDiscontinuity) {
             resetState();
             generation_ = generation;
             hasGeneration_ = true;
+        }
+        if (hasSourcePosition) {
+            lastSourceSamplePosition_ = sourceSamplePosition;
+            hasSourcePosition_ = true;
         }
 
         std::copy(context_.begin(), context_.end(), input_.begin());
@@ -131,8 +145,11 @@ private:
     std::array<float, contextSize> context_{};
     std::array<float, recurrentStateSize> recurrentState_{};
     std::array<float, modelInputSize> input_{};
+    double expectedSourceFrameSamples_ = static_cast<double>(frameSize);
     std::uint64_t generation_ = 0;
+    std::uint64_t lastSourceSamplePosition_ = 0;
     bool hasGeneration_ = false;
+    bool hasSourcePosition_ = false;
 };
 
 } // namespace smartgate
