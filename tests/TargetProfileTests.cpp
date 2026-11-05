@@ -71,6 +71,21 @@ void runTargetProfileTests() {
                        {std::numeric_limits<float>::quiet_NaN(), 0.2f, 0.2f, 0.3f, 0.5f}),
                    "Non-finite frames must not be eligible for target learning");
 
+    requireFeature(smartgate::TargetProfile::isSpeechQualifiedForLearning(false, 0.0f),
+                   "Feature-only fallback must remain available when Silero is unavailable");
+    requireFeature(smartgate::TargetProfile::isSpeechQualifiedForLearning(true, 0.50f),
+                   "Silero confidence at the learning threshold must be accepted");
+    requireFeature(smartgate::TargetProfile::isSpeechQualifiedForLearning(true, 0.75f),
+                   "Confident Silero speech must be accepted");
+    requireFeature(!smartgate::TargetProfile::isSpeechQualifiedForLearning(true, 0.49f),
+                   "Low Silero confidence must pause target learning");
+    requireFeature(!smartgate::TargetProfile::isSpeechQualifiedForLearning(
+                       true, std::numeric_limits<float>::quiet_NaN()),
+                   "NaN Silero confidence must never qualify target learning");
+    requireFeature(!smartgate::TargetProfile::isSpeechQualifiedForLearning(
+                       true, std::numeric_limits<float>::infinity()),
+                   "Infinite Silero confidence must never qualify target learning");
+
     smartgate::TargetProfile profile;
     requireFeature(profile.confidence(extracted) == 0.0f,
                    "Untrained profile must not report confidence");
