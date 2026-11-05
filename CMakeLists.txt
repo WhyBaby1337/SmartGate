@@ -131,6 +131,27 @@ if(SMARTGATE_BUILD_PLUGIN)
                 "$<TARGET_FILE:SmartGateONNXRuntime>"
                 "$<TARGET_FILE_DIR:SmartGate>")
 
+        # Runtime dependencies must live beside the actual VST3 module, not
+        # only beside JUCE's intermediate shared-code target.
+        add_custom_command(TARGET SmartGate_VST3 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:SmartGateONNXRuntime>"
+                "$<TARGET_FILE_DIR:SmartGate_VST3>"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:SmartGate_VST3>/../Resources"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.txt"
+                "$<TARGET_FILE_DIR:SmartGate_VST3>/../Resources/THIRD_PARTY_NOTICES.txt")
+
+        set(SMARTGATE_ORT_SHARED_PROVIDER_DLL
+            "${SMARTGATE_ORT_ROOT}/lib/onnxruntime_providers_shared.dll")
+        if(EXISTS "${SMARTGATE_ORT_SHARED_PROVIDER_DLL}")
+            add_custom_command(TARGET SmartGate_VST3 POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${SMARTGATE_ORT_SHARED_PROVIDER_DLL}"
+                    "$<TARGET_FILE_DIR:SmartGate_VST3>")
+        endif()
+
         add_executable(SmartGateSileroTests tests/SileroVadSmokeTests.cpp)
         target_include_directories(SmartGateSileroTests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/Source"
