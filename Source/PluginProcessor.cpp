@@ -239,11 +239,19 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // Do not run the keyboard classifier when its reduction is zero.
     // This keeps the default path lean, including when the optional AI engine
     // is disabled. Re-enable it only when the user requests keyboard cleanup.
-    if (keyboardReduction > 0.0f) {
+    const bool keyboardReductionEnabled = keyboardReduction > 0.0f;
+    if (keyboardReductionEnabled) {
+        // A disabled interval is not observed by the classifier. Start from
+        // fresh confidence/reference state when keyboard cleanup is re-enabled.
+        if (!wasKeyboardReductionEnabled_)
+            keyboardDetector_.reset();
         keyboardDetector_.setMode(static_cast<smartgate::AdaptiveKeyboardDetector::Mode>(keyboardMode));
     } else {
+        if (wasKeyboardReductionEnabled_)
+            keyboardDetector_.reset();
         keyboardConfidence_ = 0.0f;
     }
+    wasKeyboardReductionEnabled_ = keyboardReductionEnabled;
 
 #if defined(SMARTGATE_HAS_SILERO)
     const float vadProbability = aiEnabled && vadAvailable_

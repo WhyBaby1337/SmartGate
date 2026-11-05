@@ -76,6 +76,7 @@ private:
     bool wasLearningTarget_ = false;
     bool pendingLearningStart_ = false;
     bool wasAiEnabled_ = true;
+    bool wasKeyboardReductionEnabled_ = false;
 #if defined(SMARTGATE_HAS_SILERO)
     // Declaration order is intentional: worker is destroyed before its model
     // context and queue, so its thread can never outlive either dependency.
