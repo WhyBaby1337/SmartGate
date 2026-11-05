@@ -79,8 +79,14 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(std::isfinite(infiniteConfidence),
                     "Infinite samples must not poison keyboard confidence");
 
-    // Disabling keyboard reduction pauses classification. Resetting on
-    // the disable/enable edge must discard stale confidence and reference RMS.
+    // Disabling keyboard reduction pauses classification. Reproduce a
+    // confident click sequence, then verify the disable/enable reset discards
+    // both its confidence and its learned reference RMS.
+    detector.reset();
+    for (int i = 0; i < 5; ++i)
+        detector.processFrame(clickFrame.data(), clickFrame.size());
+    requireKeyboard(detector.getConfidence() > 0.35f,
+                    "Precondition: click sequence should establish stale confidence");
     detector.reset();
     requireKeyboard(detector.getConfidence() == 0.0f,
                     "Reset must clear accumulated keyboard confidence");
