@@ -27,7 +27,7 @@ add_executable(SmartGateDspBenchmark tests/DspBenchmark.cpp)
 target_link_libraries(SmartGateDspBenchmark PRIVATE smartgate_dsp)
 
 option(SMARTGATE_BUILD_PLUGIN "Build the JUCE VST3 plugin" ON)
-option(SMARTGATE_ENABLE_SILERO "Fetch and build the embedded Silero VAD engine" ON)
+option(SMARTGATE_ENABLE_SILERO "Fetch and build the embedded Silero VAD engine" ${WIN32})
 
 if(SMARTGATE_BUILD_PLUGIN)
     include(FetchContent)
@@ -130,5 +130,14 @@ if(SMARTGATE_BUILD_PLUGIN)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:SmartGateONNXRuntime>"
                 "$<TARGET_FILE_DIR:SmartGate>")
+
+        add_executable(SmartGateSileroTests tests/SileroVadSmokeTests.cpp)
+        target_include_directories(SmartGateSileroTests PRIVATE "${SMARTGATE_ORT_ROOT}/include")
+        target_link_libraries(SmartGateSileroTests PRIVATE SileroVADModel SmartGateONNXRuntime)
+        add_custom_command(TARGET SmartGateSileroTests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:SmartGateONNXRuntime>"
+                "$<TARGET_FILE_DIR:SmartGateSileroTests>")
+        add_test(NAME SmartGateSileroTests COMMAND SmartGateSileroTests)
     endif()
 endif()
