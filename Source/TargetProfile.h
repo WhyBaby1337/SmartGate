@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cmath>
 #include <cstdint>
+#include <thread>
 
 namespace smartgate {
 
@@ -125,6 +126,21 @@ public:
             m2_[i].store(bits(s.m2[i]), std::memory_order_relaxed);
         }
         sequence_.fetch_add(1, std::memory_order_release);
+    }
+
+    // Persistence runs off the audio thread. Retry while a published
+    // snapshot is being updated so a transient seqlock collision cannot
+    // silently omit the trained profile from a saved project. An unpublished
+    // mailbox (sequence zero) represents the empty pre-prepare state.
+    bool readForPersistence(TargetProfile::Snapshot& s,
+                            std::uint64_t& version) const noexcept {
+        for (;;) {
+            if (read(s, version, 64))
+                return true;
+            if (sequence_.load(std::memory_order_acquire) == 0)
+                return false;
+            std::this_thread::yield();
+        }
     }
 
     bool read(TargetProfile::Snapshot& s, std::uint64_t& version,

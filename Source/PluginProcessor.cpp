@@ -339,7 +339,10 @@ void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination
     if (auto xml = state.createXml()) {
         smartgate::TargetProfile::Snapshot snapshot;
         std::uint64_t version = 0;
-        if (publishedTargetProfile_.read(snapshot, version, 64)) {
+        // This method is called by the host's non-real-time state-save path.
+        // Wait out a concurrent audio-thread publish rather than silently
+        // serializing parameters without the trained target profile.
+        if (publishedTargetProfile_.readForPersistence(snapshot, version)) {
             auto* node = xml->createNewChildElement("TARGET_PROFILE");
             node->setAttribute("count", static_cast<int>(snapshot.count));
             for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
