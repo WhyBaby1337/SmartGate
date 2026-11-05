@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 
 #if defined(SMARTGATE_HAS_SILERO)
 #include <BinaryData.h>
@@ -313,7 +314,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 }
 
 juce::AudioProcessorEditor* SmartGateAudioProcessor::createEditor() {
-    return new juce::GenericAudioProcessorEditor(*this);
+    return new SmartGateAudioProcessorEditor(*this);
 }
 
 void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination) {

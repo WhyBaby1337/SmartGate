@@ -19,6 +19,7 @@
 #include <memory>
 
 class SmartGateAudioProcessor final : public juce::AudioProcessor {
+    friend class SmartGateAudioProcessorEditor;
 public:
     SmartGateAudioProcessor();
 
