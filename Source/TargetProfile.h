@@ -179,14 +179,20 @@ public:
     static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
                   "Requires lock-free 64-bit atomics");
 
+    // Single-writer mailbox: publish() calls must not overlap. The audio
+    // thread is the normal writer; lifecycle writes happen only while audio
+    // processing is stopped. Sequential consistency across the sequence and
+    // payload atomics gives the reader a portable C++ ordering guarantee:
+    // observing any payload store also places the writer's odd sequence
+    // transition before the reader's final sequence load.
     void publish(const TargetProfile::Snapshot& s) noexcept {
-        sequence_.fetch_add(1, std::memory_order_acq_rel);
-        count_.store(s.count, std::memory_order_relaxed);
+        sequence_.fetch_add(1, std::memory_order_seq_cst);
+        count_.store(s.count, std::memory_order_seq_cst);
         for (std::size_t i = 0; i < 5; ++i) {
-            mean_[i].store(bits(s.mean[i]), std::memory_order_relaxed);
-            m2_[i].store(bits(s.m2[i]), std::memory_order_relaxed);
+            mean_[i].store(bits(s.mean[i]), std::memory_order_seq_cst);
+            m2_[i].store(bits(s.m2[i]), std::memory_order_seq_cst);
         }
-        sequence_.fetch_add(1, std::memory_order_release);
+        sequence_.fetch_add(1, std::memory_order_seq_cst);
     }
 
     // Persistence runs off the audio thread. Retry while a published
@@ -198,7 +204,7 @@ public:
         for (;;) {
             if (read(s, version, 64))
                 return true;
-            if (sequence_.load(std::memory_order_acquire) == 0)
+            if (sequence_.load(std::memory_order_seq_cst) == 0)
                 return false;
             std::this_thread::yield();
         }
@@ -209,13 +215,13 @@ public:
         // Audio-thread callers keep the short bounded default. Persistence
         // callers may request more retries because they are not real-time.
         for (int attempt = 0; attempt < std::max(0, maximumAttempts); ++attempt) {
-            const auto first = sequence_.load(std::memory_order_acquire);
+            const auto first = sequence_.load(std::memory_order_seq_cst);
             if (first == 0 || (first & 1U)) continue;
             TargetProfile::Snapshot copy;
-            copy.count = count_.load(std::memory_order_relaxed);
+            copy.count = count_.load(std::memory_order_seq_cst);
             for (std::size_t i = 0; i < 5; ++i) {
-                copy.mean[i] = value(mean_[i].load(std::memory_order_relaxed));
-                copy.m2[i] = value(m2_[i].load(std::memory_order_relaxed));
+                copy.mean[i] = value(mean_[i].load(std::memory_order_seq_cst));
+                copy.m2[i] = value(m2_[i].load(std::memory_order_seq_cst));
             }
             const auto last = sequence_.load(std::memory_order_acquire);
             if (first == last && !(last & 1U)) {
