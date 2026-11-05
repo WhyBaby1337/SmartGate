@@ -59,6 +59,18 @@ void runTargetProfileTests() {
     requireFeature(std::abs(ratioSum - 1.0f) < 1.0e-4f,
                    "Band energy ratios must sum to one");
 
+    requireFeature(smartgate::TargetProfile::isValidLearningFrame(extracted),
+                   "A finite speech-level frame must be eligible for target learning");
+    requireFeature(!smartgate::TargetProfile::isValidLearningFrame(
+                       {-3.0f, 0.2f, 0.2f, 0.3f, 0.5f}),
+                   "Silent frames must not be eligible for target learning");
+    requireFeature(!smartgate::TargetProfile::isValidLearningFrame(
+                       {-0.01f, 0.2f, 0.2f, 0.3f, 0.5f}),
+                   "Heavily clipped frames must not be eligible for target learning");
+    requireFeature(!smartgate::TargetProfile::isValidLearningFrame(
+                       {std::numeric_limits<float>::quiet_NaN(), 0.2f, 0.2f, 0.3f, 0.5f}),
+                   "Non-finite frames must not be eligible for target learning");
+
     smartgate::TargetProfile profile;
     requireFeature(profile.confidence(extracted) == 0.0f,
                    "Untrained profile must not report confidence");

@@ -29,6 +29,13 @@ public:
         return {count_, mean_, m2_};
     }
 
+    // Learning accepts only finite, non-silent, non-clipped feature frames.
+    // Silero speech qualification is applied by the processor when available.
+    static bool isValidLearningFrame(const AudioFeatures& features) noexcept {
+        return features.isFinite()
+            && features.logRms > -2.5f && features.logRms < -0.03f;
+    }
+
     // Restore is intended for validated, non-real-time state loading. The
     // caller must ensure this object is not accessed concurrently.
     bool restore(const Snapshot& snapshot) noexcept {
