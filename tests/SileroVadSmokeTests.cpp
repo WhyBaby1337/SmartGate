@@ -24,6 +24,7 @@ struct LatencySummary {
 
 LatencySummary measureCase(Inference& inference, const Frame& frame,
                            std::uint64_t generation, const char* label) {
+    const auto successfulBefore = inference.successfulInferenceCount();
     // Each case starts a fresh recurrent stream, then warms that stream before
     // timing. This keeps silence, tonal speech-like input, and noise separate.
     for (int i = 0; i < 12; ++i) {
@@ -62,6 +63,9 @@ LatencySummary measureCase(Inference& inference, const Frame& frame,
     summary.p95Microseconds = percentile(0.95);
     summary.maxMicroseconds = timings.back();
     summary.lastProbability = lastProbability;
+
+    if (inference.successfulInferenceCount() != successfulBefore + 12 + measuredFrames)
+        throw std::runtime_error("Silero inference did not complete every ONNX Run() successfully");
 
     std::cout << "Silero ONNX latency [" << label << "] (128 warmed CPU frames): "
               << "mean=" << summary.meanMicroseconds
@@ -106,6 +110,7 @@ int main() {
         measureCase(inference, deterministicNoise, 3, "deterministic-noise");
 
         // A generation change must reset recurrent state and remain usable.
+        const auto beforeGenerationReset = inference.successfulInferenceCount();
         const float afterReset = inference.infer(silence, 4);
         if (!std::isfinite(afterReset) || afterReset < 0.0f || afterReset > 1.0f)
             throw std::runtime_error("Silero failed after a generation reset");
@@ -113,6 +118,8 @@ int main() {
         const float speechBand = inference.infer(speechLike, 4);
         if (!std::isfinite(speechBand) || speechBand < 0.0f || speechBand > 1.0f)
             throw std::runtime_error("Silero failed to process a finite speech-band frame");
+        if (inference.successfulInferenceCount() != beforeGenerationReset + 2)
+            throw std::runtime_error("Silero generation-reset frames did not complete ONNX inference");
 
         std::cout << "Silero ONNX smoke test passed.\n";
         return 0;
