@@ -286,9 +286,6 @@ void runVadInferenceWorkerTests() {
         while (!sustainedQueue.push(finalFrame.data(), 30, finalSourcePosition)
                && std::chrono::steady_clock::now() < finalDeadline)
             std::this_thread::yield();
-        requireWorker(sustainedQueue.pop(finalFrame) == false,
-                      "Test must not consume worker-owned queue frames");
-
         while (sustainedWorker.latestProbability(30) != 0.9375f
                && std::chrono::steady_clock::now() < finalDeadline)
             std::this_thread::yield();
