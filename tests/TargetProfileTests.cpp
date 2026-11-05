@@ -67,6 +67,12 @@ void runTargetProfileTests() {
         std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f, 0.0f, 0.0f
     };
     requireFeature(!profile.learn(invalid), "Invalid feature frames must be rejected");
+    requireFeature(!profile.learn({-3.0f, 0.2f, 0.2f, 0.3f, 0.5f}),
+                   "Out-of-window finite RMS values must be rejected");
+    requireFeature(!profile.learn({-1.0f, 1.2f, 0.2f, 0.3f, 0.5f}),
+                   "Out-of-range zero-crossing rates must be rejected");
+    requireFeature(!profile.learn({-1.0f, 0.2f, 0.8f, 0.3f, 0.5f}),
+                   "Spectral ratios that do not sum to one must be rejected");
     requireFeature(profile.frameCount() == 32,
                    "Rejected frames must not modify profile statistics");
 

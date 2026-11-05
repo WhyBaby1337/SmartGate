@@ -99,6 +99,17 @@ public:
             return false;
 
         const auto values = toArray(features);
+        // Keep the learning and restore contracts identical: every accepted
+        // observation must be representable by a valid persisted profile.
+        if (values[0] <= -2.5f || values[0] >= -0.03f)
+            return false;
+        for (std::size_t i = 1; i < values.size(); ++i) {
+            if (values[i] < 0.0f || values[i] > 1.0f)
+                return false;
+        }
+        const float ratioSum = values[2] + values[3] + values[4];
+        if (!std::isfinite(ratioSum) || std::abs(ratioSum - 1.0f) > 1.0e-3f)
+            return false;
         ++count_;
         for (std::size_t i = 0; i < values.size(); ++i) {
             const double delta = static_cast<double>(values[i]) - mean_[i];
