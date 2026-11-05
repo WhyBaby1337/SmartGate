@@ -167,8 +167,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     const bool aiEnabled = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
     const bool learningRequested = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
 
-    // AI OFF is a true bypass: no feature extraction or target inference is
-    // performed. Re-entry starts with a clean frame to avoid stale samples.
+    // AI OFF disables target-profile analysis and Silero inference. The
+    // independent keyboard classifier may still run when Keyboard Reduction
+    // is enabled. Re-entry starts with a clean frame to avoid stale samples.
     if (aiEnabled != wasAiEnabled_) {
         featureExtractor_.reset();
         featureFramePosition_ = 0;

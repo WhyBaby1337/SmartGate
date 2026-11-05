@@ -43,7 +43,7 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
 
     keyboardModeLabel_.setText("KEYBOARD TYPE", juce::dontSendNotification);
     keyboardModeLabel_.setColour(juce::Label::textColourId, muted);
-    keyboardModeLabel_.setFont(juce::Font(11.0f, juce::Font::bold));
+    keyboardModeLabel_.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
     addAndMakeVisible(keyboardModeLabel_);
 }
 
@@ -65,7 +65,7 @@ void SmartGateAudioProcessorEditor::configureSlider(
     title.setText(label, juce::dontSendNotification);
     title.setJustificationType(juce::Justification::centred);
     title.setColour(juce::Label::textColourId, muted);
-    title.setFont(juce::Font(10.5f, juce::Font::bold));
+    title.setFont(juce::Font(juce::FontOptions(10.5f, juce::Font::bold)));
     addAndMakeVisible(title);
 }
 
@@ -86,7 +86,7 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
     g.fillRoundedRectangle(juce::Rectangle<float>(28.0f, 28.0f, 4.0f, 34.0f), 2.0f);
 
     g.setColour(juce::Colours::white);
-    g.setFont(juce::Font(25.0f, juce::Font::bold));
+    g.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
     g.drawText("SMART GATE", 44, 25, 260, 30, juce::Justification::left);
 
     g.setColour(muted);
