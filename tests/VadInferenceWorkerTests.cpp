@@ -257,4 +257,48 @@ void runVadInferenceWorkerTests() {
     requireWorker(raceWorker.latestProbability(21) == 0.4f,
                   "Worker should resume publishing after the new generation arrives");
     raceWorker.stop();
+
+    // Sustained producer/worker traffic: the producer must never wait on
+    // inference, and after a burst the worker must converge to the newest
+    // accepted frame instead of publishing an old backlog indefinitely.
+    {
+        Queue sustainedQueue;
+        InferenceProbe sustainedProbe;
+        smartgate::VadInferenceWorker<Queue> sustainedWorker(sustainedQueue);
+        requireWorker(sustainedWorker.start(&fakeInference, &sustainedProbe, 30),
+                      "Worker should start for sustained traffic stress");
+
+        constexpr int burstFrames = 5000;
+        for (int sequence = 0; sequence < burstFrames; ++sequence) {
+            std::array<float, 8> frame{};
+            frame.fill(0.01f + static_cast<float>(sequence % 800) * 0.001f);
+            while (!sustainedQueue.push(frame.data(), 30,
+                                        static_cast<std::uint64_t>(sequence) * 512u))
+                std::this_thread::yield();
+        }
+
+        std::array<float, 8> finalFrame{};
+        finalFrame.fill(0.9375f);
+        constexpr std::uint64_t finalSourcePosition =
+            static_cast<std::uint64_t>(burstFrames) * 512u;
+        const auto finalDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(3);
+        while (!sustainedQueue.push(finalFrame.data(), 30, finalSourcePosition)
+               && std::chrono::steady_clock::now() < finalDeadline)
+            std::this_thread::yield();
+        requireWorker(sustainedQueue.pop(finalFrame) == false,
+                      "Test must not consume worker-owned queue frames");
+
+        while (sustainedWorker.latestProbability(30) != 0.9375f
+               && std::chrono::steady_clock::now() < finalDeadline)
+            std::this_thread::yield();
+        requireWorker(sustainedWorker.latestProbability(30) == 0.9375f,
+                      "Worker must eventually publish the final frame after sustained traffic");
+        requireWorker(sustainedProbe.lastSourceSamplePosition.load(
+                          std::memory_order_relaxed) == finalSourcePosition,
+                      "Sustained traffic must preserve the newest frame source position");
+        requireWorker(sustainedProbe.calls.load(std::memory_order_acquire) > 0,
+                      "Sustained traffic must execute inference callbacks");
+        sustainedWorker.stop();
+    }
 }
