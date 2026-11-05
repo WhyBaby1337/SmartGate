@@ -141,6 +141,35 @@ void runTargetProfileTests() {
     requireFeature(capped.frameCount() == smartgate::TargetProfile::maximumRestoredFrames,
                    "Rejected over-limit learning must not increment the frame count");
 
+    // A just-restored pending snapshot must be saved before the audio thread
+    // applies it, then the published snapshot must win after application.
+    smartgate::AtomicTargetProfileSnapshot pendingForSave;
+    smartgate::AtomicTargetProfileSnapshot publishedForSave;
+    std::atomic<std::uint64_t> appliedVersion{0};
+    smartgate::TargetProfile::Snapshot selected;
+    pendingForSave.publish(saved);
+    requireFeature(smartgate::readLatestTargetProfileForPersistence(
+                       pendingForSave, publishedForSave, appliedVersion, selected),
+                   "A pending restored profile must be available for immediate save");
+    requireFeature(selected.count == saved.count,
+                   "Immediate save must select the pending restored profile");
+
+    auto newer = saved;
+    newer.count += 1;
+    // This is a valid synthetic snapshot with the same bounded statistics.
+    pendingForSave.publish(saved);
+    publishedForSave.publish(newer);
+    std::uint64_t pendingVersion = 0;
+    smartgate::TargetProfile::Snapshot pendingCopy;
+    requireFeature(pendingForSave.read(pendingCopy, pendingVersion),
+                   "Pending profile version must be readable");
+    appliedVersion.store(pendingVersion, std::memory_order_release);
+    requireFeature(smartgate::readLatestTargetProfileForPersistence(
+                       pendingForSave, publishedForSave, appliedVersion, selected),
+                   "Published profile must remain available after restore application");
+    requireFeature(selected.count == newer.count,
+                   "After restore application, save must select the latest learned profile");
+
     profile.clear();
     requireFeature(!profile.isReady() && profile.frameCount() == 0,
                    "Clearing profile must reset training state");

@@ -352,14 +352,9 @@ void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination
         // the next audio callback applies the pending profile. Serialize that
         // restored snapshot rather than the previous live profile (or empty
         // pre-prepare mailbox), so an immediate save/load round trip is lossless.
-        bool hasSnapshot = false;
-        if (pendingTargetProfile_.readForPersistence(snapshot, version)) {
-            const auto appliedVersion =
-                lastAppliedTargetProfileVersion_.load(std::memory_order_acquire);
-            hasSnapshot = version != appliedVersion;
-        }
-        if (!hasSnapshot)
-            hasSnapshot = publishedTargetProfile_.readForPersistence(snapshot, version);
+        const bool hasSnapshot = smartgate::readLatestTargetProfileForPersistence(
+            pendingTargetProfile_, publishedTargetProfile_,
+            lastAppliedTargetProfileVersion_, snapshot);
 
         if (hasSnapshot) {
             auto* node = xml->createNewChildElement("TARGET_PROFILE");

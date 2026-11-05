@@ -228,4 +228,19 @@ private:
     std::array<std::atomic<std::uint64_t>, 5> mean_{}, m2_{};
 };
 
+ // Select the snapshot that represents the newest committed session state.
+ // A just-loaded snapshot remains authoritative until the audio thread applies
+ // it; afterwards the live snapshot includes any subsequent learning updates.
+ inline bool readLatestTargetProfileForPersistence(
+     const AtomicTargetProfileSnapshot& pending,
+     const AtomicTargetProfileSnapshot& published,
+     const std::atomic<std::uint64_t>& lastAppliedVersion,
+     TargetProfile::Snapshot& snapshot) noexcept {
+     std::uint64_t version = 0;
+     if (pending.readForPersistence(snapshot, version)
+         && version != lastAppliedVersion.load(std::memory_order_acquire))
+         return true;
+     return published.readForPersistence(snapshot, version);
+ }
+
 } // namespace smartgate
