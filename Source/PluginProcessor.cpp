@@ -5,6 +5,7 @@
 #include <BinaryData.h>
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -71,6 +72,11 @@ float SmartGateAudioProcessor::runSileroInference(const VadQueue::Frame& frame,
 #endif
 
 void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
+    // Use one validated host rate for every time-based subsystem. A malformed
+    // or extreme host value must not make smoothing unstable or desynchronize
+    // the gate, feature extractors, keyboard detector, and VAD resampler.
+    const double safeSampleRate = std::isfinite(sampleRate)
+        ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
 #if defined(SMARTGATE_HAS_SILERO)
     // prepareToPlay is a non-processing lifecycle boundary. Model/session
     // creation and thread startup happen here, never in processBlock().
@@ -80,12 +86,12 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     vadGeneration_ = 1;
     vadProbabilitySmoothed_ = 0.0f;
     vadAssembler_.reset();
-    if (std::isfinite(sampleRate) && sampleRate >= 16000.0) {
+    if (safeSampleRate >= 16000.0) {
         try {
             sileroInference_ = std::make_unique<smartgate::SileroVadInference>(
                 BinaryData::silero_vad_onnx,
                 static_cast<std::size_t>(BinaryData::silero_vad_onnxSize));
-            if (vadAssembler_.prepare(sampleRate, 16000.0, vadGeneration_)
+            if (vadAssembler_.prepare(safeSampleRate, 16000.0, vadGeneration_)
                 && vadWorker_.start(&SmartGateAudioProcessor::runSileroInference,
                                     sileroInference_.get(), vadGeneration_)) {
                 vadAvailable_ = true;
@@ -101,16 +107,16 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     }
     wasAiEnabled_ = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
 #endif
-    gateEnvelope_.prepare(sampleRate);
-    featureExtractor_.prepare(sampleRate);
-    keyboardDetector_.prepare(sampleRate);
+    gateEnvelope_.prepare(safeSampleRate);
+    featureExtractor_.prepare(safeSampleRate);
+    keyboardDetector_.prepare(safeSampleRate);
     keyboardConfidence_ = 0.0f;
     featureFramePosition_ = 0;
     featureFrame_.fill(0.0f);
     targetConfidenceTarget_ = 1.0f;
     targetConfidenceSmoothed_ = 1.0f;
     targetConfidenceSmoothingCoefficient_ = static_cast<float>(
-        std::exp(-1.0 / (0.030 * (std::isfinite(sampleRate) ? sampleRate : 44100.0))));
+        std::exp(-1.0 / (0.030 * safeSampleRate)));
 #if defined(SMARTGATE_HAS_SILERO)
     vadProbabilitySmoothingCoefficient_ = targetConfidenceSmoothingCoefficient_;
 #endif
