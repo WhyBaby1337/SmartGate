@@ -223,7 +223,7 @@ public:
                 copy.mean[i] = value(mean_[i].load(std::memory_order_seq_cst));
                 copy.m2[i] = value(m2_[i].load(std::memory_order_seq_cst));
             }
-            const auto last = sequence_.load(std::memory_order_acquire);
+            const auto last = sequence_.load(std::memory_order_seq_cst);
             if (first == last && !(last & 1U)) {
                 s = copy;
                 version = last;
