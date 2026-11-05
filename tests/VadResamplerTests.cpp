@@ -98,6 +98,10 @@ void runVadResamplerTests() {
     requireResampler(highRateStopband < 0.002,
                      "96 kHz conversion must strongly attenuate content just above the destination Nyquist limit");
 
+    // Keep the sanitization assertion at 48 kHz so its expected output
+    // cadence is independent of the preceding 96 kHz frequency-response test.
+    requireResampler(resampler.prepare(48000.0, 16000.0),
+                     "Resampler should prepare for non-finite input sanitization");
     resampler.reset();
     requireResampler(!resampler.processSample(0.5f, output),
                      "First sample after reset establishes interpolation history");
