@@ -90,9 +90,19 @@ void runAdaptiveKeyboardDetectorTests() {
     detector.reset();
     requireKeyboard(detector.getConfidence() == 0.0f,
                     "Reset must clear accumulated keyboard confidence");
-    std::vector<float> silence(frameSize, 0.0f);
-    for (int i = 0; i < 5; ++i)
-        detector.processFrame(silence.data(), silence.size());
-    requireKeyboard(detector.getConfidence() == 0.0f,
-                    "A fresh detector after re-enable must not retain stale click confidence");
+
+    // Compare the reset instance against a genuinely fresh detector. Matching
+    // output across the same frames verifies that reset also clears hidden
+    // filter history and the learned reference RMS, not only public confidence.
+    smartgate::AdaptiveKeyboardDetector freshDetector;
+    freshDetector.prepare(48000.0);
+    freshDetector.setMode(smartgate::AdaptiveKeyboardDetector::Mode::Mechanical);
+    for (int i = 0; i < 5; ++i) {
+        const float resetConfidence = detector.processFrame(
+            clickFrame.data(), clickFrame.size());
+        const float freshConfidence = freshDetector.processFrame(
+            clickFrame.data(), clickFrame.size());
+        requireKeyboard(std::abs(resetConfidence - freshConfidence) < 1.0e-6f,
+                        "Reset detector must behave like a fresh detector");
+    }
 }
