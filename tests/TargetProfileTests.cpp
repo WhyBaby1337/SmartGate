@@ -52,6 +52,25 @@ void runTargetProfileTests() {
     requireFeature(nonFiniteStartFeatures.zeroCrossingRate == 0.0f,
                    "Sanitized first sample must not create a false zero-crossing");
 
+    // Very large but finite samples must not overflow recursive float filter
+    // state and poison every subsequent frame after the input returns to normal.
+    smartgate::FeatureExtractor extremeExtractor;
+    extremeExtractor.prepare(48000.0);
+    const float largestFinite = std::numeric_limits<float>::max();
+    const std::array<float, 8> extremeFrame{
+        largestFinite, -largestFinite, largestFinite, -largestFinite,
+        largestFinite, -largestFinite, largestFinite, -largestFinite
+    };
+    const auto extremeFeatures = extremeExtractor.process(
+        extremeFrame.data(), extremeFrame.size());
+    requireFeature(extremeFeatures.isFinite(),
+                   "Extreme finite samples must not overflow feature filter state");
+    const auto recoveredFeatures = extremeExtractor.process(frame.data(), frame.size());
+    requireFeature(recoveredFeatures.isFinite()
+                   && recoveredFeatures.logRms < 0.0f
+                   && recoveredFeatures.logRms > -2.0f,
+                   "Feature extraction must recover when normal audio follows extreme samples");
+
     const auto extracted = extractor.process(frame.data(), frame.size());
     requireFeature(extracted.isFinite(), "Extracted features must be finite");
     requireFeature(extracted.logRms < 0.0f && extracted.logRms > -2.0f,
