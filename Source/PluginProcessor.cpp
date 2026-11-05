@@ -1,5 +1,9 @@
 #include "PluginProcessor.h"
 
+#if defined(SMARTGATE_HAS_SILERO)
+#include <BinaryData.h>
+#endif
+
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -56,7 +60,46 @@ SmartGateAudioProcessor::createParameterLayout() {
     return layout;
 }
 
+#if defined(SMARTGATE_HAS_SILERO)
+float SmartGateAudioProcessor::runSileroInference(const VadQueue::Frame& frame,
+                                                   std::uint64_t generation,
+                                                   void* context) noexcept {
+    auto* inference = static_cast<smartgate::SileroVadInference*>(context);
+    return inference != nullptr ? inference->infer(frame, generation) : 0.0f;
+}
+#endif
+
 void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
+#if defined(SMARTGATE_HAS_SILERO)
+    // prepareToPlay is a non-processing lifecycle boundary. Model/session
+    // creation and thread startup happen here, never in processBlock().
+    vadWorker_.stop();
+    sileroInference_.reset();
+    vadAvailable_ = false;
+    vadGeneration_ = 1;
+    vadProbabilitySmoothed_ = 0.0f;
+    vadAssembler_.reset();
+    if (std::isfinite(sampleRate) && sampleRate >= 16000.0) {
+        try {
+            sileroInference_ = std::make_unique<smartgate::SileroVadInference>(
+                BinaryData::silero_vad_onnx,
+                static_cast<std::size_t>(BinaryData::silero_vad_onnxSize));
+            if (vadAssembler_.prepare(sampleRate, 16000.0, vadGeneration_)
+                && vadWorker_.start(&SmartGateAudioProcessor::runSileroInference,
+                                    sileroInference_.get(), vadGeneration_)) {
+                vadAvailable_ = true;
+            } else {
+                sileroInference_.reset();
+            }
+        } catch (...) {
+            // Optional AI failure is fail-open: the conventional gate remains usable.
+            vadWorker_.stop();
+            sileroInference_.reset();
+            vadAvailable_ = false;
+        }
+    }
+    wasAiEnabled_ = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
+#endif
     gateEnvelope_.prepare(sampleRate);
     featureExtractor_.prepare(sampleRate);
     keyboardDetector_.prepare(sampleRate);
@@ -67,12 +110,23 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     targetConfidenceSmoothed_ = 1.0f;
     targetConfidenceSmoothingCoefficient_ = static_cast<float>(
         std::exp(-1.0 / (0.030 * (std::isfinite(sampleRate) ? sampleRate : 44100.0))));
+#if defined(SMARTGATE_HAS_SILERO)
+    vadProbabilitySmoothingCoefficient_ = targetConfidenceSmoothingCoefficient_;
+#endif
     wasLearningTarget_ = false;
     wasAiEnabled_ = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
     publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
 }
 
-void SmartGateAudioProcessor::releaseResources() {}
+void SmartGateAudioProcessor::releaseResources() {
+#if defined(SMARTGATE_HAS_SILERO)
+    // Host calls release after processing has stopped; joining here is safe.
+    vadWorker_.stop();
+    sileroInference_.reset();
+    vadAvailable_ = false;
+    vadProbabilitySmoothed_ = 0.0f;
+#endif
+}
 
 bool SmartGateAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
     const auto& input = layouts.getMainInputChannelSet();
@@ -120,6 +174,16 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         targetConfidenceTarget_ = 1.0f;
         targetConfidenceSmoothed_ = 1.0f;
         wasAiEnabled_ = aiEnabled;
+#if defined(SMARTGATE_HAS_SILERO)
+        if (vadAvailable_) {
+            ++vadGeneration_;
+            if (vadGeneration_ == 0)
+                vadGeneration_ = 1;
+            vadWorker_.setGeneration(vadGeneration_);
+            vadAssembler_.setGeneration(vadGeneration_);
+            vadProbabilitySmoothed_ = 0.0f;
+        }
+#endif
     }
 
     if (learningRequested && !wasLearningTarget_)
@@ -165,6 +229,15 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         keyboardConfidence_ = 0.0f;
     }
 
+#if defined(SMARTGATE_HAS_SILERO)
+    const float vadProbability = aiEnabled && vadAvailable_
+        ? vadWorker_.latestProbability(vadGeneration_) : 0.0f;
+#else
+    const float vadProbability = 0.0f;
+#endif
+    const float thresholdLinear = std::pow(10.0f,
+        *parameters_.getRawParameterValue("threshold") / 20.0f);
+
     const bool analyzeTarget = aiEnabled;
     const bool analyzeKeyboard = keyboardReduction > 0.0f;
     const bool analyzeFrames = analyzeTarget || analyzeKeyboard;
@@ -188,6 +261,14 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float linkedPeak = juce::jmax(std::abs(leftSample), std::abs(rightSample));
         const float mono = right != nullptr
             ? 0.5f * (leftSample + rightSample) : leftSample;
+
+#if defined(SMARTGATE_HAS_SILERO)
+        if (aiEnabled && vadAvailable_)
+            (void) vadAssembler_.processSample(mono);
+        vadProbabilitySmoothed_ = vadProbability
+            + vadProbabilitySmoothingCoefficient_
+                * (vadProbabilitySmoothed_ - vadProbability);
+#endif
 
         // Share one low-rate mono frame between the optional target analyzer
         // and keyboard classifier. If both are inactive, skip frame assembly
@@ -213,8 +294,17 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             : 1.0f;
         const float keyboardDetectorGain = 1.0f
             - keyboardReduction * keyboardConfidence_;
+        // Silero is an assist to the conventional level detector, not a hard
+        // gate override. A confident speech result gently lifts the detector
+        // above threshold; silence/no result leaves classic gate behavior intact.
+        const float vadAssist = aiEnabled && vadAvailable_
+            ? juce::jlimit(0.0f, 1.0f, (vadProbabilitySmoothed_ - 0.35f) / 0.40f)
+            : 0.0f;
+        const float vadAssistedPeak = vadAssist > 0.0f
+            ? juce::jmax(linkedPeak, thresholdLinear * (0.75f + 0.75f * vadAssist))
+            : linkedPeak;
         const float gain = gateEnvelope_.process(
-            linkedPeak * targetGain * keyboardDetectorGain);
+            vadAssistedPeak * targetGain * keyboardDetectorGain);
 
         left[sample] = leftSample * gain;
         if (right != nullptr)

@@ -6,8 +6,17 @@
 #include "GateEnvelope.h"
 #include "TargetProfile.h"
 
+#if defined(SMARTGATE_HAS_SILERO)
+#include "SileroVadInference.h"
+#include "VadFrameAssembler.h"
+#include "VadFrameQueue.h"
+#include "VadInferenceWorker.h"
+#endif
+
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <memory>
 
 class SmartGateAudioProcessor final : public juce::AudioProcessor {
 public:
@@ -38,6 +47,11 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void finishFeatureFrame() noexcept;
+#if defined(SMARTGATE_HAS_SILERO)
+    using VadQueue = smartgate::VadFrameQueue<smartgate::SileroVadInference::frameSize, 8>;
+    static float runSileroInference(const VadQueue::Frame& frame,
+                                    std::uint64_t generation, void* context) noexcept;
+#endif
 
     juce::AudioProcessorValueTreeState parameters_;
     smartgate::GateEnvelope gateEnvelope_;
@@ -58,6 +72,18 @@ private:
     bool wasLearningTarget_ = false;
     bool pendingLearningStart_ = false;
     bool wasAiEnabled_ = true;
+#if defined(SMARTGATE_HAS_SILERO)
+    // Declaration order is intentional: worker is destroyed before its model
+    // context and queue, so its thread can never outlive either dependency.
+    VadQueue vadQueue_;
+    smartgate::VadFrameAssembler<VadQueue> vadAssembler_{vadQueue_};
+    std::unique_ptr<smartgate::SileroVadInference> sileroInference_;
+    smartgate::VadInferenceWorker<VadQueue> vadWorker_{vadQueue_};
+    std::uint64_t vadGeneration_ = 1;
+    float vadProbabilitySmoothed_ = 0.0f;
+    float vadProbabilitySmoothingCoefficient_ = 0.0f;
+    bool vadAvailable_ = false;
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SmartGateAudioProcessor)
 };
