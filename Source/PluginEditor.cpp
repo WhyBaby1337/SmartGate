@@ -2,10 +2,10 @@
 #include "PluginProcessor.h"
 
 namespace {
-constexpr auto background = juce::Colour(0xff101318);
-constexpr auto panel = juce::Colour(0xff191f27);
-constexpr auto accent = juce::Colour(0xff65d6b0);
-constexpr auto muted = juce::Colour(0xff8b98a8);
+const auto background = juce::Colour(0xff101318);
+const auto panel = juce::Colour(0xff191f27);
+const auto accent = juce::Colour(0xff65d6b0);
+const auto muted = juce::Colour(0xff8b98a8);
 }
 
 SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
