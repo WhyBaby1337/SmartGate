@@ -6,6 +6,12 @@
 
 namespace smartgate {
 
+// Replace invalid host samples with silence before they reach analysis or output.
+// This helper is intentionally tiny and safe to call in the real-time callback.
+inline float finiteSampleOrZero(float sample) noexcept {
+    return std::isfinite(sample) ? sample : 0.0f;
+}
+
 // Compact, allocation-free frame description. Band values are energy ratios.
 struct AudioFeatures {
     float logRms = -6.0f;

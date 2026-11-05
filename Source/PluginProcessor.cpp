@@ -285,11 +285,16 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // Peak-linked detection keeps the stereo image centered and stable.
     // Target features are extracted from a mono average in fixed-size frames.
     for (int sample = 0; sample < samples; ++sample) {
-        const float leftSample = left[sample];
-        const float rightSample = right != nullptr ? right[sample] : leftSample;
+        // A malformed upstream sample must not poison the detector or leak
+        // NaN/Inf into the host output. Sanitization is allocation- and lock-free.
+        const float leftSample = smartgate::finiteSampleOrZero(left[sample]);
+        const float rightSample = right != nullptr
+            ? smartgate::finiteSampleOrZero(right[sample]) : leftSample;
         const float linkedPeak = juce::jmax(std::abs(leftSample), std::abs(rightSample));
+        // Halve before adding so two large but finite channels cannot overflow
+        // during the mono analysis fold-down.
         const float mono = right != nullptr
-            ? 0.5f * (leftSample + rightSample) : leftSample;
+            ? 0.5f * leftSample + 0.5f * rightSample : leftSample;
 
 #if defined(SMARTGATE_HAS_SILERO)
         if (aiEnabled && vadAvailable_)

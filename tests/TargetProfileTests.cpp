@@ -14,6 +14,18 @@ void requireFeature(bool condition, const char* message) {
 }
 
 void runTargetProfileTests() {
+    requireFeature(smartgate::finiteSampleOrZero(0.25f) == 0.25f,
+                   "Finite audio samples must be preserved");
+    requireFeature(smartgate::finiteSampleOrZero(
+                       std::numeric_limits<float>::quiet_NaN()) == 0.0f,
+                   "NaN audio samples must be replaced with silence");
+    requireFeature(smartgate::finiteSampleOrZero(
+                       std::numeric_limits<float>::infinity()) == 0.0f,
+                   "Infinite audio samples must be replaced with silence");
+    requireFeature(smartgate::finiteSampleOrZero(
+                       -std::numeric_limits<float>::infinity()) == 0.0f,
+                   "Negative infinite audio samples must be replaced with silence");
+
     smartgate::FeatureExtractor extractor;
     extractor.prepare(48000.0);
 
