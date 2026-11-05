@@ -19,6 +19,8 @@ public:
     static constexpr std::size_t contextSize = 64;
     static constexpr std::size_t recurrentStateSize = 2 * 128;
     static constexpr std::size_t modelInputSize = contextSize + frameSize;
+    static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
+                  "Audio-thread VAD failure diagnostics require lock-free 64-bit atomics");
 
     SileroVadInference(const void* modelData, std::size_t modelSize,
                        double hostSampleRate = 16000.0)
