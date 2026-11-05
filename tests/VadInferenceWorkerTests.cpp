@@ -17,6 +17,7 @@ void requireWorker(bool condition, const char* message) {
 struct InferenceProbe {
     std::atomic<int> calls{0};
     std::atomic<std::uint64_t> lastGeneration{0};
+    std::atomic<std::uint64_t> lastSourceSamplePosition{0};
 };
 
 struct BlockingProbe {
@@ -24,11 +25,13 @@ struct BlockingProbe {
     std::atomic<bool> release{false};
     std::atomic<int> calls{0};
     std::atomic<float> lastInput{0.0f};
+    std::atomic<std::uint64_t> lastSourceSamplePosition{0};
 };
 
 float blockingInference(const std::array<float, 8>& frame, std::uint64_t,
-                       std::uint64_t, void* opaque) noexcept {
+                       std::uint64_t sourceSamplePosition, void* opaque) noexcept {
     auto& probe = *static_cast<BlockingProbe*>(opaque);
+    probe.lastSourceSamplePosition.store(sourceSamplePosition, std::memory_order_relaxed);
     probe.lastInput.store(frame[0], std::memory_order_relaxed);
     probe.entered.store(true, std::memory_order_release);
     while (!probe.release.load(std::memory_order_acquire))
@@ -38,8 +41,9 @@ float blockingInference(const std::array<float, 8>& frame, std::uint64_t,
 }
 
 float fakeInference(const std::array<float, 8>& frame, std::uint64_t generation,
-                    std::uint64_t, void* opaque) noexcept {
+                    std::uint64_t sourceSamplePosition, void* opaque) noexcept {
     auto& probe = *static_cast<InferenceProbe*>(opaque);
+    probe.lastSourceSamplePosition.store(sourceSamplePosition, std::memory_order_relaxed);
     probe.lastGeneration.store(generation, std::memory_order_relaxed);
     probe.calls.fetch_add(1, std::memory_order_release);
     return frame[0];
@@ -84,6 +88,8 @@ void runVadInferenceWorkerTests() {
         std::this_thread::yield();
     requireWorker(worker.latestProbability(10) == 0.65f,
                   "Worker should publish the inference probability for its generation");
+    requireWorker(probe.lastSourceSamplePosition.load(std::memory_order_relaxed) == 900,
+                  "Worker must pass the source audio position to its inference callback");
     requireWorker(worker.latestProbability(10, 1000, 200) == 0.65f,
                   "A result inside the configured sample-age budget should remain usable");
     requireWorker(worker.latestProbability(10, 1201, 200) == 0.0f,
@@ -192,6 +198,8 @@ void runVadInferenceWorkerTests() {
                       "Worker should process another frame after the blocked inference");
         requireWorker(freshProbe.lastInput.load(std::memory_order_relaxed) == 0.4f,
                       "Worker should skip stale backlog and infer the newest queued frame");
+        requireWorker(freshProbe.lastSourceSamplePosition.load(std::memory_order_relaxed) == 400,
+                      "Newest-frame inference must retain its source audio position");
         const auto freshResultDeadline = std::chrono::steady_clock::now()
             + std::chrono::seconds(2);
         while (freshWorker.latestProbability(15) != 0.4f
