@@ -27,7 +27,7 @@ struct BlockingProbe {
 };
 
 float blockingInference(const std::array<float, 8>& frame, std::uint64_t,
-                       void* opaque) noexcept {
+                       std::uint64_t, void* opaque) noexcept {
     auto& probe = *static_cast<BlockingProbe*>(opaque);
     probe.lastInput.store(frame[0], std::memory_order_relaxed);
     probe.entered.store(true, std::memory_order_release);
@@ -38,7 +38,7 @@ float blockingInference(const std::array<float, 8>& frame, std::uint64_t,
 }
 
 float fakeInference(const std::array<float, 8>& frame, std::uint64_t generation,
-                    void* opaque) noexcept {
+                    std::uint64_t, void* opaque) noexcept {
     auto& probe = *static_cast<InferenceProbe*>(opaque);
     probe.lastGeneration.store(generation, std::memory_order_relaxed);
     probe.calls.fetch_add(1, std::memory_order_release);
