@@ -105,7 +105,6 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
             vadAvailable_ = false;
         }
     }
-    wasAiEnabled_ = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
 #endif
     gateEnvelope_.prepare(safeSampleRate);
     featureExtractor_.prepare(safeSampleRate);
@@ -362,7 +361,6 @@ void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination
 
     if (auto xml = state.createXml()) {
         smartgate::TargetProfile::Snapshot snapshot;
-        std::uint64_t version = 0;
         // This method is called by the host's non-real-time state-save path.
         // Wait out a concurrent audio-thread publish rather than silently
         // serializing parameters without the trained target profile.
