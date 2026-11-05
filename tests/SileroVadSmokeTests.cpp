@@ -8,8 +8,8 @@
 
 int main() {
     try {
-        smartgate::SileroVadInference inference(BinaryData::silero_vad,
-            static_cast<std::size_t>(BinaryData::silero_vadSize));
+        smartgate::SileroVadInference inference(BinaryData::silero_vad_onnx,
+            static_cast<std::size_t>(BinaryData::silero_vad_onnx_onnxSize));
         std::array<float, smartgate::SileroVadInference::frameSize> frame{};
         for (int i = 0; i < 12; ++i) {
             const float probability = inference.infer(frame, 1);
