@@ -16,7 +16,7 @@ template <typename Queue>
 class VadInferenceWorker {
 public:
     using Frame = typename Queue::Frame;
-    using InferenceFunction = float (*)(const Frame&, std::uint64_t, void*) noexcept;
+    using InferenceFunction = float (*)(const Frame&, std::uint64_t, std::uint64_t, void*) noexcept;
 
     explicit VadInferenceWorker(Queue& queue) noexcept : queue_(queue) {
         static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
@@ -142,7 +142,8 @@ private:
             if (frameGeneration != generation)
                 continue;
 
-            const float rawProbability = inference_(frame, frameGeneration, context_);
+            const float rawProbability = inference_(frame, frameGeneration,
+                sourceSamplePosition, context_);
             // Recheck after inference: AI may have been disabled/re-enabled
             // while the model was evaluating this frame.
             if (stopRequested_.load(std::memory_order_acquire)
