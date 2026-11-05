@@ -23,11 +23,13 @@ struct BlockingProbe {
     std::atomic<bool> entered{false};
     std::atomic<bool> release{false};
     std::atomic<int> calls{0};
+    std::atomic<float> lastInput{0.0f};
 };
 
 float blockingInference(const std::array<float, 8>& frame, std::uint64_t,
                        void* opaque) noexcept {
     auto& probe = *static_cast<BlockingProbe*>(opaque);
+    probe.lastInput.store(frame[0], std::memory_order_relaxed);
     probe.entered.store(true, std::memory_order_release);
     while (!probe.release.load(std::memory_order_acquire))
         std::this_thread::yield();
@@ -148,6 +150,57 @@ void runVadInferenceWorkerTests() {
 
     worker.stop();
     requireWorker(!worker.isRunning(), "Restarted worker should also stop cleanly");
+
+    // If inference stalls while new frames arrive, the worker must resume
+    // from the newest queued audio rather than replaying a stale backlog.
+    {
+        Queue freshQueue;
+        BlockingProbe freshProbe;
+        smartgate::VadInferenceWorker<Queue> freshWorker(freshQueue);
+        requireWorker(freshWorker.start(&blockingInference, &freshProbe, 15),
+                      "Worker should start for the stale-backlog test");
+        std::array<float, 8> firstFrame{};
+        firstFrame.fill(0.1f);
+        requireWorker(freshQueue.push(firstFrame.data(), 15, 100),
+                      "Initial frame should enter the freshness test queue");
+        const auto blockedDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(2);
+        while (!freshProbe.entered.load(std::memory_order_acquire)
+               && std::chrono::steady_clock::now() < blockedDeadline)
+            std::this_thread::yield();
+        const bool firstInferenceEntered =
+            freshProbe.entered.load(std::memory_order_acquire);
+        if (!firstInferenceEntered)
+            freshProbe.release.store(true, std::memory_order_release);
+        requireWorker(firstInferenceEntered,
+                      "First inference should block before backlog frames are queued");
+
+        for (const float value : {0.2f, 0.3f, 0.4f}) {
+            std::array<float, 8> queuedFrame{};
+            queuedFrame.fill(value);
+            requireWorker(freshQueue.push(queuedFrame.data(), 15,
+                                           static_cast<std::uint64_t>(value * 1000.0f)),
+                          "Backlog frame should be accepted while inference is busy");
+        }
+        freshProbe.release.store(true, std::memory_order_release);
+        const auto newestDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(2);
+        while (freshProbe.calls.load(std::memory_order_acquire) < 2
+               && std::chrono::steady_clock::now() < newestDeadline)
+            std::this_thread::yield();
+        requireWorker(freshProbe.calls.load(std::memory_order_acquire) >= 2,
+                      "Worker should process another frame after the blocked inference");
+        requireWorker(freshProbe.lastInput.load(std::memory_order_relaxed) == 0.4f,
+                      "Worker should skip stale backlog and infer the newest queued frame");
+        const auto freshResultDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(2);
+        while (freshWorker.latestProbability(15) != 0.4f
+               && std::chrono::steady_clock::now() < freshResultDeadline)
+            std::this_thread::yield();
+        requireWorker(freshWorker.latestProbability(15) == 0.4f,
+                      "Published VAD result should correspond to the newest queued frame");
+        freshWorker.stop();
+    }
 
     // Force an inference to overlap an AI generation change. Its result must
     // not be published after the audio thread has moved to the new generation.
