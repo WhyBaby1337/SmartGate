@@ -79,6 +79,22 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(std::isfinite(infiniteConfidence),
                     "Infinite samples must not poison keyboard confidence");
 
+    // Extreme but finite input must not overflow recursive low-pass state.
+    // The following normal frames must remain finite after the detector reset.
+    std::vector<float> extremeFrame(frameSize);
+    const float largestFinite = std::numeric_limits<float>::max();
+    for (std::size_t i = 0; i < frameSize; ++i)
+        extremeFrame[i] = (i & 1u) == 0u ? largestFinite : -largestFinite;
+    const float extremeConfidence = detector.processFrame(
+        extremeFrame.data(), extremeFrame.size());
+    requireKeyboard(std::isfinite(extremeConfidence),
+                    "Extreme finite samples must not overflow keyboard confidence");
+    detector.reset();
+    const float recoveredConfidence = detector.processFrame(
+        clickFrame.data(), clickFrame.size());
+    requireKeyboard(std::isfinite(recoveredConfidence),
+                    "Keyboard detector must recover after reset following extreme samples");
+
     // Disabling keyboard reduction pauses classification. Reproduce a
     // confident click sequence, then verify the disable/enable reset discards
     // both its confidence and its learned reference RMS.
