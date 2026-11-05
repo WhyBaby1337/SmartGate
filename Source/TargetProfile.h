@@ -36,6 +36,13 @@ public:
             && features.logRms > -2.5f && features.logRms < -0.03f;
     }
 
+    // Keep the optional-VAD fallback explicit and make its boundary testable.
+    static bool isSpeechQualifiedForLearning(bool vadAvailable,
+                                             float vadProbability) noexcept {
+        return !vadAvailable
+            || (std::isfinite(vadProbability) && vadProbability >= 0.50f);
+    }
+
     // Restore is intended for validated, non-real-time state loading. The
     // caller must ensure this object is not accessed concurrently.
     bool restore(const Snapshot& snapshot) noexcept {
