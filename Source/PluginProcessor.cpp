@@ -214,6 +214,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         && targetProfile_.restore(restored)) {
         lastAppliedTargetProfileVersion_ = restoredVersion;
         publishedTargetProfile_.publish(restored);
+        pendingTargetProfileRestore_.store(false, std::memory_order_release);
         targetConfidenceTarget_ = targetConfidenceSmoothed_ = 1.0f;
     }
 
@@ -348,7 +349,17 @@ void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination
         // This method is called by the host's non-real-time state-save path.
         // Wait out a concurrent audio-thread publish rather than silently
         // serializing parameters without the trained target profile.
-        if (publishedTargetProfile_.readForPersistence(snapshot, version)) {
+        // A host may request a save after setStateInformation() but before
+        // the next audio callback applies the pending profile. Serialize that
+        // restored snapshot rather than the previous live profile (or empty
+        // pre-prepare mailbox), so an immediate save/load round trip is lossless.
+        bool hasSnapshot = false;
+        if (pendingTargetProfileRestore_.load(std::memory_order_acquire))
+            hasSnapshot = pendingTargetProfile_.readForPersistence(snapshot, version);
+        if (!hasSnapshot)
+            hasSnapshot = publishedTargetProfile_.readForPersistence(snapshot, version);
+
+        if (hasSnapshot) {
             auto* node = xml->createNewChildElement("TARGET_PROFILE");
             node->setAttribute("count", static_cast<int>(snapshot.count));
             for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
@@ -399,10 +410,12 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
             // profile instead of leaving stale training from another session.
             pendingTargetProfile_.publish(valid
                 ? snapshot : smartgate::TargetProfile::Snapshot{});
+            pendingTargetProfileRestore_.store(true, std::memory_order_release);
         } else {
             // Older sessions have no target profile; clear any profile left
             // from the currently loaded instance.
             pendingTargetProfile_.publish(smartgate::TargetProfile::Snapshot{});
+            pendingTargetProfileRestore_.store(true, std::memory_order_release);
         }
     }
 }
