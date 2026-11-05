@@ -24,6 +24,27 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Measure DSP CPU budget
         run: .\\build\\Release\\SmartGateDspBenchmark.exe
+      - name: Verify VST3 bundle dependencies
+        shell: pwsh
+        run: |
+          $bundle = Get-ChildItem "build/SmartGate_artefacts/Release/VST3" -Directory -Filter "*.vst3" | Select-Object -First 1
+          if (-not $bundle) { throw "VST3 bundle was not produced." }
+
+          $module = Join-Path $bundle.FullName "Contents/x86_64-win/Smart Gate.vst3"
+          $moduleDir = Split-Path $module -Parent
+          $runtime = Join-Path $moduleDir "onnxruntime.dll"
+          $notices = Join-Path $bundle.FullName "Contents/Resources/THIRD_PARTY_NOTICES.txt"
+
+          foreach ($requiredFile in @($module, $runtime, $notices)) {
+            if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+              throw "Required VST3 bundle file is missing: $requiredFile"
+            }
+            if ((Get-Item -LiteralPath $requiredFile).Length -le 0) {
+              throw "Required VST3 bundle file is empty: $requiredFile"
+            }
+          }
+
+          Write-Host "VST3 module, ONNX Runtime, and third-party notices are present."
       - name: Upload VST3
         uses: actions/upload-artifact@v4
         with:
