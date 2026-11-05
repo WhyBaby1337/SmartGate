@@ -60,7 +60,7 @@ public:
         try {
             constexpr std::array<std::int64_t, 2> inputShape{1, 576};
             constexpr std::array<std::int64_t, 3> stateShape{2, 1, 128};
-            constexpr std::int64_t sampleRate = 16000;
+            std::int64_t sampleRate = 16000;
 
             std::array<Ort::Value, 3> inputs{
                 Ort::Value::CreateTensor<float>(memoryInfo_, input_.data(),
@@ -68,7 +68,7 @@ public:
                 Ort::Value::CreateTensor<float>(memoryInfo_, recurrentState_.data(),
                     recurrentState_.size(), stateShape.data(), stateShape.size()),
                 Ort::Value::CreateTensor<std::int64_t>(memoryInfo_,
-                    const_cast<std::int64_t*>(&sampleRate), 1, nullptr, 0)
+                    &sampleRate, 1, nullptr, 0)
             };
 
             constexpr std::array<const char*, 3> inputNames{"input", "state", "sr"};
@@ -77,23 +77,41 @@ public:
                 inputNames.data(), inputs.data(), inputs.size(),
                 outputNames.data(), outputNames.size());
 
-            if (outputs.size() != 2
-                || outputs[0].GetTensorTypeAndShapeInfo().GetElementCount() < 1
-                || outputs[1].GetTensorTypeAndShapeInfo().GetElementCount()
-                    != recurrentState_.size()) {
+            if (outputs.size() != 2) {
+                resetState();
+                return 0.0f;
+            }
+
+            const auto probabilityInfo = outputs[0].GetTensorTypeAndShapeInfo();
+            const auto stateInfo = outputs[1].GetTensorTypeAndShapeInfo();
+            if (probabilityInfo.GetElementType() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT
+                || probabilityInfo.GetElementCount() < 1
+                || stateInfo.GetElementType() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT
+                || stateInfo.GetElementCount() != recurrentState_.size()) {
                 resetState();
                 return 0.0f;
             }
 
             const float rawProbability = outputs[0].GetTensorData<float>()[0];
             const float* nextState = outputs[1].GetTensorData<float>();
+            if (!std::isfinite(rawProbability)) {
+                resetState();
+                return 0.0f;
+            }
+
+            for (std::size_t i = 0; i < recurrentState_.size(); ++i) {
+                if (!std::isfinite(nextState[i])) {
+                    resetState();
+                    return 0.0f;
+                }
+            }
+
             std::copy(nextState, nextState + recurrentState_.size(),
                       recurrentState_.begin());
             std::copy(input_.end() - static_cast<std::ptrdiff_t>(contextSize),
                       input_.end(), context_.begin());
 
-            return std::isfinite(rawProbability)
-                ? std::max(0.0f, std::min(1.0f, rawProbability)) : 0.0f;
+            return std::max(0.0f, std::min(1.0f, rawProbability));
         } catch (...) {
             resetState();
             return 0.0f;
