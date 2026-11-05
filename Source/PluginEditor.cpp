@@ -90,7 +90,7 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
     g.drawText("SMART GATE", 44, 25, 260, 30, juce::Justification::left);
 
     g.setColour(muted);
-    g.setFont(juce::Font(11.0f));
+    g.setFont(juce::Font(juce::FontOptions(11.0f)));
     g.drawText("TARGET-AWARE NOISE CONTROL", 46, 55, 300, 18,
                juce::Justification::left);
 
