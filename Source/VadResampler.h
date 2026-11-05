@@ -7,14 +7,17 @@
 namespace smartgate {
 
 // Streaming mono sample-rate converter for the VAD input path.
-// A short windowed-sinc FIR low-pass filter suppresses content above the
-// destination Nyquist frequency before linear interpolation/decimation.
+// A windowed-sinc FIR low-pass filter suppresses content above the
+// destination Nyquist frequency before linear interpolation/decimation. The
+// 95-tap design supports host rates through 96 kHz; higher rates are rejected
+// rather than silently providing inadequate anti-alias attenuation.
 // Coefficients are prepared off the audio thread; processing is fixed-cost,
 // allocation-free, and retains state across arbitrary host block boundaries.
 // Supports downsampling and equal-rate conversion.
 class VadResampler {
 public:
-    static constexpr std::size_t filterTaps = 31;
+    static constexpr std::size_t filterTaps = 95;
+    static constexpr double maximumInputRate = 96000.0;
 
     bool prepare(double inputRate, double outputRate = 16000.0) noexcept {
         prepared_ = false;
@@ -23,7 +26,8 @@ public:
         reset();
 
         if (!std::isfinite(inputRate) || !std::isfinite(outputRate)
-            || inputRate < outputRate || outputRate <= 0.0)
+            || inputRate < outputRate || inputRate > maximumInputRate
+            || outputRate <= 0.0)
             return false;
 
         inputRate_ = inputRate;
