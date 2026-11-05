@@ -46,10 +46,9 @@ if(SMARTGATE_BUILD_PLUGIN)
             URL https://github.com/microsoft/onnxruntime/releases/download/v1.30.1/onnxruntime-win-x64-1.30.1.zip
             URL_HASH SHA256=9e70d829a7c2014c6f6d2889cd3578733c2e5bbe919e186b5f2038d59176ab13
             DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
-        FetchContent_GetProperties(onnxruntime)
-        if(NOT onnxruntime_POPULATED)
-            FetchContent_Populate(onnxruntime)
-        endif()
+        # Populate the pinned SDK archive without invoking a project-level
+        # add_subdirectory. MakeAvailable is the supported non-deprecated API.
+        FetchContent_MakeAvailable(onnxruntime)
 
         set(SMARTGATE_ORT_ROOT "${onnxruntime_SOURCE_DIR}")
         if(NOT EXISTS "${SMARTGATE_ORT_ROOT}/include/onnxruntime_cxx_api.h")

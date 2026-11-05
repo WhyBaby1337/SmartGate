@@ -15,7 +15,7 @@ jobs:
   windows:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure
         run: cmake -S . -B build -A x64 -DSMARTGATE_BUILD_PLUGIN=ON
       - name: Build VST3 and tests
@@ -46,7 +46,7 @@ jobs:
 
           Write-Host "VST3 module, ONNX Runtime, and third-party notices are present."
       - name: Upload VST3
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SmartGate-Windows-x64-VST3
           path: build/SmartGate_artefacts/Release/VST3/
