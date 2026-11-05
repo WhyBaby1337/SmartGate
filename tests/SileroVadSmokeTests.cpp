@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -120,6 +121,34 @@ int main() {
             throw std::runtime_error("Silero failed to process a finite speech-band frame");
         if (inference.successfulInferenceCount() != beforeGenerationReset + 2)
             throw std::runtime_error("Silero generation-reset frames did not complete ONNX inference");
+
+        // Non-finite audio samples must be sanitized before reaching ONNX.
+        // The model call must still complete, and the next valid frame must
+        // continue to produce a finite result.
+        Frame nonFiniteAudio{};
+        for (std::size_t i = 0; i < nonFiniteAudio.size(); ++i) {
+            if ((i % 3) == 0)
+                nonFiniteAudio[i] = std::numeric_limits<float>::quiet_NaN();
+            else if ((i % 3) == 1)
+                nonFiniteAudio[i] = std::numeric_limits<float>::infinity();
+            else
+                nonFiniteAudio[i] = -std::numeric_limits<float>::infinity();
+        }
+        const auto beforeNonFiniteAudio = inference.successfulInferenceCount();
+        const float afterNonFiniteAudio = inference.infer(nonFiniteAudio, 5);
+        if (!std::isfinite(afterNonFiniteAudio)
+            || afterNonFiniteAudio < 0.0f || afterNonFiniteAudio > 1.0f)
+            throw std::runtime_error("Silero returned an invalid probability for non-finite audio");
+        if (inference.successfulInferenceCount() != beforeNonFiniteAudio + 1)
+            throw std::runtime_error("Silero did not complete ONNX inference for sanitized non-finite audio");
+
+        const auto beforeRecoveryFrame = inference.successfulInferenceCount();
+        const float afterRecoveryFrame = inference.infer(speechLike, 5);
+        if (!std::isfinite(afterRecoveryFrame)
+            || afterRecoveryFrame < 0.0f || afterRecoveryFrame > 1.0f)
+            throw std::runtime_error("Silero failed to recover after non-finite audio");
+        if (inference.successfulInferenceCount() != beforeRecoveryFrame + 1)
+            throw std::runtime_error("Silero did not complete ONNX inference after non-finite audio");
 
         std::cout << "Silero ONNX smoke test passed.\n";
         return 0;
