@@ -193,6 +193,19 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (!learningRequested)
         pendingLearningStart_ = false;
 
+    // Apply a pending session restore before a new Learn Target transition.
+    // If both arrive in the same audio block, the explicit learn request wins
+    // and starts with a clean profile instead of resurrecting the old session.
+    smartgate::TargetProfile::Snapshot restored;
+    std::uint64_t restoredVersion = 0;
+    if (pendingTargetProfile_.read(restored, restoredVersion)
+        && restoredVersion != lastAppliedTargetProfileVersion_
+        && targetProfile_.restore(restored)) {
+        lastAppliedTargetProfileVersion_ = restoredVersion;
+        publishedTargetProfile_.publish(restored);
+        targetConfidenceTarget_ = targetConfidenceSmoothed_ = 1.0f;
+    }
+
     // A requested Learn Target transition is remembered while AI is disabled.
     // Turning AI off pauses analysis without silently erasing an existing model.
     if (aiEnabled && pendingLearningStart_) {
@@ -205,16 +218,6 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         pendingLearningStart_ = false;
     }
     wasLearningTarget_ = learningRequested;
-
-    smartgate::TargetProfile::Snapshot restored;
-    std::uint64_t restoredVersion = 0;
-    if (pendingTargetProfile_.read(restored, restoredVersion)
-        && restoredVersion != lastAppliedTargetProfileVersion_
-        && targetProfile_.restore(restored)) {
-        lastAppliedTargetProfileVersion_ = restoredVersion;
-        publishedTargetProfile_.publish(restored);
-        targetConfidenceTarget_ = targetConfidenceSmoothed_ = 1.0f;
-    }
 
     const float targetAmount = juce::jlimit(
         0.0f, 1.0f, parameters_.getRawParameterValue("targetAmount")->load(std::memory_order_relaxed));
