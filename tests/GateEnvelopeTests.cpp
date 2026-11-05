@@ -14,6 +14,16 @@ void require(bool condition, const char* message) {
 void runGateEnvelopeTests() {
     smartgate::GateEnvelope envelope;
     envelope.prepare(48000.0);
+    // Host sample-rate input is external. Extreme finite values must be
+    // clamped before duration-to-sample conversions and coefficient updates.
+    envelope.prepare(std::numeric_limits<double>::max());
+    envelope.setHoldTime(1000.0f);
+    require(std::isfinite(envelope.process(0.0f)),
+            "Extreme finite sample rates must not overflow gate preparation");
+    envelope.prepare(std::numeric_limits<double>::quiet_NaN());
+    require(std::isfinite(envelope.process(0.0f)),
+            "Non-finite sample rates must fall back to a safe default");
+    envelope.prepare(48000.0);
     envelope.setThresholdDb(-40.0f);
     envelope.setTimes(2.0f, 80.0f);
 

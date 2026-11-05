@@ -9,7 +9,11 @@ namespace smartgate {
 class GateEnvelope {
 public:
     void prepare(double sampleRate) noexcept {
-        sampleRate_ = std::isfinite(sampleRate) ? std::max(1.0, sampleRate) : 44100.0;
+        // Bound host-provided rates before converting durations to integer
+        // sample counts. llround has a finite integer domain; an extreme but
+        // finite host value must not overflow during plugin preparation.
+        sampleRate_ = std::isfinite(sampleRate)
+            ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
         maximumAdaptiveHoldSamples_ = static_cast<std::uint64_t>(
             std::llround(0.150 * sampleRate_));
         maximumAdaptiveDurationSamples_ = static_cast<std::uint64_t>(
