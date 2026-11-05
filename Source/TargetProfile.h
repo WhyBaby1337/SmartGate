@@ -42,6 +42,42 @@ public:
                 return false;
         }
 
+        // Only frames inside finishFeatureFrame()'s acquisition window can
+        // enter a trained profile: log RMS is (-2.5, -0.03), while ZCR and
+        // spectral energy ratios are all in [0, 1]. Reject finite but
+        // impossible project data before it can poison subsequent Welford
+        // updates (for example, a 1e308 mean causing M2 to overflow).
+        if (snapshot.count > 0) {
+            constexpr double logRmsMinimum = -2.5;
+            constexpr double logRmsMaximum = -0.03;
+            constexpr double featureMinimum = 0.0;
+            constexpr double featureMaximum = 1.0;
+            constexpr std::array<double, 5> minima{
+                logRmsMinimum, featureMinimum, featureMinimum,
+                featureMinimum, featureMinimum
+            };
+            constexpr std::array<double, 5> maxima{
+                logRmsMaximum, featureMaximum, featureMaximum,
+                featureMaximum, featureMaximum
+            };
+
+            for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
+                const double range = maxima[i] - minima[i];
+                const double maximumM2 = static_cast<double>(snapshot.count)
+                    * range * range * 0.25;
+                const double tolerance = 1.0e-9 * std::max(1.0, maximumM2);
+                if (snapshot.mean[i] < minima[i]
+                    || snapshot.mean[i] > maxima[i]
+                    || snapshot.m2[i] > maximumM2 + tolerance)
+                    return false;
+            }
+
+            const double ratioSum = snapshot.mean[2]
+                + snapshot.mean[3] + snapshot.mean[4];
+            if (std::abs(ratioSum - 1.0) > 1.0e-3)
+                return false;
+        }
+
         count_ = snapshot.count;
         mean_ = snapshot.mean;
         m2_ = snapshot.m2;

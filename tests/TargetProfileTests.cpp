@@ -112,6 +112,18 @@ void runTargetProfileTests() {
     corrupt.count = smartgate::TargetProfile::maximumRestoredFrames + 1;
     requireFeature(!restored.restore(corrupt),
                    "Unreasonably large restored frame counts must be rejected");
+    corrupt = saved;
+    corrupt.mean[0] = 1.0e100;
+    requireFeature(!restored.restore(corrupt),
+                   "Finite but impossible feature means must be rejected");
+    corrupt = saved;
+    corrupt.m2[1] = static_cast<double>(corrupt.count);
+    requireFeature(!restored.restore(corrupt),
+                   "Variance beyond the mathematical feature-range bound must be rejected");
+    corrupt = saved;
+    corrupt.mean[2] += 0.1;
+    requireFeature(!restored.restore(corrupt),
+                   "Spectral ratios that cannot sum to one must be rejected");
 
     // The serialized count is stored as a signed XML integer. Keep learning
     // within the same validated bound used by restore() so it cannot overflow.
