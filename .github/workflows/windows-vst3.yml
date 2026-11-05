@@ -12,6 +12,22 @@ concurrency:
   cancel-in-progress: false
   queue: max
 jobs:
+  linux-dsp-sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure portable DSP tests with Clang sanitizers
+        run: >-
+          cmake -S . -B build-sanitized
+          -DSMARTGATE_BUILD_PLUGIN=OFF
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+      - name: Build portable DSP tests
+        run: cmake --build build-sanitized --parallel 2
+      - name: Run DSP tests under AddressSanitizer and UBSan
+        run: ctest --test-dir build-sanitized --output-on-failure
+
   windows:
     runs-on: windows-2022
     steps:
