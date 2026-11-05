@@ -124,6 +124,20 @@ private:
                 continue;
             }
 
+            // Inference may be slower than real time on a busy machine. Do
+            // not spend several future frames evaluating stale audio: drain the
+            // SPSC queue and retain only its newest complete frame. The producer
+            // never waits or changes its indices, and inference still runs once
+            // per worker iteration at most.
+            Frame newestFrame{};
+            std::uint64_t newestGeneration = frameGeneration;
+            std::uint64_t newestSourceSamplePosition = sourceSamplePosition;
+            while (queue_.pop(newestFrame, newestGeneration, newestSourceSamplePosition)) {
+                frame = newestFrame;
+                frameGeneration = newestGeneration;
+                sourceSamplePosition = newestSourceSamplePosition;
+            }
+
             const auto generation = activeGeneration_.load(std::memory_order_acquire);
             if (frameGeneration != generation)
                 continue;
