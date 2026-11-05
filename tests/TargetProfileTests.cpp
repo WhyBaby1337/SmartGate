@@ -232,26 +232,29 @@ void runTargetProfileTests() {
         });
 
         std::uint64_t successfulReads = 0;
+        bool snapshotsCoherent = true;
         do {
             smartgate::TargetProfile::Snapshot value;
             std::uint64_t version = 0;
             if (!concurrentMailbox.read(value, version, 64))
                 continue;
             ++successfulReads;
-            requireFeature(version != 0 && (version & 1U) == 0,
-                           "Published snapshot version must be stable and even");
+            snapshotsCoherent = snapshotsCoherent
+                && version != 0 && (version & 1U) == 0;
             for (std::size_t i = 0; i < value.mean.size(); ++i) {
-                requireFeature(value.mean[i] == static_cast<double>(value.count),
-                               "Concurrent snapshot read must not mix profile means");
-                requireFeature(value.m2[i] == static_cast<double>(value.count) * 2.0,
-                               "Concurrent snapshot read must not mix profile variances");
+                snapshotsCoherent = snapshotsCoherent
+                    && value.mean[i] == static_cast<double>(value.count)
+                    && value.m2[i] == static_cast<double>(value.count) * 2.0;
             }
         } while (!writerFinished.load(std::memory_order_acquire));
 
         writer.join();
         smartgate::TargetProfile::Snapshot finalValue;
         std::uint64_t finalVersion = 0;
-        requireFeature(concurrentMailbox.read(finalValue, finalVersion),
+        const bool finalReadable = concurrentMailbox.read(finalValue, finalVersion);
+        requireFeature(snapshotsCoherent,
+                       "Concurrent snapshot reads must not mix adjacent publications");
+        requireFeature(finalReadable,
                        "Final concurrent snapshot must remain readable");
         requireFeature(finalValue.count == 50000 && successfulReads > 0,
                        "Concurrent mailbox must publish the writer's final snapshot");
