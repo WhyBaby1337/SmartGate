@@ -52,7 +52,8 @@ private:
 #if defined(SMARTGATE_HAS_SILERO)
     using VadQueue = smartgate::VadFrameQueue<smartgate::SileroVadInference::frameSize, 8>;
     static float runSileroInference(const VadQueue::Frame& frame,
-                                    std::uint64_t generation, void* context) noexcept;
+                                    std::uint64_t generation, std::uint64_t sourceSamplePosition,
+                                    void* context) noexcept;
 #endif
 
     juce::AudioProcessorValueTreeState parameters_;
