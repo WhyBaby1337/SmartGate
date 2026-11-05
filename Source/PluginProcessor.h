@@ -87,6 +87,8 @@ private:
     std::uint64_t vadGeneration_ = 1;
     float vadProbabilitySmoothed_ = 0.0f;
     float vadProbabilitySmoothingCoefficient_ = 0.0f;
+    std::uint64_t audioSamplePosition_ = 0;
+    std::uint64_t vadMaxAgeSamples_ = 0;
     bool vadAvailable_ = false;
 #endif
 

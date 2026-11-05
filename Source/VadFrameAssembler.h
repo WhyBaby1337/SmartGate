@@ -27,7 +27,7 @@ public:
     }
 
     // Returns true only when a complete frame was successfully queued.
-    bool processSample(float input) noexcept {
+    bool processSample(float input, std::uint64_t sourceSamplePosition = 0) noexcept {
         float converted = 0.0f;
         if (!resampler_.processSample(input, converted))
             return false;
@@ -36,7 +36,7 @@ public:
         if (framePosition_ != frameSize)
             return false;
 
-        const bool queued = queue_.push(frame_.data(), generation_);
+        const bool queued = queue_.push(frame_.data(), generation_, sourceSamplePosition);
         if (!queued)
             ++droppedFrames_;
         framePosition_ = 0;

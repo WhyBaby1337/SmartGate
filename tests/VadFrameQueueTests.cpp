@@ -44,11 +44,14 @@ void runVadFrameQueueTests() {
     requireQueue(!queue.pop(output), "Queue should be empty after consuming all frames");
 
     const std::array<float, 4> wrapped{20.0f, 21.0f, 22.0f, 23.0f};
-    requireQueue(queue.push(wrapped.data(), 777), "Queue should accept frames after index wrap");
+    requireQueue(queue.push(wrapped.data(), 777, 123456),
+                 "Queue should accept frames after index wrap");
     std::uint64_t wrappedGeneration = 0;
-    requireQueue(queue.pop(output, wrappedGeneration) && output == wrapped
-                 && wrappedGeneration == 777,
-                 "Queue should preserve samples and generation after ring-buffer wraparound");
+    std::uint64_t wrappedPosition = 0;
+    requireQueue(queue.pop(output, wrappedGeneration, wrappedPosition)
+                 && output == wrapped && wrappedGeneration == 777
+                 && wrappedPosition == 123456,
+                 "Queue should preserve samples, generation, and source position after wraparound");
 
     {
         using ConcurrentQueue = smartgate::VadFrameQueue<8, 64>;

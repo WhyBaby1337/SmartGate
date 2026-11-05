@@ -78,6 +78,10 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     const double safeSampleRate = std::isfinite(sampleRate)
         ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
 #if defined(SMARTGATE_HAS_SILERO)
+    audioSamplePosition_ = 0;
+    vadMaxAgeSamples_ = static_cast<std::uint64_t>(safeSampleRate * 0.250);
+#endif
+#if defined(SMARTGATE_HAS_SILERO)
     // prepareToPlay is a non-processing lifecycle boundary. Model/session
     // creation and thread startup happen here, never in processBlock().
     vadWorker_.stop();
@@ -254,7 +258,8 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
 #if defined(SMARTGATE_HAS_SILERO)
     const float vadProbability = aiEnabled && vadAvailable_
-        ? vadWorker_.latestProbability(vadGeneration_) : 0.0f;
+        ? vadWorker_.latestProbability(vadGeneration_, audioSamplePosition_,
+                                       vadMaxAgeSamples_) : 0.0f;
 #else
     const float vadProbability = 0.0f;
 #endif
@@ -297,7 +302,8 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
 #if defined(SMARTGATE_HAS_SILERO)
         if (aiEnabled && vadAvailable_)
-            (void) vadAssembler_.processSample(mono);
+            (void) vadAssembler_.processSample(mono, audioSamplePosition_);
+        ++audioSamplePosition_;
         vadProbabilitySmoothed_ = vadProbability
             + vadProbabilitySmoothingCoefficient_
                 * (vadProbabilitySmoothed_ - vadProbability);

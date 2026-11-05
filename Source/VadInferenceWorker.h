@@ -46,6 +46,7 @@ public:
         resultSequence_.store(0, std::memory_order_relaxed);
         publishedGeneration_.store(~std::uint64_t{0}, std::memory_order_relaxed);
         publishedProbability_.store(0.0f, std::memory_order_relaxed);
+        publishedSourceSamplePosition_.store(0, std::memory_order_relaxed);
         publishedResultCount_.store(0, std::memory_order_relaxed);
         stopRequested_.store(false, std::memory_order_release);
 
@@ -67,7 +68,9 @@ public:
     }
 
     // Returns zero until a result for the requested active generation exists.
-    float latestProbability(std::uint64_t generation) const noexcept {
+    float latestProbability(std::uint64_t generation,
+                            std::uint64_t currentSamplePosition = 0,
+                            std::uint64_t maxAgeSamples = ~std::uint64_t{0}) const noexcept {
         const auto sequenceBefore = resultSequence_.load(std::memory_order_seq_cst);
         if ((sequenceBefore & 1u) != 0u)
             return 0.0f;
@@ -75,10 +78,16 @@ public:
         const auto publishedGeneration =
             publishedGeneration_.load(std::memory_order_seq_cst);
         const auto probability = publishedProbability_.load(std::memory_order_seq_cst);
+        const auto sourceSamplePosition =
+            publishedSourceSamplePosition_.load(std::memory_order_seq_cst);
         const auto sequenceAfter = resultSequence_.load(std::memory_order_seq_cst);
 
         if (sequenceBefore != sequenceAfter || (sequenceAfter & 1u) != 0u
             || publishedGeneration != generation)
+            return 0.0f;
+        if (maxAgeSamples != ~std::uint64_t{0}
+            && (currentSamplePosition < sourceSamplePosition
+                || currentSamplePosition - sourceSamplePosition > maxAgeSamples))
             return 0.0f;
         return probability;
     }
@@ -109,7 +118,8 @@ private:
         Frame frame{};
         while (!stopRequested_.load(std::memory_order_acquire)) {
             std::uint64_t frameGeneration = 0;
-            if (!queue_.pop(frame, frameGeneration)) {
+            std::uint64_t sourceSamplePosition = 0;
+            if (!queue_.pop(frame, frameGeneration, sourceSamplePosition)) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
@@ -133,6 +143,7 @@ private:
             resultSequence_.fetch_add(1, std::memory_order_seq_cst);
             publishedProbability_.store(probability, std::memory_order_seq_cst);
             publishedGeneration_.store(frameGeneration, std::memory_order_seq_cst);
+            publishedSourceSamplePosition_.store(sourceSamplePosition, std::memory_order_seq_cst);
             resultSequence_.fetch_add(1, std::memory_order_seq_cst);
             publishedResultCount_.fetch_add(1, std::memory_order_release);
         }
@@ -149,6 +160,7 @@ private:
     std::atomic<std::uint32_t> resultSequence_{0};
     std::atomic<std::uint64_t> publishedGeneration_{~std::uint64_t{0}};
     std::atomic<float> publishedProbability_{0.0f};
+    std::atomic<std::uint64_t> publishedSourceSamplePosition_{0};
     std::atomic<std::uint64_t> publishedResultCount_{0};
 };
 

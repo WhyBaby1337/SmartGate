@@ -71,7 +71,8 @@ void runVadInferenceWorkerTests() {
     std::array<float, 8> currentFrame{};
     currentFrame.fill(0.65f);
     requireWorker(queue.push(staleFrame.data(), 9), "Queue should accept a stale test frame");
-    requireWorker(queue.push(currentFrame.data(), 10), "Queue should accept the current frame");
+    requireWorker(queue.push(currentFrame.data(), 10, 900),
+                  "Queue should accept the current frame with its source position");
     requireWorker(waitForCalls(probe, 1), "Worker should process the current-generation frame");
     requireWorker(probe.lastGeneration.load(std::memory_order_relaxed) == 10,
                   "Worker must discard queued frames from an earlier generation");
@@ -81,6 +82,10 @@ void runVadInferenceWorkerTests() {
         std::this_thread::yield();
     requireWorker(worker.latestProbability(10) == 0.65f,
                   "Worker should publish the inference probability for its generation");
+    requireWorker(worker.latestProbability(10, 1000, 200) == 0.65f,
+                  "A result inside the configured sample-age budget should remain usable");
+    requireWorker(worker.latestProbability(10, 1201, 200) == 0.0f,
+                  "A result older than the configured sample-age budget must be neutral");
 
     worker.setGeneration(11);
     requireWorker(worker.latestProbability(11) == 0.0f,
