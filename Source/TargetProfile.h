@@ -127,8 +127,11 @@ public:
         sequence_.fetch_add(1, std::memory_order_release);
     }
 
-    bool read(TargetProfile::Snapshot& s, std::uint64_t& version) const noexcept {
-        for (int attempt = 0; attempt < 8; ++attempt) {
+    bool read(TargetProfile::Snapshot& s, std::uint64_t& version,
+              int maximumAttempts = 8) const noexcept {
+        // Audio-thread callers keep the short bounded default. Persistence
+        // callers may request more retries because they are not real-time.
+        for (int attempt = 0; attempt < std::max(0, maximumAttempts); ++attempt) {
             const auto first = sequence_.load(std::memory_order_acquire);
             if (first == 0 || (first & 1U)) continue;
             TargetProfile::Snapshot copy;

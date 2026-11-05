@@ -75,6 +75,8 @@ void runTargetProfileTests() {
     smartgate::TargetProfile::Snapshot mailboxCopy;
     requireFeature(!mailbox.read(mailboxCopy, mailboxVersion),
                    "An unpublished mailbox must not expose a snapshot");
+    requireFeature(!mailbox.read(mailboxCopy, mailboxVersion, 0),
+                   "A mailbox read with zero attempts must fail without spinning");
     mailbox.publish(profile.makeSnapshot());
     requireFeature(mailbox.read(mailboxCopy, mailboxVersion),
                    "A published mailbox snapshot must be readable");

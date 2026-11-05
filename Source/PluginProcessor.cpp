@@ -334,7 +334,7 @@ void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination
     if (auto xml = state.createXml()) {
         smartgate::TargetProfile::Snapshot snapshot;
         std::uint64_t version = 0;
-        if (publishedTargetProfile_.read(snapshot, version)) {
+        if (publishedTargetProfile_.read(snapshot, version, 64)) {
             auto* node = xml->createNewChildElement("TARGET_PROFILE");
             node->setAttribute("count", static_cast<int>(snapshot.count));
             for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
