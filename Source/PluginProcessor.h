@@ -62,10 +62,9 @@ private:
     smartgate::TargetProfile targetProfile_;
     smartgate::AtomicTargetProfileSnapshot publishedTargetProfile_;
     smartgate::AtomicTargetProfileSnapshot pendingTargetProfile_;
-    // Keeps a just-restored profile available to host state saves until the
-    // audio thread has applied it to the live TargetProfile instance.
-    std::atomic<bool> pendingTargetProfileRestore_{false};
-    std::uint64_t lastAppliedTargetProfileVersion_ = 0;
+    // Audio-thread restore version is also observed by the non-real-time
+    // state-save path to distinguish pending data from the live snapshot.
+    std::atomic<std::uint64_t> lastAppliedTargetProfileVersion_{0};
 
     static constexpr std::size_t featureFrameSize_ = 256;
     std::array<float, featureFrameSize_> featureFrame_{};

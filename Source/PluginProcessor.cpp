@@ -210,11 +210,10 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     smartgate::TargetProfile::Snapshot restored;
     std::uint64_t restoredVersion = 0;
     if (pendingTargetProfile_.read(restored, restoredVersion)
-        && restoredVersion != lastAppliedTargetProfileVersion_
+        && restoredVersion != lastAppliedTargetProfileVersion_.load(std::memory_order_relaxed)
         && targetProfile_.restore(restored)) {
-        lastAppliedTargetProfileVersion_ = restoredVersion;
         publishedTargetProfile_.publish(restored);
-        pendingTargetProfileRestore_.store(false, std::memory_order_release);
+        lastAppliedTargetProfileVersion_.store(restoredVersion, std::memory_order_release);
         targetConfidenceTarget_ = targetConfidenceSmoothed_ = 1.0f;
     }
 
@@ -354,8 +353,11 @@ void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination
         // restored snapshot rather than the previous live profile (or empty
         // pre-prepare mailbox), so an immediate save/load round trip is lossless.
         bool hasSnapshot = false;
-        if (pendingTargetProfileRestore_.load(std::memory_order_acquire))
-            hasSnapshot = pendingTargetProfile_.readForPersistence(snapshot, version);
+        if (pendingTargetProfile_.readForPersistence(snapshot, version)) {
+            const auto appliedVersion =
+                lastAppliedTargetProfileVersion_.load(std::memory_order_acquire);
+            hasSnapshot = version != appliedVersion;
+        }
         if (!hasSnapshot)
             hasSnapshot = publishedTargetProfile_.readForPersistence(snapshot, version);
 
@@ -410,12 +412,10 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
             // profile instead of leaving stale training from another session.
             pendingTargetProfile_.publish(valid
                 ? snapshot : smartgate::TargetProfile::Snapshot{});
-            pendingTargetProfileRestore_.store(true, std::memory_order_release);
         } else {
             // Older sessions have no target profile; clear any profile left
             // from the currently loaded instance.
             pendingTargetProfile_.publish(smartgate::TargetProfile::Snapshot{});
-            pendingTargetProfileRestore_.store(true, std::memory_order_release);
         }
     }
 }
