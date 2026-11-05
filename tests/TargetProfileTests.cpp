@@ -93,6 +93,16 @@ void runTargetProfileTests() {
     requireFeature(!restored.restore(corrupt),
                    "Unreasonably large restored frame counts must be rejected");
 
+    // The serialized count is stored as a signed XML integer. Keep learning
+    // within the same validated bound used by restore() so it cannot overflow.
+    auto atLimit = saved;
+    atLimit.count = smartgate::TargetProfile::maximumRestoredFrames;
+    smartgate::TargetProfile capped;
+    requireFeature(capped.restore(atLimit), "Maximum supported profile count must restore");
+    requireFeature(!capped.learn(extracted), "Learning must stop at the supported frame-count limit");
+    requireFeature(capped.frameCount() == smartgate::TargetProfile::maximumRestoredFrames,
+                   "Rejected over-limit learning must not increment the frame count");
+
     profile.clear();
     requireFeature(!profile.isReady() && profile.frameCount() == 0,
                    "Clearing profile must reset training state");

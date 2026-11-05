@@ -58,7 +58,7 @@ public:
     }
 
     bool learn(const AudioFeatures& features) noexcept {
-        if (!features.isFinite())
+        if (!features.isFinite() || count_ >= maximumRestoredFrames)
             return false;
 
         const auto values = toArray(features);
