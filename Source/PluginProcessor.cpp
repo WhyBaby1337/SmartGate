@@ -266,6 +266,11 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     const bool analyzeKeyboard = keyboardReduction > 0.0f;
     const bool analyzeFrames = analyzeTarget || analyzeKeyboard;
 
+    // Do not carry a partially collected frame across a period in which both
+    // analyzers are inactive. The next activation must start with fresh audio.
+    if (!analyzeFrames)
+        featureFramePosition_ = 0;
+
     const int channels = buffer.getNumChannels();
     const int samples = buffer.getNumSamples();
     if (channels <= 0 || samples <= 0)
