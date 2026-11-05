@@ -35,6 +35,8 @@ void runVadResamplerTests() {
                      "VAD resampler must reject unsupported upsampling");
     requireResampler(!resampler.prepare(0.0, 16000.0),
                      "VAD resampler must reject invalid rates");
+    requireResampler(!resampler.prepare(192000.0, 16000.0),
+                     "VAD resampler must reject rates beyond its real-time FIR design limit");
     requireResampler(resampler.prepare(48000.0, 16000.0),
                      "48 kHz to 16 kHz preparation should succeed");
 
@@ -82,6 +84,19 @@ void runVadResamplerTests() {
     const double stopbandRms = measureRms(resampler, 12000.0, 48000.0, 48000);
     requireResampler(stopbandRms < 0.025,
                      "Low-pass filter should strongly attenuate a 12 kHz tone before decimation");
+
+    // 96 kHz is the maximum supported host rate. The longer FIR must still
+    // preserve speech-band content and reject energy just above 8 kHz.
+    requireResampler(resampler.prepare(96000.0, 16000.0),
+                     "96 kHz input should remain supported by the expanded FIR");
+    const double highRatePassband = measureRms(resampler, 1000.0, 96000.0, 96000);
+    requireResampler(highRatePassband > 0.60 && highRatePassband < 0.80,
+                     "96 kHz conversion should preserve a 1 kHz speech-band tone");
+    requireResampler(resampler.prepare(96000.0, 16000.0),
+                     "Resampler should re-prepare before 96 kHz alias rejection test");
+    const double highRateStopband = measureRms(resampler, 9000.0, 96000.0, 96000);
+    requireResampler(highRateStopband < 0.002,
+                     "96 kHz conversion must strongly attenuate content just above the destination Nyquist limit");
 
     resampler.reset();
     requireResampler(!resampler.processSample(0.5f, output),
