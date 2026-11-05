@@ -113,6 +113,8 @@ if(SMARTGATE_BUILD_PLUGIN)
     target_sources(SmartGate PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginProcessor.h
+        Source/PluginEditor.cpp
+        Source/PluginEditor.h
         Source/SileroVadInference.h)
     target_compile_definitions(SmartGate PUBLIC
         JUCE_WEB_BROWSER=0
