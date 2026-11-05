@@ -22,7 +22,7 @@ public:
     void setMode(Mode mode) noexcept { mode_ = mode; }
 
     void reset() noexcept {
-        lowPassState_ = 0.0f;
+        lowPassState_ = 0.0;
         referenceRms_ = 0.005f;
         hasReference_ = false;
         confidence_ = 0.0f;
@@ -38,10 +38,15 @@ public:
         float peak = 0.0f;
         for (std::size_t i = 0; i < count; ++i) {
             const float x = std::isfinite(samples[i]) ? samples[i] : 0.0f;
-            lowPassState_ = x + lowPassCoefficient_ * (lowPassState_ - x);
-            const float high = x - lowPassState_;
-            energy += static_cast<double>(x) * x;
-            highEnergy += static_cast<double>(high) * high;
+            // Keep recursive filter state and the high-band residual in
+            // double precision. Alternating extreme finite float samples can
+            // overflow the float subtraction and permanently poison the filter.
+            const double sample = static_cast<double>(x);
+            lowPassState_ = sample + static_cast<double>(lowPassCoefficient_)
+                * (lowPassState_ - sample);
+            const double high = sample - lowPassState_;
+            energy += sample * sample;
+            highEnergy += high * high;
             peak = std::max(peak, std::abs(x));
         }
 
@@ -88,7 +93,7 @@ private:
 
     Mode mode_ = Mode::Universal;
     float lowPassCoefficient_ = 0.0f;
-    float lowPassState_ = 0.0f;
+    double lowPassState_ = 0.0;
     float referenceRms_ = 0.005f;
     bool hasReference_ = false;
     float confidence_ = 0.0f;
