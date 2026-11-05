@@ -319,7 +319,16 @@ juce::AudioProcessorEditor* SmartGateAudioProcessor::createEditor() {
 }
 
 void SmartGateAudioProcessor::getStateInformation(juce::MemoryBlock& destination) {
-    if (auto xml = parameters_.copyState().createXml()) {
+    auto state = parameters_.copyState();
+
+    // TARGET_PROFILE is plugin-owned metadata, not an APVTS parameter child.
+    // Strip any copy left by older sessions before writing exactly one profile.
+    for (int i = state.getNumChildren(); --i >= 0;) {
+        if (state.getChild(i).getType().toString() == "TARGET_PROFILE")
+            state.removeChild(i, nullptr);
+    }
+
+    if (auto xml = state.createXml()) {
         smartgate::TargetProfile::Snapshot snapshot;
         std::uint64_t version = 0;
         if (publishedTargetProfile_.read(snapshot, version)) {
@@ -339,7 +348,18 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
     if (auto xml = getXmlFromBinary(data, sizeInBytes)) {
         if (!xml->hasTagName(parameters_.state.getType()))
             return;
-        parameters_.replaceState(juce::ValueTree::fromXml(*xml));
+
+        auto restoredState = juce::ValueTree::fromXml(*xml);
+        if (!restoredState.isValid())
+            return;
+
+        // Keep plugin metadata out of APVTS. Otherwise each subsequent save
+        // can serialize the previous TARGET_PROFILE and append another copy.
+        for (int i = restoredState.getNumChildren(); --i >= 0;) {
+            if (restoredState.getChild(i).getType().toString() == "TARGET_PROFILE")
+                restoredState.removeChild(i, nullptr);
+        }
+        parameters_.replaceState(restoredState);
 
         if (auto* node = xml->getChildByName("TARGET_PROFILE")) {
             smartgate::TargetProfile::Snapshot snapshot;
