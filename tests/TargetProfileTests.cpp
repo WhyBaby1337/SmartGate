@@ -2,6 +2,7 @@
 #include "TargetProfile.h"
 
 #include <cmath>
+#include <array>
 #include <atomic>
 #include <limits>
 #include <stdexcept>
