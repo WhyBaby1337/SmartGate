@@ -64,15 +64,22 @@ public:
             const float x = std::isfinite(samples[i]) ? samples[i] : 0.0f;
             totalEnergy += static_cast<double>(x) * x;
 
-            lowState_ = x + lowCoefficient_ * (lowState_ - x);
-            midState_ = x + midCoefficient_ * (midState_ - x);
-            const float low = lowState_;
-            const float mid = midState_ - lowState_;
-            const float high = x - midState_;
+            // Keep filter state and band residuals in double precision. Finite
+            // but out-of-range host samples can make float subtraction overflow
+            // (for example, alternating +FLT_MAX/-FLT_MAX), permanently
+            // poisoning the recursive filters with Inf/NaN.
+            const double sample = static_cast<double>(x);
+            lowState_ = sample + static_cast<double>(lowCoefficient_)
+                * (lowState_ - sample);
+            midState_ = sample + static_cast<double>(midCoefficient_)
+                * (midState_ - sample);
+            const double low = lowState_;
+            const double mid = midState_ - lowState_;
+            const double high = sample - midState_;
 
-            lowEnergy += static_cast<double>(low) * low;
-            midEnergy += static_cast<double>(mid) * mid;
-            highEnergy += static_cast<double>(high) * high;
+            lowEnergy += low * low;
+            midEnergy += mid * mid;
+            highEnergy += high * high;
 
             if (i > 0 && ((x >= 0.0f) != (previous >= 0.0f)))
                 ++crossings;
@@ -97,8 +104,8 @@ public:
 private:
     float lowCoefficient_ = 0.0f;
     float midCoefficient_ = 0.0f;
-    float lowState_ = 0.0f;
-    float midState_ = 0.0f;
+    double lowState_ = 0.0;
+    double midState_ = 0.0;
 };
 
 } // namespace smartgate
