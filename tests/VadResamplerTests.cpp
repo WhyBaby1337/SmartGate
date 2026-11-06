@@ -124,6 +124,8 @@ void runVadResamplerTests() {
     resampler.reset();
     requireResampler(resampler.processSample(0.5f, output) && std::isfinite(output),
                      "First sample after reset must be emitted as the initial filtered output");
+    requireResampler(std::abs(output - 0.5f) < 1.0e-4f,
+                     "FIR startup must preserve the first sample instead of creating a zero-padding level dip");
     (void) resampler.processSample(std::numeric_limits<float>::quiet_NaN(), output);
     (void) resampler.processSample(0.0f, output);
     requireResampler(resampler.processSample(0.0f, output) && std::isfinite(output),
