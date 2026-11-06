@@ -43,6 +43,7 @@ public:
         hasPrevious_ = false;
         history_.fill(0.0f);
         historyPosition_ = 0;
+        historyInitialized_ = false;
     }
 
     // Returns true when one output sample is ready. No allocation or locking.
@@ -129,6 +130,15 @@ private:
         if (inputRate_ == outputRate_)
             return input;
 
+        // Extend the first real sample backwards to define a steady startup
+        // boundary. Zero-padding would create an artificial level ramp in
+        // the first VAD frame after prepare/reset.
+        if (!historyInitialized_) {
+            history_.fill(input);
+            historyPosition_ = 0;
+            historyInitialized_ = true;
+        }
+
         history_[historyPosition_] = input;
         double filtered = 0.0;
         std::size_t position = historyPosition_;
@@ -147,6 +157,7 @@ private:
     std::array<double, filterTaps> coefficients_{};
     std::array<float, filterTaps> history_{};
     std::size_t historyPosition_ = 0;
+    bool historyInitialized_ = false;
     float previous_ = 0.0f;
     bool hasPrevious_ = false;
     bool prepared_ = false;
