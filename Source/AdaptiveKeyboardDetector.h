@@ -13,7 +13,8 @@ public:
     enum class Mode { Universal, Mechanical, Membrane };
 
     void prepare(double sampleRate) noexcept {
-        const double rate = std::isfinite(sampleRate) ? std::max(8000.0, sampleRate) : 44100.0;
+        const double rate = std::isfinite(sampleRate)
+            ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
         lowPassCoefficient_ = static_cast<float>(
             std::exp(-2.0 * 3.14159265358979323846 * 1800.0 / rate));
         reset();
