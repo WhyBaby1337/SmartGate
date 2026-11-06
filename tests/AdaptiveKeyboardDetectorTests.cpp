@@ -43,6 +43,32 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(smoothedGain.getGain() == 1.0f,
                     "Reset must restore unity keyboard output gain");
 
+    // The attack and release are specified in milliseconds, not samples.
+    // Their response should therefore remain stable across common host rates.
+    float referenceAttackGain = -1.0f;
+    float referenceReleaseGain = -1.0f;
+    for (const double rate : {44100.0, 48000.0, 96000.0}) {
+        smartgate::AdaptiveKeyboardGain rateGain;
+        rateGain.prepare(rate);
+        const int attackSamples = static_cast<int>(std::lround(0.003 * rate));
+        const int releaseSamples = static_cast<int>(std::lround(0.030 * rate));
+        float attackGain = 1.0f;
+        for (int i = 0; i < attackSamples; ++i)
+            attackGain = rateGain.process(1.0f, 1.0f);
+        float releaseGain = attackGain;
+        for (int i = 0; i < releaseSamples; ++i)
+            releaseGain = rateGain.process(1.0f, 0.0f);
+        if (referenceAttackGain < 0.0f) {
+            referenceAttackGain = attackGain;
+            referenceReleaseGain = releaseGain;
+        } else {
+            requireKeyboard(std::abs(attackGain - referenceAttackGain) < 0.002f,
+                            "Keyboard attack time must be sample-rate independent");
+            requireKeyboard(std::abs(releaseGain - referenceReleaseGain) < 0.002f,
+                            "Keyboard release time must be sample-rate independent");
+        }
+    }
+
     constexpr std::size_t frameSize = 256;
     smartgate::AdaptiveKeyboardDetector detector;
     detector.prepare(48000.0);
