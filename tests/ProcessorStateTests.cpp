@@ -206,6 +206,42 @@ void testInvalidProfileVariantsClearPreviousProfile() {
         missingStatistic, "incomplete profile statistics must clear previous training");
 }
 
+void testLearnTargetRequestWaitsUntilAiIsEnabled() {
+    SmartGateAudioProcessor fixtureProcessor;
+    juce::MemoryBlock fixtureData;
+    auto fixture = saveXml(fixtureProcessor, fixtureData);
+    addValidProfile(*fixture, 24);
+    juce::MemoryBlock encodedFixture;
+    encode(fixtureProcessor, *fixture, encodedFixture);
+
+    SmartGateAudioProcessor processor;
+    processor.setStateInformation(encodedFixture.getData(),
+                                  static_cast<int>(encodedFixture.getSize()));
+    processor.prepareToPlay(48000.0, 256);
+
+    juce::MidiBuffer midi;
+    juce::AudioBuffer<float> buffer(2, 1);
+    setParameter(processor, "aiEnabled", 0.0f);
+    setParameter(processor, "learnTarget", 1.0f);
+    processor.processBlock(buffer, midi);
+
+    juce::MemoryBlock whileAiDisabled;
+    auto preservedState = saveXml(processor, whileAiDisabled);
+    require(profile(*preservedState) != nullptr
+                && profile(*preservedState)->getIntAttribute("count", -1) == 24,
+            "Learn Target requested with AI disabled must preserve the existing profile");
+
+    setParameter(processor, "aiEnabled", 1.0f);
+    processor.processBlock(buffer, midi);
+
+    juce::MemoryBlock afterAiEnabled;
+    auto clearedState = saveXml(processor, afterAiEnabled);
+    require(profile(*clearedState) != nullptr
+                && profile(*clearedState)->getIntAttribute("count", -1) == 0,
+            "deferred Learn Target request must clear the old profile when AI is re-enabled");
+    processor.releaseResources();
+}
+
 void testInvalidAndLegacyStatesClearProfile() {
     SmartGateAudioProcessor processor;
     juce::MemoryBlock empty;
@@ -244,6 +280,7 @@ void testInvalidAndLegacyStatesClearProfile() {
 int main() {
     testImmediateRoundTrip();
     testInvalidAndLegacyStatesClearProfile();
+    testLearnTargetRequestWaitsUntilAiIsEnabled();
     testInvalidProfileVariantsClearPreviousProfile();
     testRuntimeBlockAndToggleTransitions();
     testMonoRuntimeProcessing();
