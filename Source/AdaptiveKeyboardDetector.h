@@ -109,4 +109,41 @@ private:
     float confidence_ = 0.0f;
 };
 
+ 
+// Sample-rate-aware output smoothing for keyboard attenuation. The classifier
+// updates once per analysis frame, while this gain is evaluated per audio
+// sample so frame-boundary changes cannot create audible steps.
+class AdaptiveKeyboardGain {
+public:
+    void prepare(double sampleRate) noexcept {
+        const double rate = std::isfinite(sampleRate)
+            ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
+        attackCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.003 * rate)));
+        releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.030 * rate)));
+        reset();
+    }
+
+    void reset() noexcept { gain_ = 1.0f; }
+
+    float process(float reduction, float confidence) noexcept {
+        const float target = AdaptiveKeyboardDetector::gainForReduction(
+            reduction, confidence);
+        const float coefficient = target < gain_
+            ? attackCoefficient_ : releaseCoefficient_;
+        gain_ = target + coefficient * (gain_ - target);
+        return unit(gain_);
+    }
+
+    float getGain() const noexcept { return gain_; }
+
+private:
+    static float unit(float value) noexcept {
+        return std::clamp(std::isfinite(value) ? value : 1.0f, 0.0f, 1.0f);
+    }
+
+    float attackCoefficient_ = 0.0f;
+    float releaseCoefficient_ = 0.0f;
+    float gain_ = 1.0f;
+};
+
 } // namespace smartgate
