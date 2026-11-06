@@ -345,7 +345,7 @@ void runAdaptiveKeyboardDetectorTests() {
     }
 
     stereoFoldDown.prepare(96000.0);
-    requireKeyboard(std::abs(stereoFoldDown.process(0.1f, 0.3f) - 0.1f) < 1.0e-6f,
-                    "Reprepare must clear stereo channel history");
+    requireKeyboard(std::abs(stereoFoldDown.process(0.1f, 0.3f) - 0.3f) < 1.0e-6f,
+                    "Reprepare must clear stereo channel history and select the first stronger channel");
 
 }
