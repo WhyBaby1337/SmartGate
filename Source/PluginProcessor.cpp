@@ -280,6 +280,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             vadGeneration_ = 1;
         vadWorker_.setGeneration(vadGeneration_);
         vadAssembler_.setGeneration(vadGeneration_);
+        vadWorker_.requestStop();
         vadProbabilitySmoothed_ = 0.0f;
     }
 #endif
