@@ -65,7 +65,8 @@ void runVadFrameQueueTests() {
             for (int sequence = 0; sequence < frameCount; ++sequence) {
                 input.fill(static_cast<float>(sequence));
                 while (!concurrentQueue.push(input.data(),
-                       static_cast<std::uint64_t>(sequence / 1000)))
+                       static_cast<std::uint64_t>(sequence / 1000),
+                       static_cast<std::uint64_t>(sequence) * 512u))
                     std::this_thread::yield();
             }
             producerDone.store(true, std::memory_order_release);
@@ -76,12 +77,15 @@ void runVadFrameQueueTests() {
             int expected = 0;
             while (expected < frameCount) {
                 std::uint64_t generation = 0;
-                if (concurrentQueue.pop(received, generation)) {
+                std::uint64_t sourceSamplePosition = 0;
+                if (concurrentQueue.pop(received, generation, sourceSamplePosition)) {
                     for (const float sample : received) {
                         if (sample != static_cast<float>(expected))
                             fifoIntact = false;
                     }
                     if (generation != static_cast<std::uint64_t>(expected / 1000))
+                        fifoIntact = false;
+                    if (sourceSamplePosition != static_cast<std::uint64_t>(expected) * 512u)
                         fifoIntact = false;
                     ++expected;
                 } else if (producerDone.load(std::memory_order_acquire)) {
@@ -93,7 +97,7 @@ void runVadFrameQueueTests() {
         producer.join();
         consumer.join();
         requireQueue(fifoIntact,
-                     "Concurrent SPSC must preserve FIFO samples and generation tags");
+                     "Concurrent SPSC must preserve FIFO samples, generation tags, and source positions");
         ConcurrentQueue::Frame drained{};
         requireQueue(!concurrentQueue.pop(drained),
                      "Concurrent SPSC stress test must drain the queue");
