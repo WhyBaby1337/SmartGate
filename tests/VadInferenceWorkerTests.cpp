@@ -90,10 +90,12 @@ void runVadInferenceWorkerTests() {
                   "Worker should publish the inference probability for its generation");
     requireWorker(probe.lastSourceSamplePosition.load(std::memory_order_relaxed) == 900,
                   "Worker must pass the source audio position to its inference callback");
-    requireWorker(worker.latestProbability(10, 1000, 200) == 0.65f,
-                  "A result inside the configured sample-age budget should remain usable");
+    requireWorker(worker.latestProbability(10, 1100, 200) == 0.65f,
+                  "A result exactly at the configured sample-age boundary should remain usable");
     requireWorker(worker.latestProbability(10, 1201, 200) == 0.0f,
                   "A result older than the configured sample-age budget must be neutral");
+    requireWorker(worker.latestProbability(10, 899, 200) == 0.0f,
+                  "A result timestamped in the future must be rejected as inconsistent");
 
     worker.setGeneration(11);
     requireWorker(worker.latestProbability(11) == 0.0f,
