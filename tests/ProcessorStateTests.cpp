@@ -107,16 +107,16 @@ void testMonoRuntimeProcessing() {
                 setParameter(processor, "aiEnabled", enableAi ? 1.0f : 0.0f);
                 setParameter(processor, "keyboardReduction", enableKeyboard ? 0.7f : 0.0f);
                 for (const int blockSize : blockSizes) {
-                juce::AudioBuffer<float> buffer(1, blockSize);
-                auto* samples = buffer.getWritePointer(0);
-                for (int i = 0; i < blockSize; ++i) {
-                    const double phase = 2.0 * juce::MathConstants<double>::pi
-                        * 330.0 * static_cast<double>(i) / rate;
-                    samples[i] = static_cast<float>(0.15 * std::sin(phase));
-                }
-                if (blockSize > 1)
-                    samples[0] = std::numeric_limits<float>::quiet_NaN();
-                processor.processBlock(buffer, midi);
+                    juce::AudioBuffer<float> buffer(1, blockSize);
+                    auto* samples = buffer.getWritePointer(0);
+                    for (int i = 0; i < blockSize; ++i) {
+                        const double phase = 2.0 * juce::MathConstants<double>::pi
+                            * 330.0 * static_cast<double>(i) / rate;
+                        samples[i] = static_cast<float>(0.15 * std::sin(phase));
+                    }
+                    if (blockSize > 1)
+                        samples[0] = std::numeric_limits<float>::quiet_NaN();
+                    processor.processBlock(buffer, midi);
                     for (int i = 0; i < blockSize; ++i)
                         require(std::isfinite(samples[i]),
                                 "mono runtime processing must keep output finite across block sizes and analyzer states");
@@ -164,6 +164,48 @@ void testImmediateRoundTrip() {
     require(profile(*repeatedXml)->getIntAttribute("count", -1) == 37,
             "repeated save/load must preserve target profile");
 }
+
+void testInvalidProfileVariantsClearPreviousProfile() {
+    SmartGateAudioProcessor processor;
+    juce::MemoryBlock empty;
+    auto fixture = saveXml(processor, empty);
+    addValidProfile(*fixture, 24);
+
+    const auto expectInvalidProfileCleared = [&](juce::XmlElement& invalid,
+                                                  const char* message) {
+        juce::MemoryBlock encoded;
+        encode(processor, invalid, encoded);
+        processor.setStateInformation(encoded.getData(),
+                                      static_cast<int>(encoded.getSize()));
+        juce::MemoryBlock saved;
+        auto savedXml = saveXml(processor, saved);
+        auto* savedProfile = profile(*savedXml);
+        require(savedProfile != nullptr
+                    && savedProfile->getIntAttribute("count", -1) == 0,
+                message);
+    };
+
+    juce::XmlElement negativeVariance(*fixture);
+    profile(negativeVariance)->setAttribute("m2_2", -0.01);
+    expectInvalidProfileCleared(
+        negativeVariance, "negative profile variance must clear previous training");
+
+    juce::XmlElement invalidBandRatios(*fixture);
+    profile(invalidBandRatios)->setAttribute("mean2", 0.8);
+    expectInvalidProfileCleared(
+        invalidBandRatios, "inconsistent spectral ratios must clear previous training");
+
+    juce::XmlElement excessiveCount(*fixture);
+    profile(excessiveCount)->setAttribute("count", 1000000001);
+    expectInvalidProfileCleared(
+        excessiveCount, "excessive restored frame counts must clear previous training");
+
+    juce::XmlElement missingStatistic(*fixture);
+    profile(missingStatistic)->removeAttribute("m2_4");
+    expectInvalidProfileCleared(
+        missingStatistic, "incomplete profile statistics must clear previous training");
+}
+
 void testInvalidAndLegacyStatesClearProfile() {
     SmartGateAudioProcessor processor;
     juce::MemoryBlock empty;
@@ -202,6 +244,7 @@ void testInvalidAndLegacyStatesClearProfile() {
 int main() {
     testImmediateRoundTrip();
     testInvalidAndLegacyStatesClearProfile();
+    testInvalidProfileVariantsClearPreviousProfile();
     testRuntimeBlockAndToggleTransitions();
     testMonoRuntimeProcessing();
     std::cout << "All processor state integration tests passed.\n";
