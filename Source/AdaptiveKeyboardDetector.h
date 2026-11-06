@@ -87,6 +87,15 @@ public:
 
     float getConfidence() const noexcept { return confidence_; }
 
+    // Confidence is an estimate, not a probability that should map linearly
+    // to attenuation. Squaring it makes uncertain detections less destructive
+    // to speech while preserving full reduction for a fully confident click.
+    static float gainForReduction(float reduction, float confidence) noexcept {
+        const float amount = unit(reduction);
+        const float certainty = unit(confidence);
+        return 1.0f - amount * certainty * certainty;
+    }
+
 private:
     static float unit(float value) noexcept {
         return std::clamp(std::isfinite(value) ? value : 0.0f, 0.0f, 1.0f);
