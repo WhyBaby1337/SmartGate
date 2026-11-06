@@ -122,8 +122,8 @@ void runVadResamplerTests() {
     requireResampler(resampler.prepare(48000.0, 16000.0),
                      "Resampler should prepare for non-finite input sanitization");
     resampler.reset();
-    requireResampler(!resampler.processSample(0.5f, output),
-                     "First sample after reset establishes interpolation history");
+    requireResampler(resampler.processSample(0.5f, output) && std::isfinite(output),
+                     "First sample after reset must be emitted as the initial filtered output");
     (void) resampler.processSample(std::numeric_limits<float>::quiet_NaN(), output);
     (void) resampler.processSample(0.0f, output);
     requireResampler(resampler.processSample(0.0f, output) && std::isfinite(output),
