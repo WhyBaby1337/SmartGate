@@ -33,7 +33,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Configure
-        run: cmake -S . -B build -A x64 -DSMARTGATE_BUILD_PLUGIN=ON
+        run: >-
+          cmake -S . -B build -A x64
+          -DSMARTGATE_BUILD_PLUGIN=ON
+          "-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Zi"
+          "-DCMAKE_SHARED_LINKER_FLAGS_RELEASE=/DEBUG:FULL"
+          "-DCMAKE_MODULE_LINKER_FLAGS_RELEASE=/DEBUG:FULL"
+          "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FULL"
       - name: Build VST3 and tests
         run: cmake --build build --config Release --parallel 2
       - name: Run DSP tests
