@@ -195,6 +195,38 @@ void testPreparedRestoreCanBeSavedBeforeAudioCallback() {
     processor.releaseResources();
 }
 
+void testLatestRestoreWinsBeforeAudioCallback() {
+    SmartGateAudioProcessor fixtureProcessor;
+    juce::MemoryBlock fixtureData;
+    auto fixture = saveXml(fixtureProcessor, fixtureData);
+    addValidProfile(*fixture, 24);
+    juce::MemoryBlock firstState;
+    encode(fixtureProcessor, *fixture, firstState);
+
+    juce::XmlElement newerFixture(*fixture);
+    profile(newerFixture)->setAttribute("count", 37);
+    profile(newerFixture)->setAttribute("mean0", -1.2);
+    juce::MemoryBlock secondState;
+    encode(fixtureProcessor, newerFixture, secondState);
+
+    SmartGateAudioProcessor processor;
+    processor.prepareToPlay(48000.0, 256);
+    processor.setStateInformation(firstState.getData(), static_cast<int>(firstState.getSize()));
+    processor.setStateInformation(secondState.getData(), static_cast<int>(secondState.getSize()));
+
+    // No processBlock() occurs between the restores. The newest host state
+    // must replace the older pending snapshot and survive an immediate save.
+    juce::MemoryBlock saved;
+    auto savedXml = saveXml(processor, saved);
+    auto* savedProfile = profile(*savedXml);
+    require(savedProfile != nullptr
+                && savedProfile->getIntAttribute("count", -1) == 37,
+            "the latest of multiple pending restores must win before audio processing");
+    require(std::abs(savedProfile->getDoubleAttribute("mean0") + 1.2) < 1.0e-12,
+            "the latest pending restore must preserve its own profile statistics");
+    processor.releaseResources();
+}
+
 void testInvalidProfileVariantsClearPreviousProfile() {
     SmartGateAudioProcessor processor;
     juce::MemoryBlock empty;
@@ -402,6 +434,7 @@ void testInvalidAndLegacyStatesClearProfile() {
 int main() {
     testImmediateRoundTrip();
     testPreparedRestoreCanBeSavedBeforeAudioCallback();
+    testLatestRestoreWinsBeforeAudioCallback();
     testInvalidAndLegacyStatesClearProfile();
     testLearnTargetRequestWaitsUntilAiIsEnabled();
     testExplicitLearningWinsOverPendingProfileRestore();
