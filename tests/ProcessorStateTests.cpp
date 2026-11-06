@@ -270,6 +270,33 @@ void testExplicitLearningWinsOverPendingProfileRestore() {
     processor.releaseResources();
 }
 
+void testRestoreWithLearningEnabledAfterPreparePreservesProfile() {
+    SmartGateAudioProcessor fixtureProcessor;
+    setParameter(fixtureProcessor, "learnTarget", 1.0f);
+    juce::MemoryBlock fixtureData;
+    auto fixture = saveXml(fixtureProcessor, fixtureData);
+    addValidProfile(*fixture, 37);
+    juce::MemoryBlock encodedFixture;
+    encode(fixtureProcessor, *fixture, encodedFixture);
+
+    SmartGateAudioProcessor processor;
+    processor.prepareToPlay(48000.0, 256);
+    // Some hosts/preset flows restore state after the audio processor is prepared.
+    processor.setStateInformation(encodedFixture.getData(),
+                                  static_cast<int>(encodedFixture.getSize()));
+
+    juce::MidiBuffer midi;
+    juce::AudioBuffer<float> buffer(2, 1);
+    processor.processBlock(buffer, midi);
+
+    juce::MemoryBlock saved;
+    auto savedXml = saveXml(processor, saved);
+    auto* savedProfile = profile(*savedXml);
+    require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 37,
+            "restoring a session with Learn Target enabled after prepare must preserve its profile");
+    processor.releaseResources();
+}
+
 void testInvalidAndLegacyStatesClearProfile() {
     SmartGateAudioProcessor processor;
     juce::MemoryBlock empty;
@@ -310,6 +337,7 @@ int main() {
     testInvalidAndLegacyStatesClearProfile();
     testLearnTargetRequestWaitsUntilAiIsEnabled();
     testExplicitLearningWinsOverPendingProfileRestore();
+    testRestoreWithLearningEnabledAfterPreparePreservesProfile();
     testInvalidProfileVariantsClearPreviousProfile();
     testRuntimeBlockAndToggleTransitions();
     testMonoRuntimeProcessing();
