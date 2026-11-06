@@ -297,6 +297,43 @@ void testRestoreWithLearningEnabledAfterPreparePreservesProfile() {
     processor.releaseResources();
 }
 
+void testLearnTargetCanRestartAfterRestoredEnabledSession() {
+    SmartGateAudioProcessor fixtureProcessor;
+    setParameter(fixtureProcessor, "learnTarget", 1.0f);
+    juce::MemoryBlock fixtureData;
+    auto fixture = saveXml(fixtureProcessor, fixtureData);
+    addValidProfile(*fixture, 37);
+    juce::MemoryBlock encodedFixture;
+    encode(fixtureProcessor, *fixture, encodedFixture);
+
+    SmartGateAudioProcessor processor;
+    processor.prepareToPlay(48000.0, 256);
+    processor.setStateInformation(encodedFixture.getData(),
+                                  static_cast<int>(encodedFixture.getSize()));
+
+    juce::MidiBuffer midi;
+    juce::AudioBuffer<float> buffer(2, 1);
+    processor.processBlock(buffer, midi);
+
+    juce::MemoryBlock restored;
+    auto restoredXml = saveXml(processor, restored);
+    require(profile(*restoredXml) != nullptr
+                && profile(*restoredXml)->getIntAttribute("count", -1) == 37,
+            "restoring an enabled Learn Target session must preserve its profile");
+
+    setParameter(processor, "learnTarget", 0.0f);
+    processor.processBlock(buffer, midi);
+    setParameter(processor, "learnTarget", 1.0f);
+    processor.processBlock(buffer, midi);
+
+    juce::MemoryBlock restarted;
+    auto restartedXml = saveXml(processor, restarted);
+    require(profile(*restartedXml) != nullptr
+                && profile(*restartedXml)->getIntAttribute("count", -1) == 0,
+            "turning Learn Target off and on after restore must start a fresh profile");
+    processor.releaseResources();
+}
+
 void testInvalidAndLegacyStatesClearProfile() {
     SmartGateAudioProcessor processor;
     juce::MemoryBlock empty;
@@ -338,6 +375,7 @@ int main() {
     testLearnTargetRequestWaitsUntilAiIsEnabled();
     testExplicitLearningWinsOverPendingProfileRestore();
     testRestoreWithLearningEnabledAfterPreparePreservesProfile();
+    testLearnTargetCanRestartAfterRestoredEnabledSession();
     testInvalidProfileVariantsClearPreviousProfile();
     testRuntimeBlockAndToggleTransitions();
     testMonoRuntimeProcessing();
