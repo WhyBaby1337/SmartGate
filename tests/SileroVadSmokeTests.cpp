@@ -151,6 +151,32 @@ int main() {
             throw std::runtime_error("Silero did not complete ONNX inference after non-finite audio");
 
         std::cout << "Silero ONNX smoke test passed.\n";
+        // A discontinuity in source sample positions must reset both the
+        // recurrent state and the 64-sample context. Compare the first result
+        // after a large gap with a fresh instance processing the same frame.
+        Inference discontinuityInference(BinaryData::silero_vad_onnx,
+            static_cast<std::size_t>(BinaryData::silero_vad_onnxSize));
+        Inference freshInference(BinaryData::silero_vad_onnx,
+            static_cast<std::size_t>(BinaryData::silero_vad_onnxSize));
+        constexpr std::uint64_t discontinuityGeneration = 99;
+        const float beforeGap = discontinuityInference.infer(
+            speechLike, discontinuityGeneration, 1000);
+        const float contiguous = discontinuityInference.infer(
+            speechLike, discontinuityGeneration, 1512);
+        const float afterGap = discontinuityInference.infer(
+            speechLike, discontinuityGeneration, 10000);
+        const float freshAfterGap = freshInference.infer(
+            speechLike, discontinuityGeneration, 10000);
+        if (!std::isfinite(beforeGap) || !std::isfinite(contiguous)
+            || !std::isfinite(afterGap) || !std::isfinite(freshAfterGap)
+            || std::abs(afterGap - freshAfterGap) > 1.0e-6f)
+            throw std::runtime_error(
+                "Silero must reset recurrent state and context after a source-position discontinuity");
+        if (discontinuityInference.successfulInferenceCount() != 3
+            || freshInference.successfulInferenceCount() != 1)
+            throw std::runtime_error(
+                "Silero discontinuity recovery must complete all expected ONNX inference calls");
+
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "SILERO TEST FAILURE: " << e.what() << '\n';
