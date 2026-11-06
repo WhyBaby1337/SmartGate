@@ -219,7 +219,7 @@ int main() {
             throw std::runtime_error(
                 "Silero source-position discontinuity tests must complete all expected ONNX calls");
 
-        std::cout << "Silero ONNX smoke test passed.\\n";
+        std::cout << "Silero ONNX smoke test passed.\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "SILERO TEST FAILURE: " << e.what() << '\n';
