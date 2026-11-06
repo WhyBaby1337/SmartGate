@@ -74,9 +74,7 @@ private:
     float targetConfidenceSmoothed_ = 1.0f;
     float targetConfidenceSmoothingCoefficient_ = 0.0f;
     float keyboardConfidence_ = 0.0f;
-    float keyboardGainSmoothed_ = 1.0f;
-    float keyboardGainAttackCoefficient_ = 0.0f;
-    float keyboardGainReleaseCoefficient_ = 0.0f;
+    smartgate::AdaptiveKeyboardGain keyboardGainSmoother_;
     bool wasLearningTarget_ = false;
     bool pendingLearningStart_ = false;
     bool wasAiEnabled_ = true;
