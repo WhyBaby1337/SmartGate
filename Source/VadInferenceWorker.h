@@ -11,7 +11,8 @@ namespace smartgate {
 
 // Owns the non-real-time consumer thread for a VAD frame queue.
 // The audio callback remains the sole queue producer; this worker is the sole
-// consumer. Lifecycle methods must only be called from a non-audio thread.
+// consumer. start()/stop() are non-audio lifecycle operations; requestStop()
+// is the lock-free real-time-safe shutdown signal.
 template <typename Queue>
 class VadInferenceWorker {
 public:
