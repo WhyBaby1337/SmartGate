@@ -135,6 +135,7 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     // and clearing the target profile that was just restored.
     wasLearningTarget_ = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
     pendingLearningStart_ = false;
+    stateRestorePending_.store(false, std::memory_order_relaxed);
     wasAiEnabled_ = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
     publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
 }
@@ -212,6 +213,14 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             vadProbabilitySmoothed_ = 0.0f;
         }
 #endif
+    }
+
+    // A host may restore a session while the processor is already prepared.
+    // Synchronize the restored toggle before edge detection so loading a session
+    // with Learn Target enabled does not masquerade as a fresh user request.
+    if (stateRestorePending_.exchange(false, std::memory_order_acquire)) {
+        wasLearningTarget_ = learningRequested;
+        pendingLearningStart_ = false;
     }
 
     if (learningRequested && !wasLearningTarget_)
@@ -458,6 +467,7 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
                 restoredState.removeChild(i, nullptr);
         }
         parameters_.replaceState(restoredState);
+        stateRestorePending_.store(true, std::memory_order_release);
 
         if (auto* node = xml->getChildByName("TARGET_PROFILE")) {
             smartgate::TargetProfile::Snapshot snapshot;
