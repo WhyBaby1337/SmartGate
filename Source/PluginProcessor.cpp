@@ -116,6 +116,7 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
 #endif
     gateEnvelope_.prepare(safeSampleRate);
     featureExtractor_.prepare(safeSampleRate);
+    stereoAnalysisFoldDown_.prepare(safeSampleRate);
     keyboardDetector_.prepare(safeSampleRate);
     keyboardConfidence_ = 0.0f;
     keyboardGainSmoother_.prepare(safeSampleRate);
@@ -325,7 +326,8 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     float* const right = channels > 1 ? buffer.getWritePointer(1) : nullptr;
 
     // Peak-linked detection keeps the stereo image centered and stable.
-    // Target features are extracted from a mono average in fixed-size frames.
+    // Analysis selects the stronger channel instead of averaging L/R, which
+    // would cancel anti-phase content before VAD and feature extraction.
     for (int sample = 0; sample < samples; ++sample) {
         // A malformed upstream sample must not poison the detector or leak
         // NaN/Inf into the host output. Sanitization is allocation- and lock-free.
@@ -333,10 +335,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float rightSample = right != nullptr
             ? smartgate::finiteSampleOrZero(right[sample]) : leftSample;
         const float linkedPeak = juce::jmax(std::abs(leftSample), std::abs(rightSample));
-        // Halve before adding so two large but finite channels cannot overflow
-        // during the mono analysis fold-down.
-        const float mono = right != nullptr
-            ? 0.5f * leftSample + 0.5f * rightSample : leftSample;
+        const float mono = stereoAnalysisFoldDown_.process(leftSample, rightSample);
 
 #if defined(SMARTGATE_HAS_SILERO)
         if (aiEnabled && vadAvailable_)
