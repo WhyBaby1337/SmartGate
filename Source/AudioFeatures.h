@@ -108,4 +108,46 @@ private:
     double midState_ = 0.0;
 };
 
+
+// Stable mono analysis feed for stereo inputs. Summing L/R can cancel valid
+// content when channels are out of phase. Track channel energy and select the
+// stronger channel instead; the plugin's actual stereo output is untouched.
+class StereoAnalysisFoldDown {
+public:
+    void prepare(double sampleRate) noexcept {
+        const double rate = std::isfinite(sampleRate)
+            ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
+        attackCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.005 * rate)));
+        releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.050 * rate)));
+        reset();
+    }
+
+    void reset() noexcept {
+        leftEnergy_ = 0.0;
+        rightEnergy_ = 0.0;
+    }
+
+    float process(float left, float right) noexcept {
+        const double leftPower = static_cast<double>(left) * left;
+        const double rightPower = static_cast<double>(right) * right;
+        leftEnergy_ = follow(leftEnergy_, leftPower);
+        rightEnergy_ = follow(rightEnergy_, rightPower);
+        return rightEnergy_ > leftEnergy_ ? right : left;
+    }
+
+private:
+    double follow(double current, double target) const noexcept {
+        const double coefficient = target > current
+            ? static_cast<double>(attackCoefficient_)
+            : static_cast<double>(releaseCoefficient_);
+        return target + coefficient * (current - target);
+    }
+
+    float attackCoefficient_ = 0.0f;
+    float releaseCoefficient_ = 0.0f;
+    double leftEnergy_ = 0.0;
+    double rightEnergy_ = 0.0;
+};
+
+
 } // namespace smartgate
