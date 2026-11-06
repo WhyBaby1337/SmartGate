@@ -74,6 +74,20 @@ void runTargetProfileTests() {
 
     const auto extracted = extractor.process(frame.data(), frame.size());
     requireFeature(extracted.isFinite(), "Extracted features must be finite");
+
+    // Direct DSP users receive the same bounded rate behavior as the plugin
+    // processor, even when a host supplies an extreme finite sample rate.
+    smartgate::FeatureExtractor maximumRateExtractor;
+    smartgate::FeatureExtractor extremeRateExtractor;
+    maximumRateExtractor.prepare(768000.0);
+    extremeRateExtractor.prepare(std::numeric_limits<double>::max());
+    const auto maximumRateFeatures = maximumRateExtractor.process(frame.data(), frame.size());
+    const auto extremeRateFeatures = extremeRateExtractor.process(frame.data(), frame.size());
+    requireFeature(std::abs(maximumRateFeatures.logRms - extremeRateFeatures.logRms) < 1.0e-6f
+                   && std::abs(maximumRateFeatures.lowBandRatio - extremeRateFeatures.lowBandRatio) < 1.0e-6f
+                   && std::abs(maximumRateFeatures.midBandRatio - extremeRateFeatures.midBandRatio) < 1.0e-6f
+                   && std::abs(maximumRateFeatures.highBandRatio - extremeRateFeatures.highBandRatio) < 1.0e-6f,
+                   "Extreme finite sample rates must clamp to the supported maximum");
     requireFeature(extracted.logRms < 0.0f && extracted.logRms > -2.0f,
                    "Log RMS must represent a valid non-silent frame");
     const float ratioSum = extracted.lowBandRatio + extracted.midBandRatio
