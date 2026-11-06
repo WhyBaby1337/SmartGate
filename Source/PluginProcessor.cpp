@@ -328,6 +328,11 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // Peak-linked detection keeps the stereo image centered and stable.
     // Analysis selects the stronger channel instead of averaging L/R, which
     // would cancel anti-phase content before VAD and feature extraction.
+    // When both analyzers are disabled, skip the fold-down follower entirely
+    // and clear its history so re-enabling analysis starts from fresh audio.
+    if (!analyzeFrames)
+        stereoAnalysisFoldDown_.reset();
+
     for (int sample = 0; sample < samples; ++sample) {
         // A malformed upstream sample must not poison the detector or leak
         // NaN/Inf into the host output. Sanitization is allocation- and lock-free.
@@ -335,7 +340,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float rightSample = right != nullptr
             ? smartgate::finiteSampleOrZero(right[sample]) : leftSample;
         const float linkedPeak = juce::jmax(std::abs(leftSample), std::abs(rightSample));
-        const float mono = stereoAnalysisFoldDown_.process(leftSample, rightSample);
+        const float mono = analyzeFrames
+            ? stereoAnalysisFoldDown_.process(leftSample, rightSample)
+            : leftSample;
 
 #if defined(SMARTGATE_HAS_SILERO)
         if (aiEnabled && vadAvailable_)
