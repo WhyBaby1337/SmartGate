@@ -151,6 +151,36 @@ void runTargetProfileTests() {
     requireFeature(profile.frameCount() == 32,
                    "Rejected frames must not modify profile statistics");
 
+    // Exercise Welford statistics over a long, slowly varying feature
+    // stream rather than only repeated identical observations.
+    smartgate::TargetProfile longRunProfile;
+    for (int i = 0; i < 100000; ++i) {
+        const float phase = static_cast<float>(i) * 0.001f;
+        const float low = 0.20f + 0.05f * std::sin(phase);
+        const float mid = 0.50f + 0.04f * std::cos(phase * 0.7f);
+        const float high = 1.0f - low - mid;
+        const smartgate::AudioFeatures observation{
+            -1.0f + 0.20f * std::sin(phase * 0.3f),
+            0.15f + 0.05f * std::sin(phase * 0.9f),
+            low, mid, high
+        };
+        requireFeature(longRunProfile.learn(observation),
+                       "Long-running valid feature observations must remain learnable");
+    }
+    requireFeature(longRunProfile.frameCount() == 100000
+                   && longRunProfile.isReady(),
+                   "Long-running target learning must preserve its exact frame count");
+    const float longRunConfidence = longRunProfile.confidence(extracted);
+    requireFeature(std::isfinite(longRunConfidence)
+                   && longRunConfidence >= 0.0f && longRunConfidence <= 1.0f,
+                   "Long-running profile confidence must remain finite and bounded");
+    smartgate::TargetProfile longRunRestored;
+    requireFeature(longRunRestored.restore(longRunProfile.makeSnapshot())
+                   && longRunRestored.frameCount() == longRunProfile.frameCount()
+                   && std::abs(longRunRestored.confidence(extracted)
+                               - longRunConfidence) < 1.0e-6f,
+                   "Long-running Welford statistics must survive snapshot restoration");
+
     smartgate::AtomicTargetProfileSnapshot mailbox;
     std::uint64_t mailboxVersion = 0;
     smartgate::TargetProfile::Snapshot mailboxCopy;
