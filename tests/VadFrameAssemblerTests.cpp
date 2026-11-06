@@ -104,6 +104,9 @@ void runVadFrameAssemblerTests() {
         (void) assembler.processSample(0.2f);
     requireAssembler(queue.pop(frame, generation) && generation == 43,
                      "Frames after a generation change must carry the new generation");
+    requireAssembler(std::abs(frame.front() - 0.2f) < 1.0e-4f
+                     && std::abs(frame.back() - 0.2f) < 1.0e-4f,
+                     "A generation change must clear old FIR history and preserve the new stream level");
 
     // A full queue drops complete frames without blocking the audio producer.
     using SmallQueue = smartgate::VadFrameQueue<512, 2>;
