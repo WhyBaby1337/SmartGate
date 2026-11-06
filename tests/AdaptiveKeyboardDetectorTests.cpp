@@ -341,7 +341,7 @@ void runAdaptiveKeyboardDetectorTests() {
     // layout must not bias channel selection when stereo analysis resumes.
     stereoFoldDown.reset();
     float selectedLeftAfterResetPeak = 0.0f;
-    for (int i = 0; i < 32; ++i) {
+    for (int i = 0; i < 256; ++i) {
         const float phase = static_cast<float>(i);
         const float leftSample = 0.35f * std::sin(
             2.0f * 3.14159265f * 180.0f * phase / 48000.0f);
