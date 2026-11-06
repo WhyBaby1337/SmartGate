@@ -219,7 +219,10 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // Synchronize the restored toggle before edge detection so loading a session
     // with Learn Target enabled does not masquerade as a fresh user request.
     if (stateRestorePending_.exchange(false, std::memory_order_acquire)) {
-        wasLearningTarget_ = learningRequested;
+        // Compare the live parameter against the value that was actually
+        // restored. A host/user change arriving in the same block must remain
+        // a real edge (and an explicit Learn Target request must win).
+        wasLearningTarget_ = restoredLearningTarget_.load(std::memory_order_relaxed);
         pendingLearningStart_ = false;
     }
 
@@ -467,6 +470,9 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
                 restoredState.removeChild(i, nullptr);
         }
         parameters_.replaceState(restoredState);
+        restoredLearningTarget_.store(
+            *parameters_.getRawParameterValue("learnTarget") >= 0.5f,
+            std::memory_order_relaxed);
         stateRestorePending_.store(true, std::memory_order_release);
 
         if (auto* node = xml->getChildByName("TARGET_PROFILE")) {
