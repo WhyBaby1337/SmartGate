@@ -55,7 +55,7 @@ void setParameter(SmartGateAudioProcessor& processor, const juce::String& id,
             dynamic_cast<juce::AudioProcessorParameterWithID*>(parameterBase);
         auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameterBase);
         if (parameterWithId != nullptr && ranged != nullptr
-            && parameterWithId->paramID.paramID == id) {
+            && parameterWithId->paramID == id) {
             parameterBase->setValueNotifyingHost(ranged->convertTo0to1(plainValue));
             return;
         }
