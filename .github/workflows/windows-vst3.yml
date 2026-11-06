@@ -91,7 +91,7 @@ jobs:
           $stdout = Join-Path $env:RUNNER_TEMP "pluginval-stdout.log"
           $stderr = Join-Path $env:RUNNER_TEMP "pluginval-stderr.log"
           $process = Start-Process -FilePath $validator.FullName `
-            -ArgumentList @("--strictness-level", "5", "--skip-gui-tests", $module) `
+            -ArgumentList @("--strictness-level", "5", "--skip-gui-tests", ('"{0}"' -f $module)) `
             -Wait -PassThru -NoNewWindow `
             -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
