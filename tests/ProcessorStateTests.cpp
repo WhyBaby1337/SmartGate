@@ -102,10 +102,11 @@ void testMonoRuntimeProcessing() {
     constexpr int blockSizes[] = {1, 63, 256, 511, 1024};
     for (const double rate : {44100.0, 48000.0, 96000.0}) {
         processor.prepareToPlay(rate, 1024);
-        for (const bool enableAnalysis : {false, true}) {
-            setParameter(processor, "aiEnabled", enableAnalysis ? 1.0f : 0.0f);
-            setParameter(processor, "keyboardReduction", enableAnalysis ? 0.7f : 0.0f);
-            for (const int blockSize : blockSizes) {
+        for (const bool enableAi : {false, true}) {
+            for (const bool enableKeyboard : {false, true}) {
+                setParameter(processor, "aiEnabled", enableAi ? 1.0f : 0.0f);
+                setParameter(processor, "keyboardReduction", enableKeyboard ? 0.7f : 0.0f);
+                for (const int blockSize : blockSizes) {
                 juce::AudioBuffer<float> buffer(1, blockSize);
                 auto* samples = buffer.getWritePointer(0);
                 for (int i = 0; i < blockSize; ++i) {
@@ -116,9 +117,10 @@ void testMonoRuntimeProcessing() {
                 if (blockSize > 1)
                     samples[0] = std::numeric_limits<float>::quiet_NaN();
                 processor.processBlock(buffer, midi);
-                for (int i = 0; i < blockSize; ++i)
-                    require(std::isfinite(samples[i]),
-                            "mono runtime processing must keep output finite across block sizes and analyzer states");
+                    for (int i = 0; i < blockSize; ++i)
+                        require(std::isfinite(samples[i]),
+                                "mono runtime processing must keep output finite across block sizes and analyzer states");
+                }
             }
         }
         processor.releaseResources();
