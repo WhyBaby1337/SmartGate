@@ -266,6 +266,44 @@ void runVadInferenceWorkerTests() {
                   "Worker should resume publishing after the new generation arrives");
     raceWorker.stop();
 
+    // Shutdown while inference is in flight must join safely and suppress
+    // the result produced by the callback that was already running.
+    {
+        Queue shutdownQueue;
+        BlockingProbe shutdownProbe;
+        smartgate::VadInferenceWorker<Queue> shutdownWorker(shutdownQueue);
+        requireWorker(shutdownWorker.start(&blockingInference, &shutdownProbe, 25),
+                      "Worker should start for the in-flight shutdown test");
+        std::array<float, 8> shutdownFrame{};
+        shutdownFrame.fill(0.7f);
+        requireWorker(shutdownQueue.push(shutdownFrame.data(), 25),
+                      "Shutdown test frame should be queued");
+        const auto shutdownEnteredDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(2);
+        while (!shutdownProbe.entered.load(std::memory_order_acquire)
+               && std::chrono::steady_clock::now() < shutdownEnteredDeadline)
+            std::this_thread::yield();
+        const bool shutdownInferenceEntered =
+            shutdownProbe.entered.load(std::memory_order_acquire);
+        if (!shutdownInferenceEntered)
+            shutdownProbe.release.store(true, std::memory_order_release);
+        requireWorker(shutdownInferenceEntered,
+                      "Inference should be in flight before shutdown begins");
+
+        std::thread releaseInference([&shutdownProbe] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            shutdownProbe.release.store(true, std::memory_order_release);
+        });
+        shutdownWorker.stop();
+        releaseInference.join();
+        requireWorker(!shutdownWorker.isRunning(),
+                      "Shutdown must join the in-flight worker");
+        requireWorker(shutdownWorker.latestProbability(25) == 0.0f,
+                      "An inference result completing during shutdown must not be published");
+        requireWorker(shutdownWorker.publishedResultCount() == 0,
+                      "Shutdown must not increment the published-result counter");
+    }
+
     // Sustained producer/worker traffic: the producer must never wait on
     // inference, and after a burst the worker must converge to the newest
     // accepted frame instead of publishing an old backlog indefinitely.
