@@ -19,7 +19,8 @@ void runVadFrameAssemblerTests() {
                      "Assembler should prepare for 48 kHz input");
 
     for (int i = 0; i < 4800; ++i)
-        (void) assembler.processSample(std::sin(static_cast<float>(i) * 0.01f));
+        (void) assembler.processSample(std::sin(static_cast<float>(i) * 0.01f),
+                                       static_cast<std::uint64_t>(i));
 
     requireAssembler(assembler.pendingSamples() == 64,
                      "Assembler should retain the partial frame across host blocks");
@@ -28,12 +29,20 @@ void runVadFrameAssemblerTests() {
 
     Queue::Frame frame{};
     std::uint64_t generation = 0;
-    requireAssembler(queue.pop(frame, generation), "First complete model frame should be queued");
+    std::uint64_t sourcePosition = 0;
+    requireAssembler(queue.pop(frame, generation, sourcePosition),
+                     "First complete model frame should be queued");
     requireAssembler(generation == 42, "Assembled frame must retain its configured generation");
+    requireAssembler(sourcePosition == 1533,
+                     "48 kHz frame timestamp must identify its final source sample");
     for (const float sample : frame)
         requireAssembler(std::isfinite(sample), "Assembled model samples must be finite");
-    requireAssembler(queue.pop(frame, generation) && queue.pop(frame, generation),
-                     "All three complete frames should be available in FIFO order");
+    requireAssembler(queue.pop(frame, generation, sourcePosition) && generation == 42
+                     && sourcePosition == 3069,
+                     "Second 48 kHz frame must preserve its generation and source position");
+    requireAssembler(queue.pop(frame, generation, sourcePosition) && generation == 42
+                     && sourcePosition == 4605,
+                     "Third 48 kHz frame must preserve its generation and source position");
     requireAssembler(!queue.pop(frame), "Partial samples must not be queued as a full frame");
 
     // Exercise the full assembler at the model's native rate: exactly one
