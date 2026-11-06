@@ -83,17 +83,17 @@ void runVadFrameAssemblerTests() {
         (void) fractionalRateAssembler.processSample(
             static_cast<float>(i % 97) / 97.0f, static_cast<std::uint64_t>(i));
     std::uint64_t previousSourcePosition = 0;
-    std::uint64_t sourcePosition = 0;
+    std::uint64_t fractionalSourcePosition = 0;
     std::size_t fractionalFrames = 0;
-    while (fractionalRateQueue.pop(frame, generation, sourcePosition)) {
+    while (fractionalRateQueue.pop(frame, generation, fractionalSourcePosition)) {
         requireAssembler(generation == 88,
                          "Fractional-rate frames must retain their generation");
         if (fractionalFrames != 0) {
-            const auto sourceDelta = sourcePosition - previousSourcePosition;
+            const auto sourceDelta = fractionalSourcePosition - previousSourcePosition;
             requireAssembler(sourceDelta >= 1411 && sourceDelta <= 1412,
                              "44.1 kHz frame timestamps must follow the fractional 512-sample cadence");
         }
-        previousSourcePosition = sourcePosition;
+        previousSourcePosition = fractionalSourcePosition;
         ++fractionalFrames;
     }
     requireAssembler(fractionalFrames == 31,
