@@ -74,6 +74,7 @@ void runVadFrameAssemblerTests() {
         (void) fractionalRateAssembler.processSample(
             static_cast<float>(i % 97) / 97.0f, static_cast<std::uint64_t>(i));
     std::uint64_t previousSourcePosition = 0;
+    std::uint64_t sourcePosition = 0;
     std::size_t fractionalFrames = 0;
     while (fractionalRateQueue.pop(frame, generation, sourcePosition)) {
         requireAssembler(generation == 88,
