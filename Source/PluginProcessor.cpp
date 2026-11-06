@@ -340,7 +340,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float rightSample = right != nullptr
             ? smartgate::finiteSampleOrZero(right[sample]) : leftSample;
         const float linkedPeak = juce::jmax(std::abs(leftSample), std::abs(rightSample));
-        const float mono = analyzeFrames
+        const float mono = analyzeFrames && right != nullptr
             ? stereoAnalysisFoldDown_.process(leftSample, rightSample)
             : leftSample;
 
