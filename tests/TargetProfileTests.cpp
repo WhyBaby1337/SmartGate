@@ -310,7 +310,11 @@ void runTargetProfileTests() {
 
         std::uint64_t successfulReads = 0;
         bool snapshotsCoherent = true;
-        do {
+        // Do not let a fast writer finish before the reader's first
+        // successful observation. The final published value is still a valid
+        // coherent read even when the writer wins the scheduling race.
+        while (!writerFinished.load(std::memory_order_acquire)
+               || successfulReads == 0) {
             smartgate::TargetProfile::Snapshot value;
             std::uint64_t version = 0;
             if (!concurrentMailbox.read(value, version, 64))
@@ -323,7 +327,7 @@ void runTargetProfileTests() {
                     && value.mean[i] == static_cast<double>(value.count)
                     && value.m2[i] == static_cast<double>(value.count) * 2.0;
             }
-        } while (!writerFinished.load(std::memory_order_acquire));
+        }
 
         writer.join();
         smartgate::TargetProfile::Snapshot finalValue;
