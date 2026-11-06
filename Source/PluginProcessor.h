@@ -78,6 +78,9 @@ private:
     smartgate::AdaptiveKeyboardGain keyboardGainSmoother_;
     bool wasLearningTarget_ = false;
     bool pendingLearningStart_ = false;
+    // setStateInformation may run after prepareToPlay; synchronize the restored
+    // Learn Target toggle on the audio thread without treating it as a user edge.
+    std::atomic<bool> stateRestorePending_{false};
     bool wasAiEnabled_ = true;
     bool wasKeyboardReductionEnabled_ = false;
 #if defined(SMARTGATE_HAS_SILERO)
