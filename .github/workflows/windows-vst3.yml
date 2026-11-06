@@ -38,6 +38,8 @@ jobs:
         run: cmake --build build --config Release --parallel 2
       - name: Run DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Run processor state integration tests
+        run: .\\build\\Release\\SmartGateProcessorStateTests.exe
       - name: Measure Silero ONNX inference latency
         run: .\\build\\Release\\SmartGateSileroTests.exe
       - name: Measure DSP CPU budget
