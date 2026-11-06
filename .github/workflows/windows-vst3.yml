@@ -85,7 +85,8 @@ jobs:
             throw "Built Smart Gate VST3 module is missing: $module"
           }
 
-          & $validator.FullName --strictness-level 5 $module
+          # GitHub-hosted Windows runners are headless; pluginval documents this flag for CI.
+          & $validator.FullName --strictness-level 5 --skip-gui-tests $module
           if ($LASTEXITCODE -ne 0) {
             throw "pluginval rejected Smart Gate VST3 (exit code $LASTEXITCODE)."
           }
