@@ -64,7 +64,11 @@ public:
         if (!hasPrevious_) {
             previous_ = current;
             hasPrevious_ = true;
-            return false;
+            // The zero-initialized FIR history defines the startup boundary.
+            // Emit its first filtered sample immediately; otherwise every
+            // reset loses one output sample and shifts the model-frame cadence.
+            output = current;
+            return true;
         }
 
         phase_ += outputRate_;
