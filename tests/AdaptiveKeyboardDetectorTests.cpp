@@ -1,4 +1,5 @@
 #include "AdaptiveKeyboardDetector.h"
+#include "AudioFeatures.h"
 
 #include <cmath>
 #include <cstdint>
