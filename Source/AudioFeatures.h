@@ -33,7 +33,7 @@ class FeatureExtractor {
 public:
     void prepare(double sampleRate) noexcept {
         const double safeRate = std::isfinite(sampleRate)
-            ? std::max(8000.0, sampleRate) : 44100.0;
+            ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
         lowCoefficient_ = static_cast<float>(
             std::exp(-2.0 * 3.14159265358979323846 * 250.0 / safeRate));
         midCoefficient_ = static_cast<float>(
