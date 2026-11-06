@@ -305,4 +305,47 @@ void runAdaptiveKeyboardDetectorTests() {
         requireKeyboard(std::abs(resetConfidence - freshConfidence) < 1.0e-6f,
                         "Reset detector must behave like a fresh detector");
     }
+
+    // Stereo analysis must not use (L + R) / 2: equal-level anti-phase
+    // channels would cancel a valid voice before VAD and feature extraction.
+    smartgate::StereoAnalysisFoldDown stereoFoldDown;
+    stereoFoldDown.prepare(48000.0);
+    float antiPhasePeak = 0.0f;
+    for (int i = 0; i < 512; ++i) {
+        const float sample = 0.4f * std::sin(
+            2.0f * 3.14159265f * 220.0f * static_cast<float>(i) / 48000.0f);
+        const float analysis = stereoFoldDown.process(sample, -sample);
+        antiPhasePeak = std::max(antiPhasePeak, std::abs(analysis));
+    }
+    requireKeyboard(antiPhasePeak > 0.39f,
+                    "Anti-phase stereo must not disappear from mono analysis");
+
+    // The analysis feed should follow the stronger channel instead of
+    // attenuating it through averaging when channel levels differ.
+    stereoFoldDown.reset();
+    float selectedRightPeak = 0.0f;
+    for (int i = 0; i < 2048; ++i) {
+        const float phase = static_cast<float>(i);
+        const float leftSample = 0.05f * std::sin(
+            2.0f * 3.14159265f * 180.0f * phase / 48000.0f);
+        const float rightSample = 0.35f * std::sin(
+            2.0f * 3.14159265f * 180.0f * phase / 48000.0f);
+        selectedRightPeak = std::max(selectedRightPeak,
+            std::abs(stereoFoldDown.process(leftSample, rightSample)));
+    }
+    requireKeyboard(selectedRightPeak > 0.34f,
+                    "Stereo analysis should select the stronger right channel");
+
+    // Mono input remains bit-transparent in the analysis path.
+    stereoFoldDown.reset();
+    for (int i = 0; i < 128; ++i) {
+        const float sample = 0.2f * std::sin(static_cast<float>(i) * 0.1f);
+        requireKeyboard(std::abs(stereoFoldDown.process(sample, sample) - sample) < 1.0e-6f,
+                        "Mono input must pass through stereo analysis unchanged");
+    }
+
+    stereoFoldDown.prepare(96000.0);
+    requireKeyboard(std::abs(stereoFoldDown.process(0.1f, 0.3f) - 0.1f) < 1.0e-6f,
+                    "Reprepare must clear stereo channel history");
+
 }
