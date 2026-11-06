@@ -112,6 +112,37 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(maximumMixedConfidence < 0.50f,
                     "Mixed speech and keyboard input must not accumulate near-certain keyboard confidence");
 
+    // Exercise each user-selectable classifier mode with voiced speech. The
+    // more sensitive membrane weighting must still avoid a strong false
+    // keyboard classification during ordinary sustained speech.
+    for (int mode = 0; mode < 3; ++mode) {
+        smartgate::AdaptiveKeyboardDetector modeDetector;
+        modeDetector.prepare(48000.0);
+        modeDetector.setMode(static_cast<smartgate::AdaptiveKeyboardDetector::Mode>(mode));
+        float modeSpeechMaximum = 0.0f;
+        for (int frame = 0; frame < 500; ++frame) {
+            const float syllablePhase = static_cast<float>(frame % 18);
+            const float time = static_cast<float>(frame * frameSize) / 48000.0f;
+            const float syllableEnvelope = syllablePhase < 2.0f
+                ? 0.0f
+                : std::min(1.0f, (syllablePhase - 1.0f) / 2.0f);
+            for (std::size_t i = 0; i < frameSize; ++i) {
+                const float t = time + static_cast<float>(i) / 48000.0f;
+                const float modulation = 0.55f + 0.45f
+                    * std::sin(2.0f * 3.14159265f * 3.0f * t)
+                    * std::sin(2.0f * 3.14159265f * 3.0f * t);
+                voicedSpeech[i] = 0.18f * syllableEnvelope * modulation
+                    * (std::sin(2.0f * 3.14159265f * 130.0f * t)
+                       + 0.45f * std::sin(2.0f * 3.14159265f * 260.0f * t)
+                       + 0.20f * std::sin(2.0f * 3.14159265f * 520.0f * t));
+            }
+            modeSpeechMaximum = std::max(modeSpeechMaximum,
+                modeDetector.processFrame(voicedSpeech.data(), voicedSpeech.size()));
+        }
+        requireKeyboard(modeSpeechMaximum < 0.46f,
+                        "No keyboard mode should strongly classify sustained voiced speech");
+    }
+
     std::vector<float> silenceFrame(frameSize, 0.0f);
     for (int frame = 0; frame < 30; ++frame)
         detector.processFrame(silenceFrame.data(), silenceFrame.size());
