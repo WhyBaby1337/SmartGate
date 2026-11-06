@@ -36,6 +36,30 @@ void runVadFrameAssemblerTests() {
                      "All three complete frames should be available in FIFO order");
     requireAssembler(!queue.pop(frame), "Partial samples must not be queued as a full frame");
 
+    // Exercise the full assembler at the model's native rate: exactly one
+    // model frame of host input must immediately become one queued frame.
+    using NativeRateQueue = smartgate::VadFrameQueue<512, 2>;
+    NativeRateQueue nativeRateQueue;
+    smartgate::VadFrameAssembler<NativeRateQueue> nativeRateAssembler(nativeRateQueue);
+    requireAssembler(nativeRateAssembler.prepare(16000.0, 16000.0, 77),
+                     "Assembler should support native 16 kHz input");
+    for (int i = 0; i < 512; ++i)
+        (void) nativeRateAssembler.processSample(static_cast<float>(i) / 512.0f,
+                                                 static_cast<std::uint64_t>(i));
+    NativeRateQueue::Frame nativeRateFrame{};
+    std::uint64_t nativeGeneration = 0;
+    std::uint64_t nativeSourcePosition = 0;
+    requireAssembler(nativeRateQueue.pop(nativeRateFrame, nativeGeneration,
+                                          nativeSourcePosition),
+                     "Exactly 512 native-rate samples must produce a complete VAD frame");
+    requireAssembler(nativeGeneration == 77 && nativeSourcePosition == 511,
+                     "Native-rate VAD frame must retain generation and final source position");
+    requireAssembler(nativeRateFrame.front() == 0.0f
+                     && nativeRateFrame.back() == 511.0f / 512.0f,
+                     "Native-rate VAD frame must preserve its first and final samples");
+    requireAssembler(!nativeRateQueue.pop(nativeRateFrame),
+                     "Native-rate input must produce exactly one frame, not duplicates");
+
     // Changing generations must discard a partial frame and resampler history.
     for (int i = 0; i < 300; ++i)
         (void) assembler.processSample(0.1f);
