@@ -79,6 +79,39 @@ void runAdaptiveKeyboardDetectorTests() {
     }
     requireKeyboard(maximumSpeechConfidence < 0.40f,
                     "Long-running voiced speech must not accumulate strong keyboard confidence");
+
+    // Speech remains present while occasional broadband key transients occur.
+    // The mixed signal should score higher than speech alone, but must not
+    // drive the detector into near-certain keyboard classification.
+    smartgate::AdaptiveKeyboardDetector mixedDetector;
+    mixedDetector.prepare(48000.0);
+    float maximumMixedConfidence = 0.0f;
+    for (int frame = 0; frame < 500; ++frame) {
+        const float syllablePhase = static_cast<float>(frame % 18);
+        const float time = static_cast<float>(frame * frameSize) / 48000.0f;
+        const float syllableEnvelope = syllablePhase < 2.0f
+            ? 0.0f
+            : std::min(1.0f, (syllablePhase - 1.0f) / 2.0f);
+        for (std::size_t i = 0; i < frameSize; ++i) {
+            const float t = time + static_cast<float>(i) / 48000.0f;
+            const float modulation = 0.55f + 0.45f
+                * std::sin(2.0f * 3.14159265f * 3.0f * t)
+                * std::sin(2.0f * 3.14159265f * 3.0f * t);
+            voicedSpeech[i] = 0.18f * syllableEnvelope * modulation
+                * (std::sin(2.0f * 3.14159265f * 130.0f * t)
+                   + 0.45f * std::sin(2.0f * 3.14159265f * 260.0f * t)
+                   + 0.20f * std::sin(2.0f * 3.14159265f * 520.0f * t));
+        }
+        if (frame % 8 == 4)
+            voicedSpeech[100] += 0.35f;
+        maximumMixedConfidence = std::max(maximumMixedConfidence,
+            mixedDetector.processFrame(voicedSpeech.data(), voicedSpeech.size()));
+    }
+    requireKeyboard(maximumMixedConfidence > maximumSpeechConfidence + 0.02f,
+                    "Intermittent keyboard transients should remain detectable over speech");
+    requireKeyboard(maximumMixedConfidence < 0.50f,
+                    "Mixed speech and keyboard input must not accumulate near-certain keyboard confidence");
+
     std::vector<float> silenceFrame(frameSize, 0.0f);
     for (int frame = 0; frame < 30; ++frame)
         detector.processFrame(silenceFrame.data(), silenceFrame.size());
