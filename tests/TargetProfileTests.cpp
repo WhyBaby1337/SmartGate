@@ -192,6 +192,19 @@ void runTargetProfileTests() {
     requireFeature(!restored.restore(corrupt),
                    "Spectral ratios that cannot sum to one must be rejected");
 
+    requireFeature(restored.frameCount() == saved.count
+                   && std::abs(restored.confidence(extracted)
+                               - profile.confidence(extracted)) < 1.0e-6f,
+                   "A rejected restore must leave the previously valid profile untouched");
+
+    requireFeature(restored.restore(smartgate::TargetProfile::Snapshot{}),
+                   "An empty snapshot must restore successfully");
+    requireFeature(restored.frameCount() == 0 && !restored.isReady()
+                   && restored.confidence(extracted) == 0.0f,
+                   "Restoring an empty profile must clear all previous training state");
+    requireFeature(restored.restore(saved),
+                   "A valid profile must still restore after an explicit clear");
+
     // The serialized count is stored as a signed XML integer. Keep learning
     // within the same validated bound used by restore() so it cannot overflow.
     auto atLimit = saved;
