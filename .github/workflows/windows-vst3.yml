@@ -86,9 +86,20 @@ jobs:
           }
 
           # GitHub-hosted Windows runners are headless; pluginval documents this flag for CI.
-          & $validator.FullName --strictness-level 5 --skip-gui-tests $module
-          if ($LASTEXITCODE -ne 0) {
-            throw "pluginval rejected Smart Gate VST3 (exit code $LASTEXITCODE)."
+          # Start-Process captures the native process exit code reliably, including
+          # abnormal termination, and preserves stdout/stderr for diagnosis.
+          $stdout = Join-Path $env:RUNNER_TEMP "pluginval-stdout.log"
+          $stderr = Join-Path $env:RUNNER_TEMP "pluginval-stderr.log"
+          $process = Start-Process -FilePath $validator.FullName `
+            -ArgumentList @("--strictness-level", "5", "--skip-gui-tests", $module) `
+            -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+
+          if (Test-Path -LiteralPath $stdout) { Get-Content -LiteralPath $stdout }
+          if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr }
+          Write-Host "pluginval process exit code: $($process.ExitCode)"
+          if ($process.ExitCode -ne 0) {
+            throw "pluginval rejected or crashed while validating Smart Gate VST3 (exit code $($process.ExitCode))."
           }
       - name: Upload VST3
         uses: actions/upload-artifact@v7
