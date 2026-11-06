@@ -337,6 +337,22 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(selectedRightPeak > 0.34f,
                     "Stereo analysis should select the stronger right channel");
 
+    // Reset is used at mono/disabled-analysis boundaries. A previous stereo
+    // layout must not bias channel selection when stereo analysis resumes.
+    stereoFoldDown.reset();
+    float selectedLeftAfterResetPeak = 0.0f;
+    for (int i = 0; i < 32; ++i) {
+        const float phase = static_cast<float>(i);
+        const float leftSample = 0.35f * std::sin(
+            2.0f * 3.14159265f * 180.0f * phase / 48000.0f);
+        const float rightSample = 0.05f * std::sin(
+            2.0f * 3.14159265f * 180.0f * phase / 48000.0f);
+        selectedLeftAfterResetPeak = std::max(selectedLeftAfterResetPeak,
+            std::abs(stereoFoldDown.process(leftSample, rightSample)));
+    }
+    requireKeyboard(selectedLeftAfterResetPeak > 0.34f,
+                    "Reset must discard stale channel-energy history before stereo analysis resumes");
+
     // Mono input remains bit-transparent in the analysis path.
     stereoFoldDown.reset();
     for (int i = 0; i < 128; ++i) {
