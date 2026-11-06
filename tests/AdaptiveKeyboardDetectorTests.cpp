@@ -14,6 +14,35 @@ void requireKeyboard(bool condition, const char* message) {
 }
 
 void runAdaptiveKeyboardDetectorTests() {
+    // Output gain must move smoothly at sample rate instead of stepping when
+    // the 256-sample classifier confidence changes at frame boundaries.
+    smartgate::AdaptiveKeyboardGain smoothedGain;
+    smoothedGain.prepare(48000.0);
+    const float firstAttackSample = smoothedGain.process(1.0f, 1.0f);
+    requireKeyboard(firstAttackSample < 1.0f && firstAttackSample > 0.98f,
+                    "Keyboard attenuation must ramp rather than step on its first sample");
+    float previousGain = firstAttackSample;
+    for (int i = 1; i < 144; ++i) {
+        const float gain = smoothedGain.process(1.0f, 1.0f);
+        requireKeyboard(gain <= previousGain && gain >= 0.0f && std::isfinite(gain),
+                        "Keyboard attack ramp must be finite, bounded, and monotonic");
+        previousGain = gain;
+    }
+    requireKeyboard(smoothedGain.getGain() < 0.40f,
+                    "Keyboard attenuation should reach useful level within its attack time");
+    previousGain = smoothedGain.getGain();
+    for (int i = 0; i < 1440; ++i) {
+        const float gain = smoothedGain.process(1.0f, 0.0f);
+        requireKeyboard(gain >= previousGain && gain <= 1.0f && std::isfinite(gain),
+                        "Keyboard release ramp must be finite, bounded, and monotonic");
+        previousGain = gain;
+    }
+    requireKeyboard(smoothedGain.getGain() > 0.75f,
+                    "Keyboard attenuation should release smoothly without a long tail");
+    smoothedGain.reset();
+    requireKeyboard(smoothedGain.getGain() == 1.0f,
+                    "Reset must restore unity keyboard output gain");
+
     constexpr std::size_t frameSize = 256;
     smartgate::AdaptiveKeyboardDetector detector;
     detector.prepare(48000.0);
