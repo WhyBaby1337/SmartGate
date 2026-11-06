@@ -71,6 +71,25 @@ void runVadResamplerTests() {
         throw std::runtime_error("44.1 kHz conversion emitted " + std::to_string(outputCount)
                                  + " samples; expected 1599 across host block boundaries");
 
+    // Equal-rate conversion needs no interpolation history. In particular,
+    // the first input sample must not be lost before the first VAD frame.
+    requireResampler(resampler.prepare(16000.0, 16000.0),
+                     "Equal-rate 16 kHz conversion should prepare");
+    outputCount = 0;
+    for (int i = 0; i < 512; ++i) {
+        const float input = static_cast<float>(i) / 512.0f;
+        requireResampler(resampler.processSample(input, output),
+                         "Equal-rate conversion should emit every input sample");
+        requireResampler(output == input,
+                         "Equal-rate conversion must preserve samples exactly");
+        ++outputCount;
+    }
+    requireResampler(outputCount == 512,
+                     "One 512-sample input frame must produce exactly one 512-sample VAD frame");
+    resampler.reset();
+    requireResampler(resampler.processSample(0.375f, output) && output == 0.375f,
+                     "Equal-rate conversion must emit the first sample after reset");
+
     // The FIR must preserve speech-band content while rejecting frequencies
     // above the 8 kHz destination Nyquist limit before they can alias.
     requireResampler(resampler.prepare(48000.0, 16000.0),
