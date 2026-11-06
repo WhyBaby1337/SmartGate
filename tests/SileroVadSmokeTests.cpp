@@ -219,6 +219,57 @@ int main() {
             throw std::runtime_error(
                 "Silero source-position discontinuity tests must complete all expected ONNX calls");
 
+        // Fractional host rates need a host-rate-aware discontinuity threshold.
+        // At 44.1 kHz one model frame spans 1411.2 host samples, so 2116
+        // samples is still within 1.5 frames while 2117 must reset the state.
+        Inference fractionalRateInference(BinaryData::silero_vad_onnx,
+            static_cast<std::size_t>(BinaryData::silero_vad_onnxSize), 44100.0);
+        Inference fractionalRateReference(BinaryData::silero_vad_onnx,
+            static_cast<std::size_t>(BinaryData::silero_vad_onnxSize), 44100.0);
+        (void) fractionalRateInference.infer(speechLike, 120, 10000);
+        (void) fractionalRateReference.infer(speechLike, 120);
+        const float fractionalBoundary = fractionalRateInference.infer(
+            speechLike, 120, 12116); // 2116 samples after the first frame
+        const float fractionalReference = fractionalRateReference.infer(speechLike, 120);
+        if (!std::isfinite(fractionalBoundary) || !std::isfinite(fractionalReference)
+            || std::abs(fractionalBoundary - fractionalReference) > 1.0e-6f)
+            throw std::runtime_error(
+                "Silero must preserve recurrent state within the fractional-rate 1.5-frame boundary");
+        Inference fractionalGapFresh(BinaryData::silero_vad_onnx,
+            static_cast<std::size_t>(BinaryData::silero_vad_onnxSize), 44100.0);
+        const float fractionalAfterGap = fractionalRateInference.infer(
+            speechLike, 120, 14233); // 2117 samples after the previous frame
+        const float fractionalFresh = fractionalGapFresh.infer(speechLike, 120, 14233);
+        if (!std::isfinite(fractionalAfterGap) || !std::isfinite(fractionalFresh)
+            || std::abs(fractionalAfterGap - fractionalFresh) > 1.0e-6f)
+            throw std::runtime_error(
+                "Silero must reset recurrent state one sample beyond the fractional-rate boundary");
+
+        // Repeat at the maximum supported host rate. A 96 kHz model frame
+        // spans 3072 host samples; the exact 4608-sample boundary is retained.
+        Inference highRateInference(BinaryData::silero_vad_onnx,
+            static_cast<std::size_t>(BinaryData::silero_vad_onnxSize), 96000.0);
+        Inference highRateReference(BinaryData::silero_vad_onnx,
+            static_cast<std::size_t>(BinaryData::silero_vad_onnxSize), 96000.0);
+        (void) highRateInference.infer(speechLike, 121, 20000);
+        (void) highRateReference.infer(speechLike, 121);
+        const float highRateBoundary = highRateInference.infer(
+            speechLike, 121, 24608); // exactly 4608 samples
+        const float highRateContinuous = highRateReference.infer(speechLike, 121);
+        if (!std::isfinite(highRateBoundary) || !std::isfinite(highRateContinuous)
+            || std::abs(highRateBoundary - highRateContinuous) > 1.0e-6f)
+            throw std::runtime_error(
+                "Silero must preserve recurrent state at the 96 kHz 1.5-frame boundary");
+        Inference highRateGapFresh(BinaryData::silero_vad_onnx,
+            static_cast<std::size_t>(BinaryData::silero_vad_onnxSize), 96000.0);
+        const float highRateAfterGap = highRateInference.infer(
+            speechLike, 121, 29217); // 4609 samples after the previous frame
+        const float highRateFresh = highRateGapFresh.infer(speechLike, 121, 29217);
+        if (!std::isfinite(highRateAfterGap) || !std::isfinite(highRateFresh)
+            || std::abs(highRateAfterGap - highRateFresh) > 1.0e-6f)
+            throw std::runtime_error(
+                "Silero must reset recurrent state one sample beyond the 96 kHz boundary");
+
         std::cout << "Silero ONNX smoke test passed.\n";
         return 0;
     } catch (const std::exception& e) {
