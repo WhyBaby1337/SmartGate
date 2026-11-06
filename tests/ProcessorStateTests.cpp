@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <limits>
 
 namespace {
 [[noreturn]] void fail(const char* message) {
@@ -46,6 +47,54 @@ juce::XmlElement* parameter(juce::XmlElement& xml, const juce::String& id) {
             return child;
     }
     return nullptr;
+}
+void setParameter(SmartGateAudioProcessor& processor, const juce::String& id,
+                  float plainValue) {
+    for (auto* parameterBase : processor.getParameters()) {
+        auto* parameterWithId =
+            dynamic_cast<juce::AudioProcessorParameterWithID*>(parameterBase);
+        auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameterBase);
+        if (parameterWithId != nullptr && ranged != nullptr
+            && parameterWithId->paramID.paramID == id) {
+            parameterBase->setValueNotifyingHost(ranged->convertTo0to1(plainValue));
+            return;
+        }
+    }
+    fail("runtime test parameter must exist");
+}
+void testRuntimeBlockAndToggleTransitions() {
+    SmartGateAudioProcessor processor;
+    juce::MidiBuffer midi;
+    constexpr int blockSizes[] = {1, 63, 256, 511, 1024};
+    for (const double rate : {44100.0, 48000.0, 96000.0}) {
+        processor.prepareToPlay(rate, 1024);
+        for (int cycle = 0; cycle < 3; ++cycle) {
+            setParameter(processor, "aiEnabled", cycle == 1 ? 0.0f : 1.0f);
+            setParameter(processor, "learnTarget", cycle == 2 ? 1.0f : 0.0f);
+            setParameter(processor, "keyboardReduction", cycle == 0 ? 0.0f : 0.8f);
+            setParameter(processor, "keyboardMode", static_cast<float>(cycle));
+            setParameter(processor, "targetAmount", cycle == 1 ? 0.0f : 0.75f);
+            for (const int blockSize : blockSizes) {
+                juce::AudioBuffer<float> buffer(2, blockSize);
+                for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+                    auto* samples = buffer.getWritePointer(channel);
+                    for (int i = 0; i < blockSize; ++i) {
+                        const double phase = 2.0 * juce::MathConstants<double>::pi
+                            * 220.0 * static_cast<double>(i) / rate;
+                        samples[i] = static_cast<float>(0.2 * std::sin(phase));
+                    }
+                }
+                if (blockSize > 1)
+                    buffer.getWritePointer(0)[0] = std::numeric_limits<float>::quiet_NaN();
+                processor.processBlock(buffer, midi);
+                for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+                    for (int i = 0; i < blockSize; ++i)
+                        require(std::isfinite(buffer.getReadPointer(channel)[i]),
+                                "runtime processing must keep output finite across toggles and block sizes");
+            }
+        }
+        processor.releaseResources();
+    }
 }
 void testImmediateRoundTrip() {
     SmartGateAudioProcessor source;
@@ -123,6 +172,7 @@ void testInvalidAndLegacyStatesClearProfile() {
 int main() {
     testImmediateRoundTrip();
     testInvalidAndLegacyStatesClearProfile();
+    testRuntimeBlockAndToggleTransitions();
     std::cout << "All processor state integration tests passed.\n";
     return 0;
 }
