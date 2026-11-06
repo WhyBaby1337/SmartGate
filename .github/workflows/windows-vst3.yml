@@ -113,6 +113,31 @@ jobs:
           if ($process.ExitCode -ne 0) {
             throw "pluginval rejected or crashed while validating Smart Gate VST3 (exit code $($process.ExitCode))."
           }
+      - name: Analyze pluginval crash dump
+        if: always()
+        shell: pwsh
+        run: |
+          $dump = Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "pluginval-dumps") -Filter "*.dmp" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $dump) {
+            Write-Host "No pluginval crash dump was produced; skipping dump analysis."
+            exit 0
+          }
+
+          $analysis = Join-Path $env:RUNNER_TEMP "pluginval-dump-analysis.txt"
+          $debugger = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Filter "cdb.exe" -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "\\Debuggers\\x64\\cdb\.exe$" } | Select-Object -First 1
+          if (-not $debugger) {
+            "CDB debugger was not found on this runner. Dump retained for offline analysis: $($dump.FullName)" | Set-Content -LiteralPath $analysis
+            exit 0
+          }
+
+          $pdbDirectories = Get-ChildItem -LiteralPath "build" -Filter "*.pdb" -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.DirectoryName } | Sort-Object -Unique
+          $symbolPath = (@($pdbDirectories) + @("srv*$env:RUNNER_TEMP\\symbols*https://msdl.microsoft.com/download/symbols")) -join ";"
+          "Dump: $($dump.FullName)" | Set-Content -LiteralPath $analysis
+          "Debugger: $($debugger.FullName)" | Add-Content -LiteralPath $analysis
+          "Symbol path: $symbolPath" | Add-Content -LiteralPath $analysis
+          & $debugger.FullName -z $dump.FullName -y $symbolPath -c "!analyze -v; .ecxr; kv; lm; q" 2>&1 | Add-Content -LiteralPath $analysis
+          Write-Host "Crash dump analysis written to $analysis"
+
       - name: Upload pluginval crash diagnostics
         if: always()
         uses: actions/upload-artifact@v7
@@ -122,6 +147,8 @@ jobs:
             ${{ runner.temp }}/pluginval-dumps/*.dmp
             ${{ runner.temp }}/pluginval-stdout.log
             ${{ runner.temp }}/pluginval-stderr.log
+            ${{ runner.temp }}/pluginval-dump-analysis.txt
+            build/**/*.pdb
           if-no-files-found: ignore
 
       - name: Upload VST3
