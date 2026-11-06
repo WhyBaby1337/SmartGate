@@ -121,13 +121,19 @@ void runVadInferenceWorkerTests() {
     requireWorker(!worker.isRunning(), "Worker should stop and join cleanly");
     requireWorker(!worker.start(nullptr, &probe, 12),
                   "Stopped worker must still reject a null callback");
-    requireWorker(worker.start(&fakeInference, &probe, 12),
+    // Reuse the same generation across a lifecycle restart. A previous
+    // run's snapshot must not become visible before fresh inference completes.
+    requireWorker(worker.start(&fakeInference, &probe, 11),
                   "Worker should be restartable after a completed stop");
+    requireWorker(worker.latestProbability(11) == 0.0f,
+                  "Restart must clear a previously published result even when the generation is reused");
+    requireWorker(worker.publishedResultCount() == 0,
+                  "Published-result diagnostics must restart with a clean worker lifecycle");
 
     const auto resultsBeforeClamp = worker.publishedResultCount();
     std::array<float, 8> aboveRangeFrame{};
     aboveRangeFrame.fill(2.0f);
-    requireWorker(queue.push(aboveRangeFrame.data(), 12),
+    requireWorker(queue.push(aboveRangeFrame.data(), 11),
                   "Queue should accept a frame used to test probability clamping");
     requireWorker(waitForCalls(probe, 3),
                   "Restarted worker should process the clamping test frame");
@@ -137,13 +143,13 @@ void runVadInferenceWorkerTests() {
         std::this_thread::yield();
     requireWorker(worker.publishedResultCount() > resultsBeforeClamp,
                   "Worker should finish publishing the clamping test result");
-    requireWorker(worker.latestProbability(12) == 1.0f,
+    requireWorker(worker.latestProbability(11) == 1.0f,
                   "Worker must clamp probabilities above one");
 
     const auto resultsBeforeNonFinite = worker.publishedResultCount();
     std::array<float, 8> nonFiniteFrame{};
     nonFiniteFrame.fill(std::numeric_limits<float>::quiet_NaN());
-    requireWorker(queue.push(nonFiniteFrame.data(), 12),
+    requireWorker(queue.push(nonFiniteFrame.data(), 11),
                   "Queue should accept a frame used to test non-finite probabilities");
     requireWorker(waitForCalls(probe, 4),
                   "Worker should process the non-finite probability test frame");
@@ -153,7 +159,7 @@ void runVadInferenceWorkerTests() {
         std::this_thread::yield();
     requireWorker(worker.publishedResultCount() > resultsBeforeNonFinite,
                   "Worker should finish publishing the non-finite test result");
-    requireWorker(worker.latestProbability(12) == 0.0f,
+    requireWorker(worker.latestProbability(11) == 0.0f,
                   "Worker must convert non-finite probabilities to zero");
 
     worker.stop();
