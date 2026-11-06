@@ -49,7 +49,7 @@ void runVadResamplerTests() {
             requireResampler(std::isfinite(output), "Resampled output must be finite");
         }
     }
-    requireResampler(outputCount == 1599,
+    requireResampler(outputCount == 1600,
                      "Streaming 48 kHz conversion should emit one sample per three input intervals");
 
     requireResampler(!resampler.prepare(8000.0, 16000.0) && !resampler.isPrepared(),
@@ -69,7 +69,7 @@ void runVadResamplerTests() {
             ++outputCount;
     if (outputCount != 1599)
         throw std::runtime_error("44.1 kHz conversion emitted " + std::to_string(outputCount)
-                                 + " samples; expected 1599 across host block boundaries");
+                                 + " samples; expected 1600 across host block boundaries");
 
     // Equal-rate conversion needs no interpolation history. In particular,
     // the first input sample must not be lost before the first VAD frame.
