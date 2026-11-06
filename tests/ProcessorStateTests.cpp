@@ -165,6 +165,36 @@ void testImmediateRoundTrip() {
             "repeated save/load must preserve target profile");
 }
 
+void testPreparedRestoreCanBeSavedBeforeAudioCallback() {
+    SmartGateAudioProcessor fixtureProcessor;
+    juce::MemoryBlock fixtureData;
+    auto fixture = saveXml(fixtureProcessor, fixtureData);
+    addValidProfile(*fixture, 37);
+    auto* threshold = parameter(*fixture, "threshold");
+    require(threshold != nullptr, "prepared restore fixture must contain threshold");
+    threshold->setAttribute("value", -21.7);
+    juce::MemoryBlock encodedFixture;
+    encode(fixtureProcessor, *fixture, encodedFixture);
+
+    SmartGateAudioProcessor processor;
+    processor.prepareToPlay(48000.0, 256);
+    processor.setStateInformation(encodedFixture.getData(),
+                                  static_cast<int>(encodedFixture.getSize()));
+
+    // Hosts may save immediately after restoring a preset/project, before
+    // the next processBlock() has had a chance to apply the pending profile.
+    juce::MemoryBlock immediate;
+    auto savedXml = saveXml(processor, immediate);
+    auto* savedProfile = profile(*savedXml);
+    require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 37,
+            "saving immediately after a prepared restore must preserve the pending profile");
+    auto* savedThreshold = parameter(*savedXml, "threshold");
+    require(savedThreshold != nullptr
+                && std::abs(savedThreshold->getDoubleAttribute("value") + 21.7) < 1.0e-4,
+            "saving immediately after a prepared restore must preserve restored parameters");
+    processor.releaseResources();
+}
+
 void testInvalidProfileVariantsClearPreviousProfile() {
     SmartGateAudioProcessor processor;
     juce::MemoryBlock empty;
@@ -371,6 +401,7 @@ void testInvalidAndLegacyStatesClearProfile() {
 
 int main() {
     testImmediateRoundTrip();
+    testPreparedRestoreCanBeSavedBeforeAudioCallback();
     testInvalidAndLegacyStatesClearProfile();
     testLearnTargetRequestWaitsUntilAiIsEnabled();
     testExplicitLearningWinsOverPendingProfileRestore();
