@@ -52,6 +52,39 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(detector.getConfidence() < 0.2f,
                     "A stable low-frequency tone should not look like keyboard clicks");
 
+    // Long-running voiced speech has periodic syllable onsets and harmonic
+    // energy. It must not accumulate keyboard confidence merely because its
+    // amplitude rises and falls over many consecutive analysis frames.
+    detector.reset();
+    std::vector<float> voicedSpeech(frameSize);
+    float maximumSpeechConfidence = 0.0f;
+    for (int frame = 0; frame < 500; ++frame) {
+        const float syllablePhase = static_cast<float>(frame % 18);
+        const float time = static_cast<float>(frame * frameSize) / 48000.0f;
+        const float syllableEnvelope = syllablePhase < 2.0f
+            ? 0.0f
+            : std::min(1.0f, (syllablePhase - 1.0f) / 2.0f);
+        for (std::size_t i = 0; i < frameSize; ++i) {
+            const float t = time + static_cast<float>(i) / 48000.0f;
+            const float modulation = 0.55f + 0.45f
+                * std::sin(2.0f * 3.14159265f * 3.0f * t)
+                * std::sin(2.0f * 3.14159265f * 3.0f * t);
+            voicedSpeech[i] = 0.18f * syllableEnvelope * modulation
+                * (std::sin(2.0f * 3.14159265f * 130.0f * t)
+                   + 0.45f * std::sin(2.0f * 3.14159265f * 260.0f * t)
+                   + 0.20f * std::sin(2.0f * 3.14159265f * 520.0f * t));
+        }
+        maximumSpeechConfidence = std::max(maximumSpeechConfidence,
+            detector.processFrame(voicedSpeech.data(), voicedSpeech.size()));
+    }
+    requireKeyboard(maximumSpeechConfidence < 0.40f,
+                    "Long-running voiced speech must not accumulate strong keyboard confidence");
+    std::vector<float> silenceFrame(frameSize, 0.0f);
+    for (int frame = 0; frame < 30; ++frame)
+        detector.processFrame(silenceFrame.data(), silenceFrame.size());
+    requireKeyboard(detector.getConfidence() < 0.01f,
+                    "Keyboard confidence must decay during sustained silence");
+
     // Sustained broadband noise is bright, but it is not a sequence of
     // keyboard-like transients. The classifier must not rely on brightness
     // alone to create a high confidence score.
