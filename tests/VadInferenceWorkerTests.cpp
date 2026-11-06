@@ -445,4 +445,26 @@ void runVadInferenceWorkerTests() {
                       "Sustained traffic must execute inference callbacks");
         sustainedWorker.stop();
     }
+
+    // An idle worker must also observe the lock-free stop request and exit
+    // without requiring another audio frame to wake it.
+    {
+        Queue idleQueue;
+        InferenceProbe idleProbe;
+        smartgate::VadInferenceWorker<Queue> idleWorker(idleQueue);
+        requireWorker(idleWorker.start(&fakeInference, &idleProbe, 31),
+                      "Worker should start for idle stop-request coverage");
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        idleWorker.requestStop();
+        const auto idleStopDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(2);
+        while (idleWorker.isRunning()
+               && std::chrono::steady_clock::now() < idleStopDeadline)
+            std::this_thread::yield();
+        requireWorker(!idleWorker.isRunning(),
+                      "Idle worker must exit after a stop request without new frames");
+        requireWorker(idleProbe.calls.load(std::memory_order_acquire) == 0,
+                      "Idle stop-request test must not invoke inference without a frame");
+        idleWorker.stop();
+    }
 }
