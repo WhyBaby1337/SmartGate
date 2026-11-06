@@ -51,15 +51,20 @@ public:
         publishedResultCount_.store(0, std::memory_order_relaxed);
         stopRequested_.store(false, std::memory_order_release);
 
+        // Publish the running state before the new thread can observe a
+        // stop request and exit. Setting it after construction races with
+        // run()'s final running_=false store and can leave a stopped worker
+        // incorrectly reported as running.
+        running_.store(true, std::memory_order_release);
         try {
             thread_ = std::thread(&VadInferenceWorker::run, this);
         } catch (...) {
+            running_.store(false, std::memory_order_release);
             inference_ = nullptr;
             context_ = nullptr;
             return false;
         }
 
-        running_.store(true, std::memory_order_release);
         return true;
     }
 
