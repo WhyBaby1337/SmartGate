@@ -65,6 +65,24 @@ jobs:
           }
 
           Write-Host "VST3 module, ONNX Runtime, and third-party notices are present."
+      - name: Validate VST3 with pluginval
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "pluginval_Windows.zip"
+          $tools = Join-Path $env:RUNNER_TEMP "pluginval"
+          Invoke-WebRequest -Uri "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip" -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $tools -Force
+
+          $validator = Get-ChildItem -LiteralPath $tools -Filter "pluginval.exe" -File -Recurse | Select-Object -First 1
+          if (-not $validator) { throw "Pinned pluginval v1.0.4 executable was not found in its release archive." }
+          if (-not $module -or -not (Test-Path -LiteralPath $module -PathType Leaf)) {
+            throw "Built Smart Gate VST3 module is missing: $module"
+          }
+
+          & $validator.FullName --strictness-level 5 $module
+          if ($LASTEXITCODE -ne 0) {
+            throw "pluginval rejected Smart Gate VST3 (exit code $LASTEXITCODE)."
+          }
       - name: Upload VST3
         uses: actions/upload-artifact@v7
         with:
