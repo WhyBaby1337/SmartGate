@@ -118,6 +118,11 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     featureExtractor_.prepare(safeSampleRate);
     keyboardDetector_.prepare(safeSampleRate);
     keyboardConfidence_ = 0.0f;
+    keyboardGainSmoothed_ = 1.0f;
+    keyboardGainAttackCoefficient_ = static_cast<float>(
+        std::exp(-1.0 / (0.003 * safeSampleRate)));
+    keyboardGainReleaseCoefficient_ = static_cast<float>(
+        std::exp(-1.0 / (0.030 * safeSampleRate)));
     featureFramePosition_ = 0;
     featureFrame_.fill(0.0f);
     targetConfidenceTarget_ = 1.0f;
@@ -368,9 +373,19 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float targetGain = aiEnabled
             ? (1.0f - targetAmount) + targetAmount * targetConfidenceSmoothed_
             : 1.0f;
-        const float keyboardDetectorGain =
+        // Keyboard classification controls the output level, not the gate
+        // detector. Feeding this factor into the detector would only make the
+        // gate close sooner; it would not reduce keyboard transients while
+        // speech keeps the gate open. Smooth the gain at sample rate to avoid
+        // 256-sample frame-boundary steps becoming audible zipper noise.
+        const float keyboardGainTarget =
             smartgate::AdaptiveKeyboardDetector::gainForReduction(
                 keyboardReduction, keyboardConfidence_);
+        const float keyboardGainCoefficient = keyboardGainTarget < keyboardGainSmoothed_
+            ? keyboardGainAttackCoefficient_ : keyboardGainReleaseCoefficient_;
+        keyboardGainSmoothed_ = keyboardGainTarget
+            + keyboardGainCoefficient * (keyboardGainSmoothed_ - keyboardGainTarget);
+
         // Silero is an assist to the conventional level detector, not a hard
         // gate override. A confident speech result gently lifts the detector
         // above threshold; silence/no result leaves classic gate behavior intact.
@@ -380,12 +395,12 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float vadAssistedPeak = vadAssist > 0.0f
             ? juce::jmax(linkedPeak, thresholdLinear * (0.75f + 0.75f * vadAssist))
             : linkedPeak;
-        const float gain = gateEnvelope_.process(
-            vadAssistedPeak * targetGain * keyboardDetectorGain);
+        const float gateGain = gateEnvelope_.process(vadAssistedPeak * targetGain);
+        const float outputGain = gateGain * keyboardGainSmoothed_;
 
-        left[sample] = leftSample * gain;
+        left[sample] = leftSample * outputGain;
         if (right != nullptr)
-            right[sample] = rightSample * gain;
+            right[sample] = rightSample * outputGain;
     }
 }
 
