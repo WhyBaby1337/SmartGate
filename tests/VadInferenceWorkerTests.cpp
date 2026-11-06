@@ -304,6 +304,45 @@ void runVadInferenceWorkerTests() {
                       "Shutdown must not increment the published-result counter");
     }
 
+    // A real-time stop request must be non-blocking while inference is in flight.
+    // The owner joins later from its non-audio lifecycle path.
+    {
+        Queue requestQueue;
+        BlockingProbe requestProbe;
+        smartgate::VadInferenceWorker<Queue> requestWorker(requestQueue);
+        requireWorker(requestWorker.start(&blockingInference, &requestProbe, 27),
+                      "Worker should start for the real-time stop-request test");
+        std::array<float, 8> requestFrame{};
+        requestFrame.fill(0.6f);
+        requireWorker(requestQueue.push(requestFrame.data(), 27),
+                      "Stop-request test frame should be queued");
+        const auto requestEnteredDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(2);
+        while (!requestProbe.entered.load(std::memory_order_acquire)
+               && std::chrono::steady_clock::now() < requestEnteredDeadline)
+            std::this_thread::yield();
+        const bool requestInferenceEntered =
+            requestProbe.entered.load(std::memory_order_acquire);
+        if (!requestInferenceEntered)
+            requestProbe.release.store(true, std::memory_order_release);
+        requireWorker(requestInferenceEntered,
+                      "Inference should be in flight before the stop request");
+
+        requestWorker.requestStop();
+        requestProbe.release.store(true, std::memory_order_release);
+        const auto requestStoppedDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(2);
+        while (requestWorker.isRunning()
+               && std::chrono::steady_clock::now() < requestStoppedDeadline)
+            std::this_thread::yield();
+        requireWorker(!requestWorker.isRunning(),
+                      "Real-time stop request should let the worker exit after inference returns");
+        requireWorker(requestWorker.latestProbability(27) == 0.0f
+                      && requestWorker.publishedResultCount() == 0,
+                      "A result completing after a stop request must not be published");
+        requestWorker.stop();
+    }
+
     // Sustained producer/worker traffic: the producer must never wait on
     // inference, and after a burst the worker must converge to the newest
     // accepted frame instead of publishing an old backlog indefinitely.
