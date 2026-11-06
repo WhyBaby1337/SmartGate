@@ -21,7 +21,7 @@ void runVadFrameAssemblerTests() {
     for (int i = 0; i < 4800; ++i)
         (void) assembler.processSample(std::sin(static_cast<float>(i) * 0.01f));
 
-    requireAssembler(assembler.pendingSamples() == 63,
+    requireAssembler(assembler.pendingSamples() == 64,
                      "Assembler should retain the partial frame across host blocks");
     requireAssembler(assembler.droppedFrames() == 0,
                      "Assembler should not drop frames while queue capacity remains");
@@ -89,7 +89,7 @@ void runVadFrameAssemblerTests() {
     }
     requireAssembler(fractionalFrames == 31,
                      "One second at 44.1 kHz must assemble 31 complete 512-sample VAD frames");
-    requireAssembler(fractionalRateAssembler.pendingSamples() == 127,
+    requireAssembler(fractionalRateAssembler.pendingSamples() == 128,
                      "Fractional-rate assembly must retain only the expected partial frame");
 
     // Changing generations must discard a partial frame and resampler history.
