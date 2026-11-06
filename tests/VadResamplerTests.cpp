@@ -37,6 +37,16 @@ void runVadResamplerTests() {
                      "VAD resampler must reject invalid rates");
     requireResampler(!resampler.prepare(192000.0, 16000.0),
                      "VAD resampler must reject rates beyond its real-time FIR design limit");
+    requireResampler(!resampler.prepare(std::numeric_limits<double>::quiet_NaN(), 16000.0),
+                     "VAD resampler must reject a non-finite input rate");
+    requireResampler(!resampler.prepare(std::numeric_limits<double>::infinity(), 16000.0),
+                     "VAD resampler must reject an infinite input rate");
+    requireResampler(!resampler.prepare(48000.0, std::numeric_limits<double>::quiet_NaN()),
+                     "VAD resampler must reject a non-finite output rate");
+    requireResampler(!resampler.prepare(48000.0, 0.0),
+                     "VAD resampler must reject a zero output rate");
+    requireResampler(!resampler.prepare(48000.0, -1.0),
+                     "VAD resampler must reject a negative output rate");
     requireResampler(resampler.prepare(48000.0, 16000.0),
                      "48 kHz to 16 kHz preparation should succeed");
 
@@ -89,6 +99,15 @@ void runVadResamplerTests() {
     resampler.reset();
     requireResampler(resampler.processSample(0.375f, output) && output == 0.375f,
                      "Equal-rate conversion must emit the first sample after reset");
+
+    requireResampler(resampler.processSample(std::numeric_limits<float>::quiet_NaN(), output)
+                     && output == 0.0f,
+                     "Equal-rate conversion must sanitize NaN input to silence");
+    requireResampler(resampler.processSample(std::numeric_limits<float>::infinity(), output)
+                     && output == 0.0f,
+                     "Equal-rate conversion must sanitize infinite input to silence");
+    requireResampler(resampler.processSample(-0.25f, output) && output == -0.25f,
+                     "Non-finite input must not corrupt subsequent valid equal-rate samples");
 
     // The FIR must preserve speech-band content while rejecting frequencies
     // above the 8 kHz destination Nyquist limit before they can alias.
