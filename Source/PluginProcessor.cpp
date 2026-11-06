@@ -386,9 +386,12 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         // Silero is an assist to the conventional level detector, not a hard
         // gate override. A confident speech result gently lifts the detector
         // above threshold; silence/no result leaves classic gate behavior intact.
-        const float vadAssist = aiEnabled && vadAvailable_
+        float vadAssist = 0.0f;
+#if defined(SMARTGATE_HAS_SILERO)
+        vadAssist = aiEnabled && vadAvailable_
             ? juce::jlimit(0.0f, 1.0f, (vadProbabilitySmoothed_ - 0.35f) / 0.40f)
             : 0.0f;
+#endif
         const float vadAssistedPeak = vadAssist > 0.0f
             ? juce::jmax(linkedPeak, thresholdLinear * (0.75f + 0.75f * vadAssist))
             : linkedPeak;
