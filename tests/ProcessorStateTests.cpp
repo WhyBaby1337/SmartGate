@@ -96,6 +96,34 @@ void testRuntimeBlockAndToggleTransitions() {
         processor.releaseResources();
     }
 }
+void testMonoRuntimeProcessing() {
+    SmartGateAudioProcessor processor;
+    juce::MidiBuffer midi;
+    constexpr int blockSizes[] = {1, 63, 256, 511, 1024};
+    for (const double rate : {44100.0, 48000.0, 96000.0}) {
+        processor.prepareToPlay(rate, 1024);
+        for (const bool enableAnalysis : {false, true}) {
+            setParameter(processor, "aiEnabled", enableAnalysis ? 1.0f : 0.0f);
+            setParameter(processor, "keyboardReduction", enableAnalysis ? 0.7f : 0.0f);
+            for (const int blockSize : blockSizes) {
+                juce::AudioBuffer<float> buffer(1, blockSize);
+                auto* samples = buffer.getWritePointer(0);
+                for (int i = 0; i < blockSize; ++i) {
+                    const double phase = 2.0 * juce::MathConstants<double>::pi
+                        * 330.0 * static_cast<double>(i) / rate;
+                    samples[i] = static_cast<float>(0.15 * std::sin(phase));
+                }
+                if (blockSize > 1)
+                    samples[0] = std::numeric_limits<float>::quiet_NaN();
+                processor.processBlock(buffer, midi);
+                for (int i = 0; i < blockSize; ++i)
+                    require(std::isfinite(samples[i]),
+                            "mono runtime processing must keep output finite across block sizes and analyzer states");
+            }
+        }
+        processor.releaseResources();
+    }
+}
 void testImmediateRoundTrip() {
     SmartGateAudioProcessor source;
     juce::MemoryBlock unused;
@@ -173,6 +201,7 @@ int main() {
     testImmediateRoundTrip();
     testInvalidAndLegacyStatesClearProfile();
     testRuntimeBlockAndToggleTransitions();
+    testMonoRuntimeProcessing();
     std::cout << "All processor state integration tests passed.\n";
     return 0;
 }
