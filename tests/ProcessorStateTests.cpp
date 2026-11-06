@@ -16,10 +16,10 @@ void require(bool condition, const char* message) {
 std::unique_ptr<juce::XmlElement> saveXml(SmartGateAudioProcessor& processor,
                                           juce::MemoryBlock& data) {
     processor.getStateInformation(data);
-    auto* xml = juce::AudioProcessor::getXmlFromBinary(
+    auto xml = juce::AudioProcessor::getXmlFromBinary(
         data.getData(), static_cast<int>(data.getSize()));
     require(xml != nullptr, "saved processor state must decode");
-    return std::unique_ptr<juce::XmlElement>(xml);
+    return xml;
 }
 void encode(SmartGateAudioProcessor& processor, const juce::XmlElement& xml,
             juce::MemoryBlock& data) {
