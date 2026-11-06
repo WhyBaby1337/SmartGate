@@ -18,6 +18,19 @@ void runAdaptiveKeyboardDetectorTests() {
     smartgate::AdaptiveKeyboardDetector detector;
     detector.prepare(48000.0);
 
+    smartgate::AdaptiveKeyboardDetector maximumRateDetector;
+    smartgate::AdaptiveKeyboardDetector extremeRateDetector;
+    maximumRateDetector.prepare(768000.0);
+    extremeRateDetector.prepare(std::numeric_limits<double>::max());
+    std::vector<float> rateProbe(frameSize, 0.0f);
+    rateProbe[100] = 0.8f;
+    const float maximumRateConfidence = maximumRateDetector.processFrame(
+        rateProbe.data(), rateProbe.size());
+    const float extremeRateConfidence = extremeRateDetector.processFrame(
+        rateProbe.data(), rateProbe.size());
+    requireKeyboard(std::abs(maximumRateConfidence - extremeRateConfidence) < 1.0e-6f,
+                    "Extreme finite sample rates must clamp to the supported maximum");
+
     std::vector<float> clickFrame(frameSize, 0.0f);
     clickFrame[100] = 0.8f;
     float clickConfidence = 0.0f;
