@@ -60,6 +60,37 @@ void runVadFrameAssemblerTests() {
     requireAssembler(!nativeRateQueue.pop(nativeRateFrame),
                      "Native-rate input must produce exactly one frame, not duplicates");
 
+    // Exercise the complete assembler at 44.1 kHz, where the 16000/44100
+    // ratio is non-integer. Frame timestamps must remain monotonic and close
+    // to the expected host-sample distance so VAD freshness/discontinuity
+    // checks do not mistake normal fractional resampling cadence for a gap.
+    using FractionalRateQueue = smartgate::VadFrameQueue<512, 64>;
+    FractionalRateQueue fractionalRateQueue;
+    smartgate::VadFrameAssembler<FractionalRateQueue> fractionalRateAssembler(
+        fractionalRateQueue);
+    requireAssembler(fractionalRateAssembler.prepare(44100.0, 16000.0, 88),
+                     "Assembler should support fractional 44.1 kHz conversion");
+    for (int i = 0; i < 44100; ++i)
+        (void) fractionalRateAssembler.processSample(
+            static_cast<float>(i % 97) / 97.0f, static_cast<std::uint64_t>(i));
+    std::uint64_t previousSourcePosition = 0;
+    std::size_t fractionalFrames = 0;
+    while (fractionalRateQueue.pop(frame, generation, sourcePosition)) {
+        requireAssembler(generation == 88,
+                         "Fractional-rate frames must retain their generation");
+        if (fractionalFrames != 0) {
+            const auto sourceDelta = sourcePosition - previousSourcePosition;
+            requireAssembler(sourceDelta >= 1411 && sourceDelta <= 1412,
+                             "44.1 kHz frame timestamps must follow the fractional 512-sample cadence");
+        }
+        previousSourcePosition = sourcePosition;
+        ++fractionalFrames;
+    }
+    requireAssembler(fractionalFrames == 31,
+                     "One second at 44.1 kHz must assemble 31 complete 512-sample VAD frames");
+    requireAssembler(fractionalRateAssembler.pendingSamples() == 127,
+                     "Fractional-rate assembly must retain only the expected partial frame");
+
     // Changing generations must discard a partial frame and resampler history.
     for (int i = 0; i < 300; ++i)
         (void) assembler.processSample(0.1f);
