@@ -304,6 +304,68 @@ void runVadInferenceWorkerTests() {
                       "Shutdown must not increment the published-result counter");
     }
 
+    // Restart must clear frames left in the SPSC queue after a worker stops.
+    // This models a shutdown during a busy audio period followed by prepareToPlay.
+    {
+        Queue restartQueue;
+        BlockingProbe restartProbe;
+        smartgate::VadInferenceWorker<Queue> restartWorker(restartQueue);
+        requireWorker(restartWorker.start(&blockingInference, &restartProbe, 26),
+                      "Worker should start for the queued-frame restart test");
+        std::array<float, 8> activeFrame{};
+        activeFrame.fill(0.3f);
+        requireWorker(restartQueue.push(activeFrame.data(), 26),
+                      "Active inference frame should be queued before restart");
+        const auto activeDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(2);
+        while (!restartProbe.entered.load(std::memory_order_acquire)
+               && std::chrono::steady_clock::now() < activeDeadline)
+            std::this_thread::yield();
+        const bool activeEntered = restartProbe.entered.load(std::memory_order_acquire);
+        if (!activeEntered)
+            restartProbe.release.store(true, std::memory_order_release);
+        requireWorker(activeEntered,
+                      "Worker inference should be active before queuing restart backlog");
+
+        std::array<float, 8> staleQueuedFrame{};
+        staleQueuedFrame.fill(0.9f);
+        requireWorker(restartQueue.push(staleQueuedFrame.data(), 26, 999),
+                      "A stale frame should remain queued behind the active inference");
+        std::thread releaseRestartInference([&restartProbe] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            restartProbe.release.store(true, std::memory_order_release);
+        });
+        restartWorker.stop();
+        releaseRestartInference.join();
+        requireWorker(!restartWorker.isRunning(),
+                      "Original worker should be fully stopped before restart");
+
+        InferenceProbe freshRestartProbe;
+        requireWorker(restartWorker.start(&fakeInference, &freshRestartProbe, 26),
+                      "Worker should restart with the same generation");
+        requireWorker(restartWorker.latestProbability(26) == 0.0f
+                      && restartWorker.publishedResultCount() == 0,
+                      "Restart must clear prior results and diagnostics");
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        requireWorker(freshRestartProbe.calls.load(std::memory_order_acquire) == 0,
+                      "Restart must discard frames queued before the previous worker stopped");
+
+        std::array<float, 8> freshRestartFrame{};
+        freshRestartFrame.fill(0.45f);
+        requireWorker(restartQueue.push(freshRestartFrame.data(), 26, 1200),
+                      "Fresh post-restart frame should be accepted");
+        requireWorker(waitForCalls(freshRestartProbe, 1),
+                      "Restarted worker should process fresh frames normally");
+        const auto restartResultDeadline = std::chrono::steady_clock::now()
+            + std::chrono::seconds(2);
+        while (restartWorker.latestProbability(26) != 0.45f
+               && std::chrono::steady_clock::now() < restartResultDeadline)
+            std::this_thread::yield();
+        requireWorker(restartWorker.latestProbability(26) == 0.45f,
+                      "Restarted worker should publish only fresh post-restart inference");
+        restartWorker.stop();
+    }
+
     // A real-time stop request must be non-blocking while inference is in flight.
     // The owner joins later from its non-audio lifecycle path.
     {
