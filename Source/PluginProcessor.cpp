@@ -368,8 +368,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float targetGain = aiEnabled
             ? (1.0f - targetAmount) + targetAmount * targetConfidenceSmoothed_
             : 1.0f;
-        const float keyboardDetectorGain = 1.0f
-            - keyboardReduction * keyboardConfidence_;
+        const float keyboardDetectorGain =
+            smartgate::AdaptiveKeyboardDetector::gainForReduction(
+                keyboardReduction, keyboardConfidence_);
         // Silero is an assist to the conventional level detector, not a hard
         // gate override. A confident speech result gently lifts the detector
         // above threshold; silence/no result leaves classic gate behavior intact.
