@@ -59,6 +59,7 @@ private:
     juce::AudioProcessorValueTreeState parameters_;
     smartgate::GateEnvelope gateEnvelope_;
     smartgate::FeatureExtractor featureExtractor_;
+    smartgate::StereoAnalysisFoldDown stereoAnalysisFoldDown_;
     smartgate::AdaptiveKeyboardDetector keyboardDetector_;
     smartgate::TargetProfile targetProfile_;
     smartgate::AtomicTargetProfileSnapshot publishedTargetProfile_;
