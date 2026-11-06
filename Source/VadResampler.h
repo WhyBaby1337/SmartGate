@@ -52,6 +52,15 @@ public:
             return false;
 
         const float current = filterSample(std::isfinite(input) ? input : 0.0f);
+
+        // At equal rates there is no interpolation interval to establish:
+        // every input sample is already one output sample. Emit the first
+        // sample immediately instead of introducing a one-sample startup gap.
+        if (inputRate_ == outputRate_) {
+            output = current;
+            return true;
+        }
+
         if (!hasPrevious_) {
             previous_ = current;
             hasPrevious_ = true;
