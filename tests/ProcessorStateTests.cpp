@@ -101,7 +101,9 @@ void testInvalidAndLegacyStatesClearProfile() {
     processor.setStateInformation(invalidData.getData(), static_cast<int>(invalidData.getSize()));
     juce::MemoryBlock afterInvalid;
     auto invalidSaved = saveXml(processor, afterInvalid);
-    require(profile(*invalidSaved) == nullptr, "invalid profile must clear old training");
+    require(profile(*invalidSaved) != nullptr
+            && profile(*invalidSaved)->getIntAttribute("count", -1) == 0,
+            "invalid profile must serialize an explicit empty profile");
 
     juce::XmlElement legacy(*fixture);
     auto* oldProfile = profile(legacy);
@@ -112,7 +114,9 @@ void testInvalidAndLegacyStatesClearProfile() {
     processor.setStateInformation(legacyData.getData(), static_cast<int>(legacyData.getSize()));
     juce::MemoryBlock afterLegacy;
     auto legacySaved = saveXml(processor, afterLegacy);
-    require(profile(*legacySaved) == nullptr, "legacy state must clear old training");
+    require(profile(*legacySaved) != nullptr
+            && profile(*legacySaved)->getIntAttribute("count", -1) == 0,
+            "legacy state must serialize an explicit empty profile");
 }
 } // namespace
 
