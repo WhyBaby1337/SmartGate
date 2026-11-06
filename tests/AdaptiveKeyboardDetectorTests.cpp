@@ -38,6 +38,16 @@ void runAdaptiveKeyboardDetectorTests() {
         clickConfidence = detector.processFrame(clickFrame.data(), clickFrame.size());
     requireKeyboard(clickConfidence > 0.35f,
                     "Sharp broadband transients should raise keyboard confidence");
+    requireKeyboard(smartgate::AdaptiveKeyboardDetector::gainForReduction(
+                        1.0f, clickConfidence) < 0.75f,
+                    "Confident keyboard transients should still receive useful reduction");
+    requireKeyboard(smartgate::AdaptiveKeyboardDetector::gainForReduction(
+                        0.0f, 1.0f) == 1.0f
+                    && smartgate::AdaptiveKeyboardDetector::gainForReduction(
+                        1.0f, 0.0f) == 1.0f
+                    && smartgate::AdaptiveKeyboardDetector::gainForReduction(
+                        1.0f, 1.0f) == 0.0f,
+                    "Keyboard reduction curve must preserve its endpoint behavior");
 
     detector.reset();
     std::vector<float> voiceLikeTone(frameSize);
@@ -79,6 +89,9 @@ void runAdaptiveKeyboardDetectorTests() {
     }
     requireKeyboard(maximumSpeechConfidence < 0.40f,
                     "Long-running voiced speech must not accumulate strong keyboard confidence");
+    requireKeyboard(smartgate::AdaptiveKeyboardDetector::gainForReduction(
+                        1.0f, maximumSpeechConfidence) > 0.80f,
+                    "Uncertain voiced speech must not be heavily attenuated");
 
     // Speech remains present while occasional broadband key transients occur.
     // The mixed signal should score higher than speech alone, but must not
@@ -111,6 +124,9 @@ void runAdaptiveKeyboardDetectorTests() {
                     "Intermittent keyboard transients should remain detectable over speech");
     requireKeyboard(maximumMixedConfidence < 0.50f,
                     "Mixed speech and keyboard input must not accumulate near-certain keyboard confidence");
+    requireKeyboard(smartgate::AdaptiveKeyboardDetector::gainForReduction(
+                        1.0f, maximumMixedConfidence) > 0.80f,
+                    "Mixed speech and intermittent clicks must retain most speech level");
 
     // Exercise each user-selectable classifier mode with voiced speech. The
     // more sensitive membrane weighting must still avoid a strong false
@@ -141,6 +157,9 @@ void runAdaptiveKeyboardDetectorTests() {
         }
         requireKeyboard(modeSpeechMaximum < 0.46f,
                         "No keyboard mode should strongly classify sustained voiced speech");
+        requireKeyboard(smartgate::AdaptiveKeyboardDetector::gainForReduction(
+                            1.0f, modeSpeechMaximum) > 0.80f,
+                        "Every keyboard mode must preserve most sustained speech level");
     }
 
     std::vector<float> silenceFrame(frameSize, 0.0f);
