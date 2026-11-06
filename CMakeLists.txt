@@ -123,6 +123,27 @@ if(SMARTGATE_BUILD_PLUGIN)
         PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags
                juce::juce_recommended_warning_flags)
 
+    # Exercise the real AudioProcessor state API without preparing an audio
+    # device or starting the optional Silero inference worker.
+    add_executable(SmartGateProcessorStateTests
+        tests/ProcessorStateTests.cpp
+        Source/PluginProcessor.cpp
+        Source/PluginEditor.cpp
+        Source/PluginProcessor.h
+        Source/PluginEditor.h)
+    target_compile_definitions(SmartGateProcessorStateTests PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_link_libraries(SmartGateProcessorStateTests PRIVATE
+        smartgate_dsp
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+    add_test(NAME SmartGateProcessorStateTests
+        COMMAND SmartGateProcessorStateTests)
+
     if(SMARTGATE_ENABLE_SILERO)
         target_include_directories(SmartGate PRIVATE "${SMARTGATE_ORT_ROOT}/include")
         target_compile_definitions(SmartGate PRIVATE SMARTGATE_HAS_SILERO=1)
