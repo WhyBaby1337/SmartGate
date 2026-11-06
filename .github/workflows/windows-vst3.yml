@@ -85,6 +85,16 @@ jobs:
             throw "Built Smart Gate VST3 module is missing: $module"
           }
 
+          # Capture a native crash dump if pluginval or the plugin raises an access violation.
+          # This is CI-only diagnostics; it does not change plugin runtime behavior.
+          $dumpDir = Join-Path $env:RUNNER_TEMP "pluginval-dumps"
+          New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
+          $werKey = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting\\LocalDumps\\pluginval.exe"
+          New-Item -Path $werKey -Force | Out-Null
+          New-ItemProperty -Path $werKey -Name DumpFolder -Value $dumpDir -PropertyType ExpandString -Force | Out-Null
+          New-ItemProperty -Path $werKey -Name DumpType -Value 2 -PropertyType DWord -Force | Out-Null
+          New-ItemProperty -Path $werKey -Name DumpCount -Value 2 -PropertyType DWord -Force | Out-Null
+
           # GitHub-hosted Windows runners are headless; pluginval documents this flag for CI.
           # Start-Process captures the native process exit code reliably, including
           # abnormal termination, and preserves stdout/stderr for diagnosis.
@@ -101,6 +111,17 @@ jobs:
           if ($process.ExitCode -ne 0) {
             throw "pluginval rejected or crashed while validating Smart Gate VST3 (exit code $($process.ExitCode))."
           }
+      - name: Upload pluginval crash diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: SmartGate-pluginval-crash-diagnostics
+          path: |
+            ${{ runner.temp }}/pluginval-dumps/*.dmp
+            ${{ runner.temp }}/pluginval-stdout.log
+            ${{ runner.temp }}/pluginval-stderr.log
+          if-no-files-found: ignore
+
       - name: Upload VST3
         uses: actions/upload-artifact@v7
         with:
