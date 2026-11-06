@@ -102,6 +102,13 @@ public:
         return publishedResultCount_.load(std::memory_order_acquire);
     }
 
+    // Real-time safe stop request: one atomic store, no join or allocation.
+    // The owner must still call stop() later from a non-audio lifecycle thread
+    // to join the completed worker before destroying its context or queue.
+    void requestStop() noexcept {
+        stopRequested_.store(true, std::memory_order_release);
+    }
+
     // Stop/join only from a non-audio thread. In-flight inference may finish,
     // but its result is discarded once shutdown has been requested.
     void stop() noexcept {
