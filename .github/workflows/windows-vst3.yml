@@ -75,7 +75,13 @@ jobs:
 
           $validator = Get-ChildItem -LiteralPath $tools -Filter "pluginval.exe" -File -Recurse | Select-Object -First 1
           if (-not $validator) { throw "Pinned pluginval v1.0.4 executable was not found in its release archive." }
-          if (-not $module -or -not (Test-Path -LiteralPath $module -PathType Leaf)) {
+
+          # Each GitHub Actions step runs in a separate PowerShell process.
+          # Resolve the module path again instead of relying on a prior step's variable.
+          $bundle = Get-ChildItem "build/SmartGate_artefacts/Release/VST3" -Directory -Filter "*.vst3" | Select-Object -First 1
+          if (-not $bundle) { throw "Built Smart Gate VST3 bundle is missing." }
+          $module = Join-Path $bundle.FullName "Contents/x86_64-win/Smart Gate.vst3"
+          if (-not (Test-Path -LiteralPath $module -PathType Leaf)) {
             throw "Built Smart Gate VST3 module is missing: $module"
           }
 
