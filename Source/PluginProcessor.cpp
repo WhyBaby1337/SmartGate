@@ -300,8 +300,6 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     const float vadProbability = aiEnabled && vadAvailable_
         ? vadWorker_.latestProbability(vadGeneration_, blockEndSamplePosition,
                                        vadMaxAgeSamples_) : 0.0f;
-#else
-    const float vadProbability = 0.0f;
 #endif
     const float thresholdLinear = std::pow(10.0f,
         *parameters_.getRawParameterValue("threshold") / 20.0f);
