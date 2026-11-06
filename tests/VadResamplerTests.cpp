@@ -67,7 +67,7 @@ void runVadResamplerTests() {
     for (int i = 2205; i < 4410; ++i)
         if (resampler.processSample(std::sin(static_cast<float>(i) * 0.01f), output))
             ++outputCount;
-    if (outputCount != 1599)
+    if (outputCount != 1600)
         throw std::runtime_error("44.1 kHz conversion emitted " + std::to_string(outputCount)
                                  + " samples; expected 1600 across host block boundaries");
 
