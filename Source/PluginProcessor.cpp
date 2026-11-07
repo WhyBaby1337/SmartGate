@@ -186,7 +186,9 @@ void SmartGateAudioProcessor::finishFeatureFrame() noexcept {
     vadAllowsLearning = smartgate::TargetProfile::isSpeechQualifiedForLearning(
         vadAvailable_, vadProbabilitySmoothed_);
 #endif
-    if (learning && vadAllowsLearning
+    const bool keyboardAllowsLearning =
+        smartgate::TargetProfile::isKeyboardQualifiedForLearning(keyboardConfidence_);
+    if (learning && vadAllowsLearning && keyboardAllowsLearning
         && smartgate::TargetProfile::isValidLearningFrame(features)
         && targetProfile_.learn(features)) {
         const auto snapshot = targetProfile_.makeSnapshot();
@@ -286,22 +288,22 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         0.0f, 1.0f, parameters_.getRawParameterValue("keyboardReduction")->load(std::memory_order_relaxed));
     const int keyboardMode = juce::jlimit(0, 2, static_cast<int>(std::lround(
         parameters_.getRawParameterValue("keyboardMode")->load(std::memory_order_relaxed))));
-    // Do not run the keyboard classifier when its reduction is zero.
-    // This keeps the default path lean, including when the optional AI engine
-    // is disabled. Re-enable it only when the user requests keyboard cleanup.
+    // Run the keyboard transient detector either for audible reduction or
+    // while learning a target. Learning-time analysis prevents keyboard clicks
+    // from contaminating the profile even when the user leaves reduction at 0.
     const bool keyboardReductionEnabled = keyboardReduction > 0.0f;
-    if (keyboardReductionEnabled) {
-        // A disabled interval is not observed by the classifier. Start from
-        // fresh confidence/reference state when keyboard cleanup is re-enabled.
-        if (!wasKeyboardReductionEnabled_)
+    const bool keyboardAnalysisEnabled = keyboardReductionEnabled
+        || (aiEnabled && learningRequested);
+    if (keyboardAnalysisEnabled) {
+        if (!wasKeyboardAnalysisEnabled_)
             keyboardDetector_.reset();
         keyboardDetector_.setMode(static_cast<smartgate::AdaptiveKeyboardDetector::Mode>(keyboardMode));
     } else {
-        if (wasKeyboardReductionEnabled_)
+        if (wasKeyboardAnalysisEnabled_)
             keyboardDetector_.reset();
         keyboardConfidence_ = 0.0f;
     }
-    wasKeyboardReductionEnabled_ = keyboardReductionEnabled;
+    wasKeyboardAnalysisEnabled_ = keyboardAnalysisEnabled;
 
     const int samples = buffer.getNumSamples();
 #if defined(SMARTGATE_HAS_SILERO)
@@ -341,7 +343,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         *parameters_.getRawParameterValue("threshold") / 20.0f);
 
     const bool analyzeTarget = aiEnabled;
-    const bool analyzeKeyboard = keyboardReduction > 0.0f;
+    const bool analyzeKeyboard = keyboardAnalysisEnabled;
     const bool analyzeFrames = analyzeTarget || analyzeKeyboard;
 
     // Do not carry a partially collected frame across a period in which both
