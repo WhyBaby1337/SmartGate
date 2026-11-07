@@ -133,7 +133,11 @@ private:
             std::uint64_t frameGeneration = 0;
             std::uint64_t sourceSamplePosition = 0;
             if (!queue_.pop(frame, frameGeneration, sourceSamplePosition)) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                // C++17 has no portable atomic wait primitive. Keep the audio
+                // producer strictly lock-free and use a short timed idle wait;
+                // this halves idle wakeups versus 1 ms polling while adding at
+                // most 2 ms nominal pickup delay for a newly queued frame.
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 continue;
             }
 
