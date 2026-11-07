@@ -469,6 +469,44 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
             if (restoredState.getChild(i).getType().toString() == "TARGET_PROFILE")
                 restoredState.removeChild(i, nullptr);
         }
+
+        // APVTS binds parameter nodes by ID while walking the tree. If a
+        // corrupted/hand-edited session contains duplicate PARAM IDs, the
+        // last node silently wins. Remove every copy of each duplicated known
+        // parameter so that parameter falls back to its declared default;
+        // unrelated valid parameters and unknown future IDs remain intact.
+        juce::StringArray duplicateParameterIds;
+        for (int i = 0; i < restoredState.getNumChildren(); ++i) {
+            const auto child = restoredState.getChild(i);
+            if (!child.hasType("PARAM"))
+                continue;
+
+            const auto id = child.getProperty("id").toString();
+            if (parameters_.getParameter(id) == nullptr
+                || duplicateParameterIds.contains(id))
+                continue;
+
+            int occurrences = 0;
+            for (int j = 0; j < restoredState.getNumChildren(); ++j) {
+                const auto candidate = restoredState.getChild(j);
+                if (candidate.hasType("PARAM")
+                    && candidate.getProperty("id").toString() == id)
+                    ++occurrences;
+            }
+            if (occurrences > 1)
+                duplicateParameterIds.add(id);
+        }
+
+        if (!duplicateParameterIds.isEmpty()) {
+            for (int i = restoredState.getNumChildren(); --i >= 0;) {
+                const auto child = restoredState.getChild(i);
+                if (child.hasType("PARAM")
+                    && duplicateParameterIds.contains(
+                        child.getProperty("id").toString()))
+                    restoredState.removeChild(i, nullptr);
+            }
+        }
+
         parameters_.replaceState(restoredState);
         restoredLearningTarget_.store(
             *parameters_.getRawParameterValue("learnTarget") >= 0.5f,
