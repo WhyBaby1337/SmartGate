@@ -103,6 +103,34 @@ void SmartGateAudioProcessorEditor::drawMeter(
     g.fillRoundedRectangle(fill, 4.0f);
 }
 
+void SmartGateAudioProcessorEditor::drawCpuMeter(
+    juce::Graphics& g, juce::Rectangle<float> area) const {
+    g.setColour(muted);
+    g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
+    g.drawText("CPU LOAD", area.removeFromTop(15.0f), juce::Justification::left);
+
+    const auto valueArea = area.removeFromTop(17.0f);
+    g.setColour(cpuPeakPercent_ >= 100.0f ? warning : juce::Colours::white);
+    g.setFont(juce::Font(juce::FontOptions(11.0f)));
+    g.drawText(juce::String(cpuLoadPercent_, 1) + "%  PEAK "
+                   + juce::String(cpuPeakPercent_, 1) + "%",
+               valueArea, juce::Justification::right);
+
+    g.setColour(meterTrack);
+    g.fillRoundedRectangle(area, 4.0f);
+    const float normalized = juce::jlimit(0.0f, 1.0f, cpuLoadPercent_ / 100.0f);
+    auto fill = area.withWidth(area.getWidth() * normalized);
+    g.setColour(cpuLoadPercent_ >= 100.0f ? warning
+        : (cpuLoadPercent_ >= 75.0f ? warning : accent));
+    g.fillRoundedRectangle(fill, 4.0f);
+
+    // Peak marker remains visible even when the current average has fallen.
+    const float peakX = area.getX()
+        + area.getWidth() * juce::jlimit(0.0f, 1.0f, cpuPeakPercent_ / 100.0f);
+    g.setColour(cpuPeakPercent_ >= 100.0f ? warning : juce::Colours::white);
+    g.drawLine(peakX, area.getY() - 1.0f, peakX, area.getBottom() + 1.0f, 1.5f);
+}
+
 void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
     g.fillAll(background);
     auto bounds = getLocalBounds().toFloat();
@@ -129,7 +157,7 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
     meterArea.setY(155.0f);
     meterArea.setHeight(48.0f);
     const float gap = 18.0f;
-    const float meterWidth = (meterArea.getWidth() - 2.0f * gap) / 3.0f;
+    const float meterWidth = (meterArea.getWidth() - 3.0f * gap) / 4.0f;
     drawMeter(g, meterArea.removeFromLeft(meterWidth), "INPUT", inputMeterDb_);
     meterArea.removeFromLeft(gap);
     drawMeter(g, meterArea.removeFromLeft(meterWidth), "OUTPUT", outputMeterDb_);
@@ -143,6 +171,8 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
     g.setColour(gateGain_ > 0.95f ? accent : juce::Colours::white);
     g.setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
     g.drawText(gateText, meterArea.removeFromTop(17.0f), juce::Justification::left);
+    meterArea.removeFromLeft(gap);
+    drawCpuMeter(g, meterArea);
 
     auto status = getLocalBounds().reduced(30, 0);
     status.setY(207);
@@ -195,5 +225,9 @@ void SmartGateAudioProcessorEditor::timerCallback() {
         processor_.gateGainForUi_.load(std::memory_order_relaxed));
     learnedFrames_ = processor_.learnedFramesForUi_.load(std::memory_order_relaxed);
     vadReady_ = processor_.vadReadyForUi_.load(std::memory_order_relaxed);
+    cpuLoadPercent_ = juce::jlimit(0.0f, 1000.0f,
+        processor_.cpuLoadPercentForUi_.load(std::memory_order_relaxed));
+    cpuPeakPercent_ = juce::jlimit(0.0f, 1000.0f,
+        processor_.cpuPeakPercentForUi_.load(std::memory_order_relaxed));
     repaint();
 }
