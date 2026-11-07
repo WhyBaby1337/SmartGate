@@ -65,8 +65,8 @@ void setParameter(SmartGateAudioProcessor& processor, const juce::String& id,
 }
 void testHostMetadataAndAutomationParameters() {
     SmartGateAudioProcessor processor;
-    require(processor.getTailLengthSeconds() == 1.65,
-            "host tail must include maximum Hold, adaptive extension, and Release");
+    require(processor.getTailLengthSeconds() == 0.0,
+            "feed-forward gate must not advertise a generated or delayed audio tail");
     require(!processor.acceptsMidi() && !processor.producesMidi() && !processor.isMidiEffect(),
             "Smart Gate must advertise its audio-effect MIDI capabilities accurately");
     require(processor.hasEditor(), "host metadata must advertise the plugin editor");
