@@ -15,13 +15,13 @@ The ONNX Runtime DLLs and the Silero VAD model are included with the plug-in bun
 3. Extract the archive. It contains the complete `Smart Gate.vst3` bundle.
 4. Copy the entire `Smart Gate.vst3` folder to the system VST3 directory:
 
-   `%CommonProgramFiles%\\VST3`
+   `%CommonProgramFiles%\VST3`
 
-   Usually this resolves to `C:\\Program Files\\Common Files\\VST3`. Create the `VST3` directory if it does not exist. Windows may ask for administrator permission.
+   Usually this resolves to `C:\Program Files\Common Files\VST3`. Create the `VST3` directory if it does not exist. Windows may ask for administrator permission.
 
 5. Start your DAW and run its VST3 plug-in rescan if Smart Gate does not appear automatically.
 
-Do not copy only the file named `Smart Gate.vst3` from inside the bundle. Keep the full folder structure, including `Contents\\x86_64-win` and `Contents\\Resources`, so the bundled runtime dependencies and notices remain beside the module.
+Do not copy only the file named `Smart Gate.vst3` from inside the bundle. Keep the full folder structure, including `Contents\x86_64-win` and `Contents\Resources`, so the bundled runtime dependencies and notices remain beside the module.
 
 ## Troubleshooting
 
