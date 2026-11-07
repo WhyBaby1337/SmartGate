@@ -124,10 +124,10 @@ void runTargetProfileTests() {
 
     requireFeature(smartgate::TargetProfile::isKeyboardQualifiedForLearning(0.0f),
                    "Clean speech without keyboard transients must remain learnable");
-    requireFeature(smartgate::TargetProfile::isKeyboardQualifiedForLearning(0.54f),
-                   "Weak keyboard suspicion must not unnecessarily pause learning");
-    requireFeature(!smartgate::TargetProfile::isKeyboardQualifiedForLearning(0.55f),
-                   "Confident keyboard transients must pause target learning");
+    requireFeature(smartgate::TargetProfile::isKeyboardQualifiedForLearning(0.35f),
+                   "Low keyboard suspicion must not unnecessarily pause learning");
+    requireFeature(!smartgate::TargetProfile::isKeyboardQualifiedForLearning(0.36f),
+                   "Keyboard confidence at the learning limit must pause target learning");
     requireFeature(!smartgate::TargetProfile::isKeyboardQualifiedForLearning(0.90f),
                    "Strong keyboard transients must never enter the target profile");
     requireFeature(!smartgate::TargetProfile::isKeyboardQualifiedForLearning(
