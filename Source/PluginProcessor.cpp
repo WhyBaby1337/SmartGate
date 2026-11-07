@@ -475,17 +475,31 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
             std::memory_order_relaxed);
         stateRestorePending_.store(true, std::memory_order_release);
 
-        if (auto* node = xml->getChildByName("TARGET_PROFILE")) {
+        juce::XmlElement* profileNode = nullptr;
+        int profileNodeCount = 0;
+        for (auto* child = xml->getFirstChildElement(); child != nullptr;
+             child = child->getNextElement()) {
+            if (child->hasTagName("TARGET_PROFILE")) {
+                profileNode = child;
+                ++profileNodeCount;
+            }
+        }
+
+        // A profile is a single versioned snapshot. Multiple copies are
+        // ambiguous (for example, a stale and a newly trained profile mixed
+        // by an older host/save path), so reject the metadata rather than
+        // silently choosing whichever XML child happens to appear first.
+        if (profileNodeCount == 1) {
             smartgate::TargetProfile::Snapshot snapshot;
-            const auto count = node->getIntAttribute("count", -1);
+            const auto count = profileNode->getIntAttribute("count", -1);
             bool valid = count >= 0;
             if (valid) {
                 snapshot.count = static_cast<std::uint64_t>(count);
                 for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
                     const auto index = juce::String(static_cast<int>(i));
-                    snapshot.mean[i] = node->getDoubleAttribute("mean" + index,
+                    snapshot.mean[i] = profileNode->getDoubleAttribute("mean" + index,
                         std::numeric_limits<double>::quiet_NaN());
-                    snapshot.m2[i] = node->getDoubleAttribute("m2_" + index,
+                    snapshot.m2[i] = profileNode->getDoubleAttribute("m2_" + index,
                         std::numeric_limits<double>::quiet_NaN());
                 }
                 smartgate::TargetProfile validator;
@@ -497,8 +511,8 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
             pendingTargetProfile_.publish(valid
                 ? snapshot : smartgate::TargetProfile::Snapshot{});
         } else {
-            // Older sessions have no target profile; clear any profile left
-            // from the currently loaded instance.
+            // Older sessions have no profile; duplicate profiles are
+            // ambiguous. Both cases clear any profile left by another session.
             pendingTargetProfile_.publish(smartgate::TargetProfile::Snapshot{});
         }
     }
