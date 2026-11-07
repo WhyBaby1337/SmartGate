@@ -164,6 +164,9 @@ void testAllParametersSurviveStateRoundTrip() {
         }
         require(std::isfinite(actualValue),
                 "every persisted parameter must exist in the restored layout");
+        if (std::abs(actualValue - expected) > tolerance)
+            std::cerr << "Round-trip mismatch for " << id << ": expected "
+                      << expected << ", got " << actualValue << '\\n';
         require(std::abs(actualValue - expected) <= tolerance,
                 "every APVTS parameter must survive a complete save/load round trip");
     };
