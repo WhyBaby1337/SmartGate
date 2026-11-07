@@ -23,6 +23,16 @@ The ONNX Runtime DLLs and the Silero VAD model are included with the plug-in bun
 
 Do not copy only the file named `Smart Gate.vst3` from inside the bundle. Keep the full folder structure, including `Contents\x86_64-win` and `Contents\Resources`, so the bundled runtime dependencies and notices remain beside the module.
 
+## Update an existing installation
+
+1. Close your DAW so it releases the plug-in and its runtime DLLs.
+2. Extract the new workflow artifact to a temporary folder.
+3. In `%CommonProgramFiles%\VST3`, delete the old `Smart Gate.vst3` folder.
+4. Copy the new, complete `Smart Gate.vst3` folder into `%CommonProgramFiles%\VST3`.
+5. Start your DAW and rescan VST3 plug-ins if the updated version is not detected.
+
+Replace the whole bundle instead of merging the new files into the old folder. This prevents obsolete or mismatched runtime DLLs from being left behind. Plug-in settings stored in a DAW project are separate from the installed VST3 files.
+
 ## Troubleshooting
 
 - **The plug-in is missing from the DAW:** confirm that the full `Smart Gate.vst3` folder is under the system VST3 directory, then rescan VST3 plug-ins.
