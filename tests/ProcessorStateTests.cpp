@@ -559,6 +559,12 @@ void testLegacyPartialParameterStateUsesDefaults() {
 void testMalformedAndForeignRootStatesAreIgnored() {
     SmartGateAudioProcessor processor;
     setParameter(processor, "threshold", -18.0f);
+    juce::MemoryBlock initialData;
+    auto initialState = saveXml(processor, initialData);
+    addValidProfile(*initialState, 24);
+    encode(processor, *initialState, initialData);
+    processor.setStateInformation(initialData.getData(),
+                                  static_cast<int>(initialData.getSize()));
 
     juce::XmlElement foreignRoot("FOREIGN_STATE");
     juce::MemoryBlock foreignData;
@@ -579,6 +585,11 @@ void testMalformedAndForeignRootStatesAreIgnored() {
     }
     require(std::abs(thresholdAfterForeignRoot - (-18.0f)) <= 1.0e-4f,
             "state with a foreign XML root must leave current parameters unchanged");
+    juce::MemoryBlock afterForeignRoot;
+    auto foreignRootSaved = saveXml(processor, afterForeignRoot);
+    require(profile(*foreignRootSaved) != nullptr
+                && profile(*foreignRootSaved)->getIntAttribute("count", -1) == 24,
+            "state with a foreign XML root must leave the pending target profile unchanged");
 
     const char malformedBytes[] = {
         static_cast<char>(0x13), static_cast<char>(0x37),
@@ -601,6 +612,11 @@ void testMalformedAndForeignRootStatesAreIgnored() {
     }
     require(std::abs(thresholdAfterMalformedData - (-18.0f)) <= 1.0e-4f,
             "malformed binary state must leave current parameters unchanged");
+    juce::MemoryBlock afterMalformedData;
+    auto malformedSaved = saveXml(processor, afterMalformedData);
+    require(profile(*malformedSaved) != nullptr
+                && profile(*malformedSaved)->getIntAttribute("count", -1) == 24,
+            "malformed binary state must leave the pending target profile unchanged");
 }
 
 void testInvalidAndLegacyStatesClearProfile() {
