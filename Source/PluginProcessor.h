@@ -82,6 +82,12 @@ private:
     // Learn Target toggle on the audio thread without treating it as a user edge.
     std::atomic<bool> stateRestorePending_{false};
     std::atomic<bool> restoredLearningTarget_{false};
+    // Lock-free UI telemetry snapshots written by the audio thread and polled by the editor.
+    std::atomic<float> inputPeakDbForUi_{-100.0f};
+    std::atomic<float> outputPeakDbForUi_{-100.0f};
+    std::atomic<float> gateGainForUi_{0.0f};
+    std::atomic<std::uint64_t> learnedFramesForUi_{0};
+    std::atomic<bool> vadReadyForUi_{false};
     bool wasAiEnabled_ = true;
     bool wasKeyboardReductionEnabled_ = false;
 #if defined(SMARTGATE_HAS_SILERO)
