@@ -43,6 +43,13 @@ public:
             || (std::isfinite(vadProbability) && vadProbability >= 0.50f);
     }
 
+    // Do not contaminate the learned voice profile with detected keyboard
+    // transients. The detector is only enabled during learning when keyboard
+    // reduction itself is off, so this check does not depend on the effect mix.
+    static bool isKeyboardQualifiedForLearning(float keyboardConfidence) noexcept {
+        return std::isfinite(keyboardConfidence) && keyboardConfidence < 0.55f;
+    }
+
     // Restore is intended for validated, non-real-time state loading. The
     // caller must ensure this object is not accessed concurrently.
     bool restore(const Snapshot& snapshot) noexcept {
