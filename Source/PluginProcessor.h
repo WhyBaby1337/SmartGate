@@ -35,9 +35,9 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    // Maximum configured tail: 500 ms Hold + 150 ms adaptive extension
-    // + 1000 ms Release. Report it so hosts preserve the gate's decay on stop/render.
-    double getTailLengthSeconds() const override { return 1.65; }
+    // The gate has no delay or generated output after its input stops; Hold and
+    // Release only control gain while input audio is present.
+    double getTailLengthSeconds() const override { return 0.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
