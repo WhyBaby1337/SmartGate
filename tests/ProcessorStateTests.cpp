@@ -569,6 +569,7 @@ int main() {
     testPreparedRestoreCanBeSavedBeforeAudioCallback();
     testLatestRestoreWinsBeforeAudioCallback();
     testInvalidAndLegacyStatesClearProfile();
+    testMalformedAndForeignRootStatesAreIgnored();
     testLearnTargetRequestWaitsUntilAiIsEnabled();
     testExplicitLearningWinsOverPendingProfileRestore();
     testRestoreWithLearningEnabledAfterPreparePreservesProfile();
