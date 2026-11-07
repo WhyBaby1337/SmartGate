@@ -63,6 +63,31 @@ void setParameter(SmartGateAudioProcessor& processor, const juce::String& id,
     }
     fail("runtime test parameter must exist");
 }
+void testHostMetadataAndAutomationParameters() {
+    SmartGateAudioProcessor processor;
+    require(processor.getTailLengthSeconds() == 1.65,
+            "host tail must include maximum Hold, adaptive extension, and Release");
+    require(!processor.acceptsMidi() && !processor.producesMidi() && !processor.isMidiEffect(),
+            "Smart Gate must advertise its audio-effect MIDI capabilities accurately");
+    require(processor.hasEditor(), "host metadata must advertise the plugin editor");
+
+    const juce::StringArray expectedIds{
+        "threshold", "attack", "release", "hold", "hysteresis", "adaptiveHold",
+        "range", "aiEnabled", "learnTarget", "targetAmount", "keyboardMode",
+        "keyboardReduction"
+    };
+    require(processor.getParameters().size() == expectedIds.size(),
+            "host parameter count must match the stable parameter layout");
+    for (int i = 0; i < expectedIds.size(); ++i) {
+        auto* parameterWithId = dynamic_cast<juce::AudioProcessorParameterWithID*>(
+            processor.getParameters()[i]);
+        require(parameterWithId != nullptr && parameterWithId->paramID == expectedIds[i],
+                "host automation parameter IDs and ordering must remain stable");
+        require(processor.getParameters()[i]->isAutomatable(),
+                "every exposed Smart Gate control must support host automation");
+    }
+}
+
 void testRuntimeBlockAndToggleTransitions() {
     SmartGateAudioProcessor processor;
     juce::MidiBuffer midi;
@@ -873,6 +898,7 @@ void testRepeatedPrepareWithoutRelease() {
 }
 
 int main() {
+    testHostMetadataAndAutomationParameters();
     testAllParametersSurviveStateRoundTrip();
     testImmediateRoundTrip();
     testPreparedRestoreCanBeSavedBeforeAudioCallback();
