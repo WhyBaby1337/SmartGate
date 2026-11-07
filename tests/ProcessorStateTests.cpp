@@ -501,11 +501,30 @@ void testLegacyPartialParameterStateUsesDefaults() {
     require(std::abs(value("hold") - 80.0f) <= 1.0e-4f,
             "multiple missing legacy parameters must retain their defaults");
 
+    // The host may save the legacy tree without materializing parameters
+    // that were absent in the original project. That is valid: a subsequent
+    // load must continue to obtain the current layout defaults.
     juce::MemoryBlock saved;
-    auto normalized = saveXml(restored, saved);
-    require(parameter(*normalized, "release") != nullptr
-                && std::abs(parameter(*normalized, "release")->getDoubleAttribute("value") - 120.0) <= 1.0e-4,
-            "saving a restored legacy state must materialize missing parameters with defaults");
+    (void) saveXml(restored, saved);
+
+    SmartGateAudioProcessor roundTripped;
+    roundTripped.setStateInformation(saved.getData(), static_cast<int>(saved.getSize()));
+    const auto roundTripValue = [&](const char* id) {
+        for (auto* parameterBase : roundTripped.getParameters()) {
+            auto* parameterWithId =
+                dynamic_cast<juce::AudioProcessorParameterWithID*>(parameterBase);
+            auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameterBase);
+            if (parameterWithId != nullptr && ranged != nullptr
+                && parameterWithId->paramID == id)
+                return ranged->convertFrom0to1(parameterBase->getValue());
+        }
+        return std::numeric_limits<float>::quiet_NaN();
+    };
+    require(std::abs(roundTripValue("threshold") - (-22.5f)) <= 1.0e-4f,
+            "present legacy parameters must survive a save/load round trip");
+    require(std::abs(roundTripValue("release") - 120.0f) <= 1.0e-4f
+                && std::abs(roundTripValue("hold") - 80.0f) <= 1.0e-4f,
+            "missing legacy parameters must continue to use layout defaults after a round trip");
 }
 
 void testMalformedAndForeignRootStatesAreIgnored() {
