@@ -283,6 +283,28 @@ void testLatestRestoreWinsBeforeAudioCallback() {
     processor.releaseResources();
 }
 
+void testDuplicateTargetProfilesAreRejected() {
+    SmartGateAudioProcessor fixtureProcessor;
+    juce::MemoryBlock fixtureData;
+    auto fixture = saveXml(fixtureProcessor, fixtureData);
+    addValidProfile(*fixture, 24);
+    // A second, individually valid but conflicting snapshot makes the state
+    // ambiguous. The loader must not silently select the first XML child.
+    addValidProfile(*fixture, 37);
+
+    juce::MemoryBlock encoded;
+    encode(fixtureProcessor, *fixture, encoded);
+
+    SmartGateAudioProcessor restored;
+    restored.setStateInformation(encoded.getData(), static_cast<int>(encoded.getSize()));
+
+    juce::MemoryBlock saved;
+    auto savedXml = saveXml(restored, saved);
+    auto* savedProfile = profile(*savedXml);
+    require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 0,
+            "duplicate target profile metadata must be rejected and cleared");
+}
+
 void testInvalidProfileVariantsClearPreviousProfile() {
     SmartGateAudioProcessor processor;
     juce::MemoryBlock empty;
@@ -651,6 +673,7 @@ int main() {
     testRestoreWithLearningEnabledAfterPreparePreservesProfile();
     testLearnTargetCanRestartAfterRestoredEnabledSession();
     testInvalidProfileVariantsClearPreviousProfile();
+    testDuplicateTargetProfilesAreRejected();
     testRuntimeBlockAndToggleTransitions();
     testRepeatedPrepareWithoutRelease();
     testMonoRuntimeProcessing();
