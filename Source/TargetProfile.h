@@ -80,9 +80,14 @@ public:
                 const double maximumM2 = static_cast<double>(snapshot.count)
                     * range * range * 0.25;
                 const double tolerance = 1.0e-9 * std::max(1.0, maximumM2);
-                if (snapshot.mean[i] < minima[i]
-                    || snapshot.mean[i] > maxima[i]
-                    || snapshot.m2[i] > maximumM2 + tolerance)
+                // The log-RMS acquisition window is strict in learn():
+                // values at either endpoint can never enter a real profile.
+                // Keep restore() equally strict so hand-crafted state cannot
+                // introduce a snapshot that the learner itself cannot produce.
+                const bool outsideMeanRange = i == 0
+                    ? (snapshot.mean[i] <= minima[i] || snapshot.mean[i] >= maxima[i])
+                    : (snapshot.mean[i] < minima[i] || snapshot.mean[i] > maxima[i]);
+                if (outsideMeanRange || snapshot.m2[i] > maximumM2 + tolerance)
                     return false;
             }
 
