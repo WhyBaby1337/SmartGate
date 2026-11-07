@@ -431,6 +431,35 @@ void testInvalidAndLegacyStatesClearProfile() {
 }
 } // namespace
 
+
+void testRepeatedPrepareWithoutRelease() {
+    SmartGateAudioProcessor processor;
+    juce::MidiBuffer midi;
+    constexpr double rates[] = {48000.0, 44100.0, 96000.0};
+
+    // Hosts can renegotiate the audio format while the same processor
+    // instance is alive. prepareToPlay must stop/join the previous VAD
+    // worker before replacing its model, even without an intervening release.
+    for (const double rate : rates) {
+        processor.prepareToPlay(rate, 512);
+        juce::AudioBuffer<float> buffer(2, 257);
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+            auto* samples = buffer.getWritePointer(channel);
+            for (int i = 0; i < buffer.getNumSamples(); ++i) {
+                const double phase = 2.0 * juce::MathConstants<double>::pi
+                    * 440.0 * static_cast<double>(i) / rate;
+                samples[i] = static_cast<float>(0.1 * std::sin(phase));
+            }
+        }
+        processor.processBlock(buffer, midi);
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+                require(std::isfinite(buffer.getReadPointer(channel)[i]),
+                        "repeated prepare must keep audio output finite across sample-rate changes");
+    }
+    processor.releaseResources();
+}
+
 int main() {
     testImmediateRoundTrip();
     testPreparedRestoreCanBeSavedBeforeAudioCallback();
@@ -442,6 +471,7 @@ int main() {
     testLearnTargetCanRestartAfterRestoredEnabledSession();
     testInvalidProfileVariantsClearPreviousProfile();
     testRuntimeBlockAndToggleTransitions();
+    testRepeatedPrepareWithoutRelease();
     testMonoRuntimeProcessing();
     std::cout << "All processor state integration tests passed.\n";
     return 0;
