@@ -26,11 +26,14 @@ private:
     void layoutControl(std::size_t index, juce::Rectangle<int> area);
     void drawMeter(juce::Graphics& g, juce::Rectangle<float> area,
                    const juce::String& label, float levelDb) const;
+    void drawCpuMeter(juce::Graphics& g, juce::Rectangle<float> area) const;
 
     SmartGateAudioProcessor& processor_;
     float inputMeterDb_ = -100.0f;
     float outputMeterDb_ = -100.0f;
     float gateGain_ = 0.0f;
+    float cpuLoadPercent_ = 0.0f;
+    float cpuPeakPercent_ = 0.0f;
     std::uint64_t learnedFrames_ = 0;
     bool vadReady_ = false;
     std::array<juce::Slider, 9> sliders_;
