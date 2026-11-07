@@ -132,6 +132,20 @@ void runTargetProfileTests() {
     requireFeature(profile.confidence(extracted) > 0.99f,
                    "Profile must strongly match its training features");
 
+    // A gain or microphone-distance change alters absolute RMS without
+    // changing the normalized spectral/zero-crossing signature. It must not
+    // make the learned target suddenly look unrelated.
+    auto quieterTarget = extracted;
+    quieterTarget.logRms -= 0.60f; // approximately 12 dB lower
+    auto louderTarget = extracted;
+    louderTarget.logRms += 0.30f; // approximately 6 dB higher
+    requireFeature(std::abs(profile.confidence(quieterTarget)
+                            - profile.confidence(extracted)) < 1.0e-6f,
+                   "Target similarity must be invariant to lower input gain");
+    requireFeature(std::abs(profile.confidence(louderTarget)
+                            - profile.confidence(extracted)) < 1.0e-6f,
+                   "Target similarity must be invariant to higher input gain");
+
     const smartgate::AudioFeatures unrelated{
         -3.0f, 0.45f, 0.02f, 0.08f, 0.90f
     };
