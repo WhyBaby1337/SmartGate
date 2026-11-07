@@ -818,9 +818,13 @@ void testProcessorGateOpensClosesAndReopens() {
     require(speechPeak > 0.15f,
             "conventional gate must open and pass a sustained above-threshold voice-like signal");
 
-    const float closedPeak = processSilence(static_cast<int>(sampleRate * 1.0));
+    (void) processSilence(static_cast<int>(sampleRate * 1.0));
+    // Probe with a non-zero signal below the opening threshold. Measuring
+    // silence alone cannot prove that the gate closed because zero input
+    // produces zero output even while the gate is fully open.
+    const float closedPeak = processTone(0.01f, static_cast<int>(sampleRate * 0.05));
     require(closedPeak < 0.001f,
-            "gate must attenuate the output after speech ends and the hold/release interval expires");
+            "gate must attenuate a below-threshold probe after the hold/release interval expires");
 
     const float reopenedPeak = processTone(0.05f, static_cast<int>(sampleRate * 0.20));
     require(reopenedPeak > 0.035f,
