@@ -1,19 +1,24 @@
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace {
 const auto background = juce::Colour(0xff101318);
 const auto panel = juce::Colour(0xff191f27);
 const auto accent = juce::Colour(0xff65d6b0);
 const auto muted = juce::Colour(0xff8b98a8);
+const auto meterTrack = juce::Colour(0xff29333e);
+const auto warning = juce::Colour(0xffffc36b);
 }
 
 SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     SmartGateAudioProcessor& processor)
     : AudioProcessorEditor(&processor), processor_(processor) {
-    setSize(760, 560);
+    setSize(800, 640);
     setResizable(true, true);
-    setResizeLimits(640, 500, 1100, 760);
+    setResizeLimits(680, 560, 1200, 900);
 
     for (std::size_t i = 0; i < sliders_.size(); ++i) {
         const juce::String suffix = (i == 0 || i == 4 || i == 5)
@@ -45,6 +50,9 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     keyboardModeLabel_.setColour(juce::Label::textColourId, muted);
     keyboardModeLabel_.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
     addAndMakeVisible(keyboardModeLabel_);
+
+    timerCallback();
+    startTimerHz(30);
 }
 
 void SmartGateAudioProcessorEditor::configureSlider(
@@ -75,6 +83,26 @@ void SmartGateAudioProcessorEditor::layoutControl(
     sliders_[index].setBounds(area.reduced(4, 0));
 }
 
+void SmartGateAudioProcessorEditor::drawMeter(
+    juce::Graphics& g, juce::Rectangle<float> area,
+    const juce::String& label, float levelDb) const {
+    g.setColour(muted);
+    g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
+    g.drawText(label, area.removeFromTop(15.0f), juce::Justification::left);
+    auto valueArea = area.removeFromTop(17.0f);
+    const auto valueText = levelDb <= -99.0f ? juce::String("-inf dB")
+                                              : juce::String(levelDb, 1) + " dB";
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::Font(juce::FontOptions(11.0f)));
+    g.drawText(valueText, valueArea, juce::Justification::right);
+    g.setColour(meterTrack);
+    g.fillRoundedRectangle(area, 4.0f);
+    const float normalized = juce::jlimit(0.0f, 1.0f, (levelDb + 60.0f) / 60.0f);
+    auto fill = area.withWidth(area.getWidth() * normalized);
+    g.setColour(levelDb > -6.0f ? warning : accent);
+    g.fillRoundedRectangle(fill, 4.0f);
+}
+
 void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
     g.fillAll(background);
     auto bounds = getLocalBounds().toFloat();
@@ -96,6 +124,36 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
 
     g.setColour(juce::Colour(0xff2a333e));
     g.drawHorizontalLine(91, 28.0f, getWidth() - 28.0f);
+
+    auto meterArea = getLocalBounds().toFloat().reduced(30.0f, 0.0f);
+    meterArea.setY(155.0f);
+    meterArea.setHeight(48.0f);
+    const float gap = 18.0f;
+    const float meterWidth = (meterArea.getWidth() - 2.0f * gap) / 3.0f;
+    drawMeter(g, meterArea.removeFromLeft(meterWidth), "INPUT", inputMeterDb_);
+    meterArea.removeFromLeft(gap);
+    drawMeter(g, meterArea.removeFromLeft(meterWidth), "OUTPUT", outputMeterDb_);
+    meterArea.removeFromLeft(gap);
+
+    g.setColour(muted);
+    g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
+    g.drawText("GATE", meterArea.removeFromTop(15.0f), juce::Justification::left);
+    const auto gateText = gateGain_ > 0.95f ? "OPEN"
+        : (gateGain_ > 0.02f ? "CLOSING" : "CLOSED");
+    g.setColour(gateGain_ > 0.95f ? accent : juce::Colours::white);
+    g.setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
+    g.drawText(gateText, meterArea.removeFromTop(17.0f), juce::Justification::left);
+
+    auto status = getLocalBounds().reduced(30, 0);
+    status.setY(207);
+    status.setHeight(18);
+    g.setFont(juce::Font(juce::FontOptions(10.0f)));
+    g.setColour(vadReady_ ? accent : warning);
+    g.drawText(vadReady_ ? "SILERO VAD: READY" : "SILERO VAD: NOT AVAILABLE",
+               status.removeFromLeft(210), juce::Justification::left);
+    g.setColour(muted);
+    g.drawText("TARGET PROFILE: " + juce::String(static_cast<juce::int64>(learnedFrames_))
+                   + " FRAMES", status, juce::Justification::left);
 }
 
 void SmartGateAudioProcessorEditor::resized() {
@@ -109,7 +167,7 @@ void SmartGateAudioProcessorEditor::resized() {
     keyboardModeLabel_.setBounds(keyboardArea.removeFromTop(15));
     keyboardModeBox_.setBounds(keyboardArea.removeFromTop(28));
 
-    area.removeFromTop(10);
+    area.removeFromTop(116);
     const int gap = 8;
     const int cellWidth = (area.getWidth() - 2 * gap) / 3;
     const int cellHeight = (area.getHeight() - 2 * gap) / 3;
@@ -123,4 +181,19 @@ void SmartGateAudioProcessorEditor::resized() {
             cellWidth, cellHeight);
         layoutControl(i, cell.reduced(4));
     }
+}
+
+void SmartGateAudioProcessorEditor::timerCallback() {
+    const auto readDb = [](float value) noexcept {
+        return std::isfinite(value) ? juce::jlimit(-100.0f, 0.0f, value) : -100.0f;
+    };
+    const float input = readDb(processor_.inputPeakDbForUi_.load(std::memory_order_relaxed));
+    const float output = readDb(processor_.outputPeakDbForUi_.load(std::memory_order_relaxed));
+    inputMeterDb_ = juce::jmax(input, inputMeterDb_ - 2.0f);
+    outputMeterDb_ = juce::jmax(output, outputMeterDb_ - 2.0f);
+    gateGain_ = juce::jlimit(0.0f, 1.0f,
+        processor_.gateGainForUi_.load(std::memory_order_relaxed));
+    learnedFrames_ = processor_.learnedFramesForUi_.load(std::memory_order_relaxed);
+    vadReady_ = processor_.vadReadyForUi_.load(std::memory_order_relaxed);
+    repaint();
 }
