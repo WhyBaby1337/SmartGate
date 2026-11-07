@@ -556,6 +556,58 @@ void testLegacyPartialParameterStateUsesDefaults() {
             "missing legacy parameters must continue to use layout defaults after a round trip");
 }
 
+void testDuplicateParameterIdsAreRejected() {
+    SmartGateAudioProcessor fixtureProcessor;
+    juce::MemoryBlock fixtureData;
+    auto fixture = saveXml(fixtureProcessor, fixtureData);
+
+    auto* threshold = parameter(*fixture, "threshold");
+    require(threshold != nullptr, "duplicate-parameter fixture must contain threshold");
+    threshold->setAttribute("value", -12.4);
+    auto* duplicateThreshold = fixture->createNewChildElement("PARAM");
+    duplicateThreshold->setAttribute("id", "threshold");
+    duplicateThreshold->setAttribute("value", -55.0);
+
+    auto* release = parameter(*fixture, "release");
+    require(release != nullptr, "duplicate-parameter fixture must contain release");
+    release->setAttribute("value", 345.0);
+
+    juce::MemoryBlock encoded;
+    encode(fixtureProcessor, *fixture, encoded);
+
+    SmartGateAudioProcessor restored;
+    restored.setStateInformation(encoded.getData(), static_cast<int>(encoded.getSize()));
+
+    const auto value = [&](const char* id) {
+        for (auto* parameterBase : restored.getParameters()) {
+            auto* parameterWithId =
+                dynamic_cast<juce::AudioProcessorParameterWithID*>(parameterBase);
+            auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameterBase);
+            if (parameterWithId != nullptr && ranged != nullptr
+                && parameterWithId->paramID == id)
+                return ranged->convertFrom0to1(parameterBase->getValue());
+        }
+        return std::numeric_limits<float>::quiet_NaN();
+    };
+
+    require(std::abs(value("threshold") - (-36.0f)) <= 1.0e-4f,
+            "ambiguous duplicate parameter IDs must fall back to the parameter default");
+    require(std::abs(value("release") - 345.0f) <= 1.0e-4f,
+            "rejecting a duplicate parameter must preserve unrelated valid parameters");
+
+    juce::MemoryBlock saved;
+    auto savedXml = saveXml(restored, saved);
+    int thresholdNodes = 0;
+    for (auto* child = savedXml->getFirstChildElement(); child != nullptr;
+         child = child->getNextElement()) {
+        if (child->hasTagName("PARAM")
+            && child->getStringAttribute("id") == "threshold")
+            ++thresholdNodes;
+    }
+    require(thresholdNodes == 1,
+            "saving after duplicate-parameter recovery must write one canonical parameter node");
+}
+
 void testMalformedAndForeignRootStatesAreIgnored() {
     SmartGateAudioProcessor processor;
     setParameter(processor, "threshold", -18.0f);
@@ -689,6 +741,7 @@ int main() {
     testPreparedRestoreCanBeSavedBeforeAudioCallback();
     testLatestRestoreWinsBeforeAudioCallback();
     testInvalidAndLegacyStatesClearProfile();
+    testDuplicateParameterIdsAreRejected();
     testMalformedAndForeignRootStatesAreIgnored();
     testLegacyPartialParameterStateUsesDefaults();
     testLearnTargetRequestWaitsUntilAiIsEnabled();
