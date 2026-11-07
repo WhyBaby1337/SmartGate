@@ -818,10 +818,10 @@ void testProcessorGateOpensClosesAndReopens() {
     require(speechPeak > 0.15f,
             "conventional gate must open and pass a sustained above-threshold voice-like signal");
 
-    // A brief pause shorter than the configured hold time should not chop
-    // the quiet tail of the next fragment. Use a non-zero below-threshold
-    // probe so this checks the gate envelope rather than silence passthrough.
-    (void) processSilence(static_cast<int>(sampleRate * 0.03));
+    // Wait long enough for the detector's 20 ms release smoothing to fall
+    // below the closing threshold, but remain inside the configured 80 ms
+    // Hold interval. The next quiet probe therefore tests Hold itself.
+    (void) processSilence(static_cast<int>(sampleRate * 0.06));
     const float shortGapPeak = processTone(0.01f, static_cast<int>(sampleRate * 0.02));
     require(shortGapPeak > 0.0075f,
             "gate hold must preserve a quiet fragment immediately after a short pause");
