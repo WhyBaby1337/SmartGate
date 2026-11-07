@@ -158,9 +158,21 @@ jobs:
             build/**/*.pdb
           if-no-files-found: ignore
 
+      - name: Stage distributable VST3 bundle
+        shell: pwsh
+        run: |
+          $bundle = Get-ChildItem "build/SmartGate_artefacts/Release/VST3" -Directory -Filter "*.vst3" | Select-Object -First 1
+          if (-not $bundle) { throw "VST3 bundle was not produced." }
+
+          $stage = Join-Path $env:RUNNER_TEMP "SmartGate-VST3"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item -LiteralPath $bundle.FullName -Destination $stage -Recurse -Force
+
+          Write-Host "Staged distributable bundle: $(Join-Path $stage $bundle.Name)"
+
       - name: Upload VST3
         uses: actions/upload-artifact@v7
         with:
           name: SmartGate-Windows-x64-VST3
-          path: build/SmartGate_artefacts/Release/VST3/
+          path: ${{ runner.temp }}/SmartGate-VST3/
           if-no-files-found: error
