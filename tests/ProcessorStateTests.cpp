@@ -748,6 +748,86 @@ void testInvalidAndLegacyStatesClearProfile() {
             && profile(*legacySaved)->getIntAttribute("count", -1) == 0,
             "legacy state must serialize an explicit empty profile");
 }
+
+void testProcessorGateOpensClosesAndReopens() {
+    SmartGateAudioProcessor processor;
+    juce::MidiBuffer midi;
+    constexpr double sampleRate = 48000.0;
+    constexpr int blockSize = 256;
+    processor.prepareToPlay(sampleRate, blockSize);
+
+    setParameter(processor, "aiEnabled", 0.0f);
+    setParameter(processor, "learnTarget", 0.0f);
+    setParameter(processor, "keyboardReduction", 0.0f);
+    setParameter(processor, "threshold", -36.0f);
+    setParameter(processor, "attack", 5.0f);
+    setParameter(processor, "release", 120.0f);
+    setParameter(processor, "hold", 80.0f);
+    setParameter(processor, "hysteresis", 3.0f);
+    setParameter(processor, "range", -80.0f);
+
+    const auto processTone = [&](float amplitude, int totalSamples) {
+        float peak = 0.0f;
+        int position = 0;
+        while (position < totalSamples) {
+            const int count = std::min(blockSize, totalSamples - position);
+            juce::AudioBuffer<float> buffer(2, count);
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+                auto* samples = buffer.getWritePointer(channel);
+                for (int i = 0; i < count; ++i) {
+                    const double phase = 2.0 * juce::MathConstants<double>::pi
+                        * 220.0 * static_cast<double>(position + i) / sampleRate;
+                    samples[i] = amplitude * static_cast<float>(std::sin(phase));
+                }
+            }
+            processor.processBlock(buffer, midi);
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+                for (int i = 0; i < count; ++i) {
+                    const float output = buffer.getReadPointer(channel)[i];
+                    require(std::isfinite(output),
+                            "gate behavior test must keep every output sample finite");
+                    peak = std::max(peak, std::abs(output));
+                }
+            position += count;
+        }
+        return peak;
+    };
+
+    const auto processSilence = [&](int totalSamples) {
+        float finalPeak = 0.0f;
+        int position = 0;
+        while (position < totalSamples) {
+            const int count = std::min(blockSize, totalSamples - position);
+            juce::AudioBuffer<float> buffer(2, count);
+            buffer.clear();
+            processor.processBlock(buffer, midi);
+            if (position + count == totalSamples) {
+                for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+                    for (int i = 0; i < count; ++i)
+                        finalPeak = std::max(finalPeak,
+                            std::abs(buffer.getReadPointer(channel)[i]));
+            }
+            position += count;
+        }
+        return finalPeak;
+    };
+
+    (void) processSilence(static_cast<int>(sampleRate * 0.5));
+    const float speechPeak = processTone(0.20f, static_cast<int>(sampleRate * 0.25));
+    require(speechPeak > 0.15f,
+            "conventional gate must open and pass a sustained above-threshold voice-like signal");
+
+    const float closedPeak = processSilence(static_cast<int>(sampleRate * 1.0));
+    require(closedPeak < 0.001f,
+            "gate must attenuate the output after speech ends and the hold/release interval expires");
+
+    const float reopenedPeak = processTone(0.05f, static_cast<int>(sampleRate * 0.20));
+    require(reopenedPeak > 0.035f,
+            "gate must reopen for a subsequent quieter above-threshold voice-like signal");
+
+    processor.releaseResources();
+}
+
 } // namespace
 
 
@@ -796,6 +876,7 @@ int main() {
     testInvalidProfileVariantsClearPreviousProfile();
     testDuplicateTargetProfilesAreRejected();
     testRuntimeBlockAndToggleTransitions();
+    testProcessorGateOpensClosesAndReopens();
     testRepeatedPrepareWithoutRelease();
     testMonoRuntimeProcessing();
     std::cout << "All processor state integration tests passed.\n";
