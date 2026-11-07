@@ -46,8 +46,11 @@ public:
     // Do not contaminate the learned voice profile with detected keyboard
     // transients. The detector is only enabled during learning when keyboard
     // reduction itself is off, so this check does not depend on the effect mix.
+    static constexpr float keyboardLearningConfidenceLimit = 0.36f;
+
     static bool isKeyboardQualifiedForLearning(float keyboardConfidence) noexcept {
-        return std::isfinite(keyboardConfidence) && keyboardConfidence < 0.55f;
+        return std::isfinite(keyboardConfidence)
+            && keyboardConfidence < keyboardLearningConfidenceLimit;
     }
 
     // Restore is intended for validated, non-real-time state loading. The
