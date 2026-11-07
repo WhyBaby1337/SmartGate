@@ -489,7 +489,7 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
             char* valueEnd = nullptr;
             const auto parsedValue = std::strtod(valueStart, &valueEnd);
             const bool validValue = valueEnd != valueStart
-                && valueEnd != nullptr && *valueEnd == '\\0'
+                && valueEnd != nullptr && *valueEnd == '\0'
                 && std::isfinite(parsedValue);
             if (!validValue)
                 restoredState.removeChild(i, nullptr);
