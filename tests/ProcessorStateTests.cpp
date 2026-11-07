@@ -452,6 +452,53 @@ void testLearnTargetCanRestartAfterRestoredEnabledSession() {
     processor.releaseResources();
 }
 
+void testMalformedAndForeignRootStatesAreIgnored() {
+    SmartGateAudioProcessor processor;
+    setParameter(processor, "threshold", -18.0f);
+
+    juce::XmlElement foreignRoot("FOREIGN_STATE");
+    juce::MemoryBlock foreignData;
+    encode(processor, foreignRoot, foreignData);
+    processor.setStateInformation(foreignData.getData(),
+                                  static_cast<int>(foreignData.getSize()));
+
+    float thresholdAfterForeignRoot = std::numeric_limits<float>::quiet_NaN();
+    for (auto* parameterBase : processor.getParameters()) {
+        auto* parameterWithId =
+            dynamic_cast<juce::AudioProcessorParameterWithID*>(parameterBase);
+        auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameterBase);
+        if (parameterWithId != nullptr && ranged != nullptr
+            && parameterWithId->paramID == "threshold") {
+            thresholdAfterForeignRoot = ranged->convertFrom0to1(parameterBase->getValue());
+            break;
+        }
+    }
+    require(std::abs(thresholdAfterForeignRoot - (-18.0f)) <= 1.0e-4f,
+            "state with a foreign XML root must leave current parameters unchanged");
+
+    const char malformedBytes[] = {
+        static_cast<char>(0x13), static_cast<char>(0x37),
+        static_cast<char>(0x00), static_cast<char>(0x7f),
+        static_cast<char>(0x55), static_cast<char>(0xaa),
+        static_cast<char>(0x21), static_cast<char>(0x42)
+    };
+    processor.setStateInformation(malformedBytes, static_cast<int>(sizeof(malformedBytes)));
+
+    float thresholdAfterMalformedData = std::numeric_limits<float>::quiet_NaN();
+    for (auto* parameterBase : processor.getParameters()) {
+        auto* parameterWithId =
+            dynamic_cast<juce::AudioProcessorParameterWithID*>(parameterBase);
+        auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameterBase);
+        if (parameterWithId != nullptr && ranged != nullptr
+            && parameterWithId->paramID == "threshold") {
+            thresholdAfterMalformedData = ranged->convertFrom0to1(parameterBase->getValue());
+            break;
+        }
+    }
+    require(std::abs(thresholdAfterMalformedData - (-18.0f)) <= 1.0e-4f,
+            "malformed binary state must leave current parameters unchanged");
+}
+
 void testInvalidAndLegacyStatesClearProfile() {
     SmartGateAudioProcessor processor;
     juce::MemoryBlock empty;
