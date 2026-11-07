@@ -6,13 +6,14 @@
 
 class SmartGateAudioProcessor;
 
-class SmartGateAudioProcessorEditor final : public juce::AudioProcessorEditor {
+class SmartGateAudioProcessorEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
     explicit SmartGateAudioProcessorEditor(SmartGateAudioProcessor&);
     ~SmartGateAudioProcessorEditor() override = default;
 
     void paint(juce::Graphics&) override;
     void resized() override;
+    void timerCallback() override;
 
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
@@ -22,8 +23,15 @@ private:
     void configureSlider(std::size_t index, const juce::String& label,
                          const juce::String& suffix);
     void layoutControl(std::size_t index, juce::Rectangle<int> area);
+    void drawMeter(juce::Graphics& g, juce::Rectangle<float> area,
+                   const juce::String& label, float levelDb) const;
 
     SmartGateAudioProcessor& processor_;
+    float inputMeterDb_ = -100.0f;
+    float outputMeterDb_ = -100.0f;
+    float gateGain_ = 0.0f;
+    std::uint64_t learnedFrames_ = 0;
+    bool vadReady_ = false;
     std::array<juce::Slider, 9> sliders_;
     std::array<juce::Label, 9> labels_;
     std::array<std::unique_ptr<SliderAttachment>, 9> sliderAttachments_;
