@@ -509,6 +509,7 @@ void testLegacyPartialParameterStateUsesDefaults() {
     encode(fixtureProcessor, *legacy, encoded);
 
     SmartGateAudioProcessor restored;
+    setParameter(restored, "threshold", -8.0f);
     restored.setStateInformation(encoded.getData(), static_cast<int>(encoded.getSize()));
 
     const auto value = [&](const char* id) {
