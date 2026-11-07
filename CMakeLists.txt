@@ -147,7 +147,7 @@ if(SMARTGATE_BUILD_PLUGIN)
     if(SMARTGATE_ENABLE_SILERO)
         target_include_directories(SmartGate PRIVATE "${SMARTGATE_ORT_ROOT}/include")
         target_compile_definitions(SmartGate PRIVATE SMARTGATE_HAS_SILERO=1)
-        target_link_libraries(SmartGate PRIVATE SileroVADModel SmartGateONNXRuntime)
+        target_link_libraries(SmartGate PRIVATE SileroVADModel)
         add_custom_command(TARGET SmartGate POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:SmartGateONNXRuntime>"
