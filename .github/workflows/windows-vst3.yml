@@ -59,9 +59,10 @@ jobs:
           $module = Join-Path $bundle.FullName "Contents/x86_64-win/Smart Gate.vst3"
           $moduleDir = Split-Path $module -Parent
           $runtime = Join-Path $moduleDir "onnxruntime.dll"
+          $sharedProvider = Join-Path $moduleDir "onnxruntime_providers_shared.dll"
           $notices = Join-Path $bundle.FullName "Contents/Resources/THIRD_PARTY_NOTICES.txt"
 
-          foreach ($requiredFile in @($module, $runtime, $notices)) {
+          foreach ($requiredFile in @($module, $runtime, $sharedProvider, $notices)) {
             if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
               throw "Required VST3 bundle file is missing: $requiredFile"
             }
@@ -70,7 +71,7 @@ jobs:
             }
           }
 
-          Write-Host "VST3 module, ONNX Runtime, and third-party notices are present."
+          Write-Host "VST3 module, ONNX Runtime, shared provider DLL, and third-party notices are present."
       - name: Validate VST3 with pluginval
         shell: pwsh
         run: |
