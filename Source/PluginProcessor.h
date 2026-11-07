@@ -35,7 +35,9 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    // Maximum configured tail: 500 ms Hold + 150 ms adaptive extension
+    // + 1000 ms Release. Report it so hosts preserve the gate's decay on stop/render.
+    double getTailLengthSeconds() const override { return 1.65; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
