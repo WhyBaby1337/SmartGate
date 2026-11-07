@@ -29,6 +29,10 @@ Do not copy only the file named `Smart Gate.vst3` from inside the bundle. Keep t
 - **Windows reports a missing runtime DLL:** install or repair the official Microsoft Visual C++ 2015–2022 Redistributable for x64, then restart the DAW.
 - **The plug-in still fails to load:** check the DAW's plug-in scan or validation log. Do not replace the bundled `onnxruntime.dll` or `onnxruntime_providers_shared.dll` with files from another ONNX Runtime version.
 
+## CPU meter
+
+The editor's **PLUGIN CPU** readout estimates Smart Gate's own `processBlock` time as a percentage of the real-time budget for the current audio block. `100%` means the plug-in used the entire block deadline; values above `100%` indicate that processing exceeded that block's budget. The smoothed value is shown alongside a short peak hold. This is not the computer's total CPU usage and does not include other plug-ins or DAW processing.
+
 ## Build validation status
 
 The CI workflow builds the Windows x64 VST3, runs DSP and processor-state tests, runs Silero smoke/latency tests, checks the bundle dependencies, and validates the module with pluginval. The CI pluginval run skips GUI tests because the runner is headless. A successful CI run does not replace testing the plug-in in the target DAW on the user's computer.
