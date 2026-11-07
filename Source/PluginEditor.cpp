@@ -163,16 +163,17 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
     drawMeter(g, meterArea.removeFromLeft(meterWidth), "OUTPUT", outputMeterDb_);
     meterArea.removeFromLeft(gap);
 
+    auto gateArea = meterArea.removeFromLeft(meterWidth);
     g.setColour(muted);
     g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
-    g.drawText("GATE", meterArea.removeFromTop(15.0f), juce::Justification::left);
+    g.drawText("GATE", gateArea.removeFromTop(15.0f), juce::Justification::left);
     const auto gateText = gateGain_ > 0.95f ? "OPEN"
         : (gateGain_ > 0.02f ? "CLOSING" : "CLOSED");
     g.setColour(gateGain_ > 0.95f ? accent : juce::Colours::white);
     g.setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
-    g.drawText(gateText, meterArea.removeFromTop(17.0f), juce::Justification::left);
+    g.drawText(gateText, gateArea.removeFromTop(17.0f), juce::Justification::left);
     meterArea.removeFromLeft(gap);
-    drawCpuMeter(g, meterArea);
+    drawCpuMeter(g, meterArea.removeFromLeft(meterWidth));
 
     auto status = getLocalBounds().reduced(30, 0);
     status.setY(207);
