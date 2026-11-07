@@ -76,6 +76,11 @@ float SmartGateAudioProcessor::runSileroInference(const VadQueue::Frame& frame,
 
 void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     vadReadyForUi_.store(false, std::memory_order_relaxed);
+    cpuLoadAverage_ = 0.0f;
+    cpuPeakHold_ = 0.0f;
+    cpuPeakHoldSeconds_ = 0.0f;
+    cpuLoadPercentForUi_.store(0.0f, std::memory_order_relaxed);
+    cpuPeakPercentForUi_.store(0.0f, std::memory_order_relaxed);
     inputPeakDbForUi_.store(-100.0f, std::memory_order_relaxed);
     outputPeakDbForUi_.store(-100.0f, std::memory_order_relaxed);
     gateGainForUi_.store(0.0f, std::memory_order_relaxed);
@@ -195,6 +200,7 @@ void SmartGateAudioProcessor::finishFeatureFrame() noexcept {
 
 void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                             juce::MidiBuffer&) {
+    const auto processStartTicks = juce::Time::getHighResolutionTicks();
     juce::ScopedNoDenormals noDenormals;
 
     gateEnvelope_.setThresholdDb(*parameters_.getRawParameterValue("threshold"));
@@ -434,6 +440,40 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             right[sample] = rightSample * outputGain;
         outputPeak = juce::jmax(outputPeak,
             juce::jmax(std::abs(left[sample]), right != nullptr ? std::abs(right[sample]) : 0.0f));
+    }
+
+    // Measure this plugin's processing time against the real-time budget for
+    // the current block. The timer is read only twice per block; all smoothing
+    // and peak-hold state is audio-thread local, with atomic UI snapshots.
+    const auto processEndTicks = juce::Time::getHighResolutionTicks();
+    const auto ticksPerSecond = juce::Time::getHighResolutionTicksPerSecond();
+    const double hostSampleRate = getSampleRate();
+    if (processEndTicks > processStartTicks && ticksPerSecond > 0
+        && std::isfinite(hostSampleRate) && hostSampleRate > 0.0) {
+        const double blockSeconds = static_cast<double>(samples) / hostSampleRate;
+        const double elapsedSeconds = static_cast<double>(processEndTicks - processStartTicks)
+            / static_cast<double>(ticksPerSecond);
+        if (blockSeconds > 0.0 && std::isfinite(elapsedSeconds)) {
+            const float loadPercent = static_cast<float>(juce::jlimit(
+                0.0, 1000.0, 100.0 * elapsedSeconds / blockSeconds));
+            // A 250 ms time constant keeps the display readable without
+            // hiding meaningful changes when the host buffer size changes.
+            const float smoothing = static_cast<float>(
+                juce::jlimit(0.0, 1.0, blockSeconds / 0.250));
+            cpuLoadAverage_ += smoothing * (loadPercent - cpuLoadAverage_);
+            if (loadPercent >= cpuPeakHold_) {
+                cpuPeakHold_ = loadPercent;
+                cpuPeakHoldSeconds_ = 1.0f;
+            } else {
+                cpuPeakHoldSeconds_ -= static_cast<float>(blockSeconds);
+                if (cpuPeakHoldSeconds_ <= 0.0f) {
+                    cpuPeakHold_ = loadPercent;
+                    cpuPeakHoldSeconds_ = 0.0f;
+                }
+            }
+            cpuLoadPercentForUi_.store(cpuLoadAverage_, std::memory_order_relaxed);
+            cpuPeakPercentForUi_.store(cpuPeakHold_, std::memory_order_relaxed);
+        }
     }
 
     const auto toDb = [](float peak) noexcept {
