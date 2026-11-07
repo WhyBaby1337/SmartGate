@@ -107,7 +107,7 @@ void SmartGateAudioProcessorEditor::drawCpuMeter(
     juce::Graphics& g, juce::Rectangle<float> area) const {
     g.setColour(muted);
     g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
-    g.drawText("CPU LOAD", area.removeFromTop(15.0f), juce::Justification::left);
+    g.drawText("PLUGIN CPU", area.removeFromTop(15.0f), juce::Justification::left);
 
     const auto valueArea = area.removeFromTop(17.0f);
     g.setColour(cpuPeakPercent_ >= 100.0f ? warning : juce::Colours::white);
