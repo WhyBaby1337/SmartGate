@@ -149,22 +149,28 @@ public:
 
         // Floors prevent near-zero training variance from making the model
         // hypersensitive to harmless frame-to-frame fluctuations.
-        constexpr std::array<double, 5> varianceFloors{
-            0.08 * 0.08, 0.015 * 0.015, 0.04 * 0.04,
-            0.04 * 0.04, 0.04 * 0.04
+        // Absolute frame loudness is deliberately excluded from similarity.
+        // It is retained in the profile for acquisition validation and state
+        // compatibility, but mic distance, preamp gain, and host trim can change
+        // RMS substantially without changing the speaker or vocal timbre.
+        constexpr std::array<double, 4> varianceFloors{
+            0.015 * 0.015, 0.04 * 0.04, 0.04 * 0.04, 0.04 * 0.04
         };
         const auto values = toArray(features);
         double distance = 0.0;
-        for (std::size_t i = 0; i < values.size(); ++i) {
+        for (std::size_t i = 1; i < values.size(); ++i) {
+            const auto featureIndex = i - 1;
             const double variance = count_ > 1
                 ? m2_[i] / static_cast<double>(count_ - 1) : 0.0;
-            const double scale = std::sqrt(std::max(variance, varianceFloors[i]));
+            const double scale = std::sqrt(std::max(
+                variance, varianceFloors[featureIndex]));
             const double z = (static_cast<double>(values[i]) - mean_[i]) / scale;
             distance += z * z;
         }
 
-        // Mean squared normalized distance gives a smooth confidence curve.
-        const double meanSquaredDistance = distance / static_cast<double>(values.size());
+        // Mean squared normalized distance across gain-independent features
+        // gives a smooth confidence curve.
+        const double meanSquaredDistance = distance / 4.0;
         return static_cast<float>(std::exp(-0.5 * meanSquaredDistance));
     }
 
