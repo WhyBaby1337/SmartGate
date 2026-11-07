@@ -609,6 +609,46 @@ void testDuplicateParameterIdsAreRejected() {
             "saving after duplicate-parameter recovery must write one canonical parameter node");
 }
 
+void testMalformedAndNonFiniteParameterValuesAreRejected() {
+    const char* invalidValues[] = {"nan", "inf", "-inf", "not-a-number", "1e9999"};
+    for (const auto* invalidValue : invalidValues) {
+        SmartGateAudioProcessor fixtureProcessor;
+        juce::MemoryBlock fixtureData;
+        auto fixture = saveXml(fixtureProcessor, fixtureData);
+
+        auto* threshold = parameter(*fixture, "threshold");
+        require(threshold != nullptr, "invalid-value fixture must contain threshold");
+        threshold->setAttribute("value", invalidValue);
+        auto* release = parameter(*fixture, "release");
+        require(release != nullptr, "invalid-value fixture must contain release");
+        release->setAttribute("value", 345.0);
+
+        juce::MemoryBlock encoded;
+        encode(fixtureProcessor, *fixture, encoded);
+
+        SmartGateAudioProcessor restored;
+        setParameter(restored, "threshold", -8.0f);
+        restored.setStateInformation(encoded.getData(), static_cast<int>(encoded.getSize()));
+
+        const auto value = [&](const char* id) {
+            for (auto* parameterBase : restored.getParameters()) {
+                auto* parameterWithId =
+                    dynamic_cast<juce::AudioProcessorParameterWithID*>(parameterBase);
+                auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameterBase);
+                if (parameterWithId != nullptr && ranged != nullptr
+                    && parameterWithId->paramID == id)
+                    return ranged->convertFrom0to1(parameterBase->getValue());
+            }
+            return std::numeric_limits<float>::quiet_NaN();
+        };
+
+        require(std::abs(value("threshold") - (-36.0f)) <= 1.0e-4f,
+                "malformed or non-finite parameter values must restore the declared default");
+        require(std::abs(value("release") - 345.0f) <= 1.0e-4f,
+                "rejecting one invalid parameter must preserve unrelated valid parameters");
+    }
+}
+
 void testMalformedAndForeignRootStatesAreIgnored() {
     SmartGateAudioProcessor processor;
     setParameter(processor, "threshold", -18.0f);
@@ -743,6 +783,7 @@ int main() {
     testLatestRestoreWinsBeforeAudioCallback();
     testInvalidAndLegacyStatesClearProfile();
     testDuplicateParameterIdsAreRejected();
+    testMalformedAndNonFiniteParameterValuesAreRejected();
     testMalformedAndForeignRootStatesAreIgnored();
     testLegacyPartialParameterStateUsesDefaults();
     testLearnTargetRequestWaitsUntilAiIsEnabled();
