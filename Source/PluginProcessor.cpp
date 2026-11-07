@@ -75,6 +75,10 @@ float SmartGateAudioProcessor::runSileroInference(const VadQueue::Frame& frame,
 #endif
 
 void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
+    vadReadyForUi_.store(false, std::memory_order_relaxed);
+    inputPeakDbForUi_.store(-100.0f, std::memory_order_relaxed);
+    outputPeakDbForUi_.store(-100.0f, std::memory_order_relaxed);
+    gateGainForUi_.store(0.0f, std::memory_order_relaxed);
     // Use one validated host rate for every time-based subsystem. A malformed
     // or extreme host value must not make smoothing unstable or desynchronize
     // the gate, feature extractors, keyboard detector, and VAD resampler.
@@ -104,7 +108,9 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
                 && vadWorker_.start(&SmartGateAudioProcessor::runSileroInference,
                                     sileroInference_.get(), vadGeneration_)) {
                 vadAvailable_ = true;
+                vadReadyForUi_.store(true, std::memory_order_relaxed);
             } else {
+                vadReadyForUi_.store(false, std::memory_order_relaxed);
                 sileroInference_.reset();
             }
         } catch (...) {
@@ -112,6 +118,7 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
             vadWorker_.stop();
             sileroInference_.reset();
             vadAvailable_ = false;
+            vadReadyForUi_.store(false, std::memory_order_relaxed);
         }
     }
 #endif
@@ -138,7 +145,9 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     pendingLearningStart_ = false;
     stateRestorePending_.store(false, std::memory_order_relaxed);
     wasAiEnabled_ = *parameters_.getRawParameterValue("aiEnabled") >= 0.5f;
-    publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
+    const auto initialProfile = targetProfile_.makeSnapshot();
+    publishedTargetProfile_.publish(initialProfile);
+    learnedFramesForUi_.store(initialProfile.count, std::memory_order_relaxed);
 }
 
 void SmartGateAudioProcessor::releaseResources() {
@@ -147,6 +156,7 @@ void SmartGateAudioProcessor::releaseResources() {
     vadWorker_.stop();
     sileroInference_.reset();
     vadAvailable_ = false;
+    vadReadyForUi_.store(false, std::memory_order_relaxed);
     vadProbabilitySmoothed_ = 0.0f;
 #endif
 }
@@ -173,8 +183,11 @@ void SmartGateAudioProcessor::finishFeatureFrame() noexcept {
 #endif
     if (learning && vadAllowsLearning
         && smartgate::TargetProfile::isValidLearningFrame(features)
-        && targetProfile_.learn(features))
-        publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
+        && targetProfile_.learn(features)) {
+        const auto snapshot = targetProfile_.makeSnapshot();
+        publishedTargetProfile_.publish(snapshot);
+        learnedFramesForUi_.store(snapshot.count, std::memory_order_relaxed);
+    }
 
     targetConfidenceTarget_ = targetProfile_.isReady()
         ? targetProfile_.confidence(features) : 1.0f;
@@ -241,6 +254,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         && restoredVersion != lastAppliedTargetProfileVersion_.load(std::memory_order_relaxed)
         && targetProfile_.restore(restored)) {
         publishedTargetProfile_.publish(restored);
+        learnedFramesForUi_.store(restored.count, std::memory_order_relaxed);
         lastAppliedTargetProfileVersion_.store(restoredVersion, std::memory_order_release);
         targetConfidenceTarget_ = targetConfidenceSmoothed_ = 1.0f;
     }
@@ -249,7 +263,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // Turning AI off pauses analysis without silently erasing an existing model.
     if (aiEnabled && pendingLearningStart_) {
         targetProfile_.clear();
-        publishedTargetProfile_.publish(targetProfile_.makeSnapshot());
+        const auto emptyProfile = targetProfile_.makeSnapshot();
+        publishedTargetProfile_.publish(emptyProfile);
+        learnedFramesForUi_.store(emptyProfile.count, std::memory_order_relaxed);
         featureExtractor_.reset();
         featureFramePosition_ = 0;
         targetConfidenceTarget_ = 1.0f;
@@ -290,6 +306,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (vadAvailable_ && sileroInference_ != nullptr
         && sileroInference_->inferenceFailureCount() != 0) {
         vadAvailable_ = false;
+        vadReadyForUi_.store(false, std::memory_order_relaxed);
         ++vadGeneration_;
         if (vadGeneration_ == 0)
             vadGeneration_ = 1;
@@ -335,6 +352,8 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // calls and bounds checks in the per-sample real-time loop.
     float* const left = buffer.getWritePointer(0);
     float* const right = channels > 1 ? buffer.getWritePointer(1) : nullptr;
+    float inputPeak = 0.0f;
+    float outputPeak = 0.0f;
 
     // Peak-linked detection keeps the stereo image centered and stable.
     // Analysis selects the stronger channel instead of averaging L/R, which
@@ -351,6 +370,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float rightSample = right != nullptr
             ? smartgate::finiteSampleOrZero(right[sample]) : leftSample;
         const float linkedPeak = juce::jmax(std::abs(leftSample), std::abs(rightSample));
+        inputPeak = juce::jmax(inputPeak, linkedPeak);
         const float mono = analyzeFrames && right != nullptr
             ? stereoAnalysisFoldDown_.process(leftSample, rightSample)
             : leftSample;
@@ -412,7 +432,16 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         left[sample] = leftSample * outputGain;
         if (right != nullptr)
             right[sample] = rightSample * outputGain;
+        outputPeak = juce::jmax(outputPeak,
+            juce::jmax(std::abs(left[sample]), right != nullptr ? std::abs(right[sample]) : 0.0f));
     }
+
+    const auto toDb = [](float peak) noexcept {
+        return juce::jlimit(-100.0f, 0.0f, 20.0f * std::log10(juce::jmax(peak, 1.0e-5f)));
+    };
+    inputPeakDbForUi_.store(toDb(inputPeak), std::memory_order_relaxed);
+    outputPeakDbForUi_.store(toDb(outputPeak), std::memory_order_relaxed);
+    gateGainForUi_.store(gateEnvelope_.getGain(), std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor* SmartGateAudioProcessor::createEditor() {
