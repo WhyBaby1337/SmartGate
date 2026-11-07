@@ -291,6 +291,9 @@ void testDuplicateTargetProfilesAreRejected() {
     // A second, individually valid but conflicting snapshot makes the state
     // ambiguous. The loader must not silently select the first XML child.
     addValidProfile(*fixture, 37);
+    auto* threshold = parameter(*fixture, "threshold");
+    require(threshold != nullptr, "duplicate-profile fixture must contain threshold");
+    threshold->setAttribute("value", -19.6);
 
     juce::MemoryBlock encoded;
     encode(fixtureProcessor, *fixture, encoded);
@@ -303,6 +306,10 @@ void testDuplicateTargetProfilesAreRejected() {
     auto* savedProfile = profile(*savedXml);
     require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 0,
             "duplicate target profile metadata must be rejected and cleared");
+    auto* restoredThreshold = parameter(*savedXml, "threshold");
+    require(restoredThreshold != nullptr
+                && std::abs(restoredThreshold->getDoubleAttribute("value") + 19.6) < 1.0e-4,
+            "rejecting duplicate profile metadata must not discard valid APVTS parameters");
 }
 
 void testInvalidProfileVariantsClearPreviousProfile() {
