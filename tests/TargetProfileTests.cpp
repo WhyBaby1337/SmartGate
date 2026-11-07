@@ -228,6 +228,14 @@ void runTargetProfileTests() {
     requireFeature(!restored.restore(corrupt),
                    "Finite but impossible feature means must be rejected");
     corrupt = saved;
+    corrupt.mean[0] = -2.5;
+    requireFeature(!restored.restore(corrupt),
+                   "The exclusive lower log-RMS learning boundary must be rejected");
+    corrupt = saved;
+    corrupt.mean[0] = -0.03;
+    requireFeature(!restored.restore(corrupt),
+                   "The exclusive upper log-RMS learning boundary must be rejected");
+    corrupt = saved;
     corrupt.m2[1] = static_cast<double>(corrupt.count);
     requireFeature(!restored.restore(corrupt),
                    "Variance beyond the mathematical feature-range bound must be rejected");
