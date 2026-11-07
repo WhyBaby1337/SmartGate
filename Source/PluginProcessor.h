@@ -96,7 +96,7 @@ private:
     std::atomic<std::uint64_t> learnedFramesForUi_{0};
     std::atomic<bool> vadReadyForUi_{false};
     bool wasAiEnabled_ = true;
-    bool wasKeyboardReductionEnabled_ = false;
+    bool wasKeyboardAnalysisEnabled_ = false;
 #if defined(SMARTGATE_HAS_SILERO)
     // Declaration order is intentional: worker is destroyed before its model
     // context and queue, so its thread can never outlive either dependency.
