@@ -145,6 +145,26 @@ jobs:
           & $debugger.FullName -z $dump.FullName -y $symbolPath -c "!analyze -v; .ecxr; kv; lm; q" 2>&1 | Add-Content -LiteralPath $analysis
           Write-Host "Crash dump analysis written to $analysis"
 
+      - name: Stage pluginval symbols only when a crash dump exists
+        if: always()
+        shell: pwsh
+        run: |
+          $dump = Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "pluginval-dumps") -Filter "*.dmp" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $dump) {
+            Write-Host "No crash dump; skipping PDB artifact staging."
+            exit 0
+          }
+
+          $symbolRoot = Join-Path $env:RUNNER_TEMP "pluginval-symbols"
+          $buildRoot = (Resolve-Path -LiteralPath "build").Path
+          Get-ChildItem -LiteralPath $buildRoot -Filter "*.pdb" -File -Recurse | ForEach-Object {
+            $relativePath = [System.IO.Path]::GetRelativePath($buildRoot, $_.FullName)
+            $destination = Join-Path $symbolRoot $relativePath
+            $destinationDirectory = Split-Path -Parent $destination
+            New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
+            Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
+          }
+
       - name: Upload pluginval crash diagnostics
         if: always()
         uses: actions/upload-artifact@v7
@@ -155,7 +175,7 @@ jobs:
             ${{ runner.temp }}/pluginval-stdout.log
             ${{ runner.temp }}/pluginval-stderr.log
             ${{ runner.temp }}/pluginval-dump-analysis.txt
-            build/**/*.pdb
+            ${{ runner.temp }}/pluginval-symbols/**/*.pdb
           if-no-files-found: ignore
 
       - name: Stage distributable VST3 bundle
