@@ -126,6 +126,51 @@ void testMonoRuntimeProcessing() {
         processor.releaseResources();
     }
 }
+void testAllParametersSurviveStateRoundTrip() {
+    SmartGateAudioProcessor source;
+
+    // Exercise every APVTS parameter, not only the threshold control. This
+    // catches mismatched IDs and regressions when controls are added or renamed.
+    setParameter(source, "threshold", -23.4f);
+    setParameter(source, "attack", 12.3f);
+    setParameter(source, "release", 345.0f);
+    setParameter(source, "hold", 123.0f);
+    setParameter(source, "hysteresis", 4.7f);
+    setParameter(source, "adaptiveHold", 0.73f);
+    setParameter(source, "range", -42.1f);
+    setParameter(source, "aiEnabled", 0.0f);
+    setParameter(source, "learnTarget", 1.0f);
+    setParameter(source, "targetAmount", 0.82f);
+    setParameter(source, "keyboardMode", 2.0f);
+    setParameter(source, "keyboardReduction", 0.64f);
+
+    juce::MemoryBlock saved;
+    (void) saveXml(source, saved);
+
+    SmartGateAudioProcessor restored;
+    restored.setStateInformation(saved.getData(), static_cast<int>(saved.getSize()));
+
+    const auto expect = [&](const char* id, float expected, float tolerance = 1.0e-4f) {
+        const auto* actual = restored.parameters_.getRawParameterValue(id);
+        require(actual != nullptr, "every persisted parameter must exist in the restored layout");
+        require(std::abs(actual->load() - expected) <= tolerance,
+                "every APVTS parameter must survive a complete save/load round trip");
+    };
+
+    expect("threshold", -23.4f);
+    expect("attack", 12.3f);
+    expect("release", 345.0f);
+    expect("hold", 123.0f);
+    expect("hysteresis", 4.7f);
+    expect("adaptiveHold", 0.73f);
+    expect("range", -42.1f);
+    expect("aiEnabled", 0.0f);
+    expect("learnTarget", 1.0f);
+    expect("targetAmount", 0.82f);
+    expect("keyboardMode", 2.0f);
+    expect("keyboardReduction", 0.64f);
+}
+
 void testImmediateRoundTrip() {
     SmartGateAudioProcessor source;
     juce::MemoryBlock unused;
@@ -461,6 +506,7 @@ void testRepeatedPrepareWithoutRelease() {
 }
 
 int main() {
+    testAllParametersSurviveStateRoundTrip();
     testImmediateRoundTrip();
     testPreparedRestoreCanBeSavedBeforeAudioCallback();
     testLatestRestoreWinsBeforeAudioCallback();
