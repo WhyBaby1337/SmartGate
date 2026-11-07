@@ -15,6 +15,8 @@
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <string>
+#include <windows.h>
 
 namespace smartgate {
 
@@ -29,15 +31,14 @@ public:
 
     SileroVadInference(const void* modelData, std::size_t modelSize,
                        double hostSampleRate = 16000.0)
-        : env_(nullptr), memoryInfo_(nullptr) {
-        // A VST3 is loaded into a host process and may be initialized after
-        // other dynamically loaded modules. Initialize the ONNX C API table
-        // explicitly in this module before constructing any C++ API objects;
-        // relying on the header's lazy default initialization can leave the
-        // module-local API pointer null in this plugin-loading context.
+        {
+        // Resolve the runtime beside the module that owns this code. A host
+        // process may already have loaded a different onnxruntime.dll; using
+        // that module by basename can expose an incompatible C API version.
         initializeOrtApi();
-        env_ = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "SmartGate-Silero");
-        memoryInfo_ = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        env_ = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "SmartGate-Silero");
+        memoryInfo_ = std::make_unique<Ort::MemoryInfo>(
+            Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault));
 
         expectedSourceFrameSamples_ = std::isfinite(hostSampleRate)
             ? std::max(512.0, hostSampleRate * static_cast<double>(frameSize) / 16000.0)
@@ -52,7 +53,7 @@ public:
         options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         options.AddConfigEntry("session.intra_op.allow_spinning", "0");
         options.AddConfigEntry("session.inter_op.allow_spinning", "0");
-        session_ = std::make_unique<Ort::Session>(env_, modelData, modelSize, options);
+        session_ = std::make_unique<Ort::Session>(*env_, modelData, modelSize, options);
 
         if (session_->GetInputCount() != 3 || session_->GetOutputCount() != 2)
             throw Ort::Exception("Unexpected Silero ONNX input/output count", ORT_INVALID_GRAPH);
@@ -128,9 +129,9 @@ public:
             constexpr std::array<std::int64_t, 1> sampleRateShape{1};
 
             std::array<Ort::Value, 3> inputs{
-                Ort::Value::CreateTensor<float>(memoryInfo_, input_.data(),
+                Ort::Value::CreateTensor<float>(*memoryInfo_, input_.data(),
                     input_.size(), inputShape.data(), inputShape.size()),
-                Ort::Value::CreateTensor<float>(memoryInfo_, recurrentState_.data(),
+                Ort::Value::CreateTensor<float>(*memoryInfo_, recurrentState_.data(),
                     recurrentState_.size(), stateShape.data(), stateShape.size()),
                 Ort::Value::CreateTensor<std::int64_t>(memoryInfo_,
                     &sampleRate, 1, sampleRateShape.data(), sampleRateShape.size())
@@ -209,25 +210,59 @@ public:
 private:
     static void initializeOrtApi() {
         static std::once_flag initialized;
+        static HMODULE runtimeModule = nullptr;
         std::call_once(initialized, [] {
-            const OrtApiBase* apiBase = OrtGetApiBase();
-            if (apiBase == nullptr)
-                throw std::runtime_error("ONNX Runtime did not provide an API base");
+            HMODULE ownerModule = nullptr;
+            if (!GetModuleHandleExW(
+                    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+                        | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                    reinterpret_cast<LPCWSTR>(&moduleAnchor_),
+                    &ownerModule))
+                throw std::runtime_error("Could not locate the Smart Gate module for ONNX Runtime loading");
 
-            const OrtApi* api = apiBase->GetApi(ORT_API_VERSION);
+            std::array<wchar_t, 32768> modulePath{};
+            const DWORD pathLength = GetModuleFileNameW(
+                ownerModule, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+            if (pathLength == 0 || pathLength >= modulePath.size())
+                throw std::runtime_error("Could not resolve the Smart Gate module path");
+
+            std::wstring runtimePath(modulePath.data(), pathLength);
+            const auto separator = runtimePath.find_last_of(L"\\/");
+            if (separator == std::wstring::npos)
+                throw std::runtime_error("Smart Gate module path has no directory");
+            runtimePath.resize(separator + 1);
+            runtimePath += L"onnxruntime.dll";
+
+            // An absolute path plus LOAD_WITH_ALTERED_SEARCH_PATH also makes
+            // dependent ONNX Runtime DLLs resolve from this private directory.
+            runtimeModule = LoadLibraryExW(
+                runtimePath.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+            if (runtimeModule == nullptr)
+                throw std::runtime_error("Could not load the bundled ONNX Runtime beside Smart Gate");
+
+            using GetApiBaseFunction = const OrtApiBase* (ORT_API_CALL*)();
+            const auto getApiBase = reinterpret_cast<GetApiBaseFunction>(
+                GetProcAddress(runtimeModule, "OrtGetApiBase"));
+            if (getApiBase == nullptr)
+                throw std::runtime_error("Bundled ONNX Runtime does not export OrtGetApiBase");
+
+            const OrtApiBase* apiBase = getApiBase();
+            const OrtApi* api = apiBase != nullptr ? apiBase->GetApi(ORT_API_VERSION) : nullptr;
             if (api == nullptr)
-                throw std::runtime_error("ONNX Runtime does not support the requested C API version");
+                throw std::runtime_error("Bundled ONNX Runtime does not support the requested C API version");
 
             Ort::InitApi(api);
         });
     }
 
+    inline static int moduleAnchor_ = 0;
+
     void recordInferenceFailure() noexcept {
         inferenceFailureCount_.fetch_add(1, std::memory_order_relaxed);
     }
 
-    Ort::Env env_;
-    Ort::MemoryInfo memoryInfo_;
+    std::unique_ptr<Ort::Env> env_;
+    std::unique_ptr<Ort::MemoryInfo> memoryInfo_;
     std::unique_ptr<Ort::Session> session_;
     std::array<float, contextSize> context_{};
     std::array<float, recurrentStateSize> recurrentState_{};
