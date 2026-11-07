@@ -86,6 +86,11 @@ private:
     std::atomic<float> inputPeakDbForUi_{-100.0f};
     std::atomic<float> outputPeakDbForUi_{-100.0f};
     std::atomic<float> gateGainForUi_{0.0f};
+    std::atomic<float> cpuLoadPercentForUi_{0.0f};
+    std::atomic<float> cpuPeakPercentForUi_{0.0f};
+    float cpuLoadAverage_ = 0.0f;
+    float cpuPeakHold_ = 0.0f;
+    float cpuPeakHoldSeconds_ = 0.0f;
     std::atomic<std::uint64_t> learnedFramesForUi_{0};
     std::atomic<bool> vadReadyForUi_{false};
     bool wasAiEnabled_ = true;
