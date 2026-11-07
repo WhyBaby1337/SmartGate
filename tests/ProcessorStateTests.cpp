@@ -151,9 +151,20 @@ void testAllParametersSurviveStateRoundTrip() {
     restored.setStateInformation(saved.getData(), static_cast<int>(saved.getSize()));
 
     const auto expect = [&](const char* id, float expected, float tolerance = 1.0e-4f) {
-        const auto* actual = restored.parameters_.getRawParameterValue(id);
-        require(actual != nullptr, "every persisted parameter must exist in the restored layout");
-        require(std::abs(actual->load() - expected) <= tolerance,
+        float actualValue = std::numeric_limits<float>::quiet_NaN();
+        for (auto* parameterBase : restored.getParameters()) {
+            auto* parameterWithId =
+                dynamic_cast<juce::AudioProcessorParameterWithID*>(parameterBase);
+            auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameterBase);
+            if (parameterWithId != nullptr && ranged != nullptr
+                && parameterWithId->paramID == id) {
+                actualValue = ranged->convertFrom0to1(parameterBase->getValue());
+                break;
+            }
+        }
+        require(std::isfinite(actualValue),
+                "every persisted parameter must exist in the restored layout");
+        require(std::abs(actualValue - expected) <= tolerance,
                 "every APVTS parameter must survive a complete save/load round trip");
     };
 
