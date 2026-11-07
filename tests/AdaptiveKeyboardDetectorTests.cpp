@@ -1,5 +1,6 @@
 #include "AdaptiveKeyboardDetector.h"
 #include "AudioFeatures.h"
+#include "TargetProfile.h"
 
 #include <cmath>
 #include <cstdint>
@@ -143,8 +144,11 @@ void runAdaptiveKeyboardDetectorTests() {
         maximumSpeechConfidence = std::max(maximumSpeechConfidence,
             detector.processFrame(voicedSpeech.data(), voicedSpeech.size()));
     }
-    requireKeyboard(maximumSpeechConfidence < 0.40f,
-                    "Long-running voiced speech must not accumulate strong keyboard confidence");
+    requireKeyboard(maximumSpeechConfidence < smartgate::TargetProfile::keyboardLearningConfidenceLimit,
+                    "Ordinary voiced speech must remain eligible for target learning");
+    requireKeyboard(smartgate::TargetProfile::isKeyboardQualifiedForLearning(
+                        maximumSpeechConfidence),
+                    "Ordinary voiced speech must pass the target-learning keyboard filter");
     requireKeyboard(smartgate::AdaptiveKeyboardDetector::gainForReduction(
                         1.0f, maximumSpeechConfidence) > 0.80f,
                     "Uncertain voiced speech must not be heavily attenuated");
@@ -178,6 +182,9 @@ void runAdaptiveKeyboardDetectorTests() {
     }
     requireKeyboard(maximumMixedConfidence > maximumSpeechConfidence + 0.02f,
                     "Intermittent keyboard transients should remain detectable over speech");
+    requireKeyboard(!smartgate::TargetProfile::isKeyboardQualifiedForLearning(
+                        maximumMixedConfidence),
+                    "Mixed speech and keyboard transients must pause target learning");
     requireKeyboard(maximumMixedConfidence < 0.50f,
                     "Mixed speech and keyboard input must not accumulate near-certain keyboard confidence");
     requireKeyboard(smartgate::AdaptiveKeyboardDetector::gainForReduction(
