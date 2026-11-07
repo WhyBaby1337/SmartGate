@@ -452,6 +452,62 @@ void testLearnTargetCanRestartAfterRestoredEnabledSession() {
     processor.releaseResources();
 }
 
+
+void testLegacyPartialParameterStateUsesDefaults() {
+    SmartGateAudioProcessor fixtureProcessor;
+    juce::MemoryBlock fixtureData;
+    auto legacy = saveXml(fixtureProcessor, fixtureData);
+
+    auto* threshold = parameter(*legacy, "threshold");
+    require(threshold != nullptr, "legacy fixture must contain threshold");
+    threshold->setAttribute("value", -22.5);
+
+    // Simulate a project saved before newer controls existed.
+    for (auto* child = legacy->getFirstChildElement(); child != nullptr;) {
+        auto* next = child->getNextElement();
+        if (child->hasTagName("PARAM")
+            && child->getStringAttribute("id") != "threshold")
+            legacy->removeChildElement(child, true);
+        child = next;
+    }
+
+    // Unknown future/foreign parameter IDs must not interfere with known IDs.
+    auto* unknown = legacy->createNewChildElement("PARAM");
+    unknown->setAttribute("id", "parameterFromAnotherVersion");
+    unknown->setAttribute("value", 999.0);
+
+    juce::MemoryBlock encoded;
+    encode(fixtureProcessor, *legacy, encoded);
+
+    SmartGateAudioProcessor restored;
+    restored.setStateInformation(encoded.getData(), static_cast<int>(encoded.getSize()));
+
+    const auto value = [&](const char* id) {
+        for (auto* parameterBase : restored.getParameters()) {
+            auto* parameterWithId =
+                dynamic_cast<juce::AudioProcessorParameterWithID*>(parameterBase);
+            auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameterBase);
+            if (parameterWithId != nullptr && ranged != nullptr
+                && parameterWithId->paramID == id)
+                return ranged->convertFrom0to1(parameterBase->getValue());
+        }
+        return std::numeric_limits<float>::quiet_NaN();
+    };
+
+    require(std::abs(value("threshold") - (-22.5f)) <= 1.0e-4f,
+            "legacy state must restore parameters that are present");
+    require(std::abs(value("release") - 120.0f) <= 1.0e-4f,
+            "missing legacy parameters must retain their current layout defaults");
+    require(std::abs(value("hold") - 80.0f) <= 1.0e-4f,
+            "multiple missing legacy parameters must retain their defaults");
+
+    juce::MemoryBlock saved;
+    auto normalized = saveXml(restored, saved);
+    require(parameter(*normalized, "release") != nullptr
+                && std::abs(parameter(*normalized, "release")->getDoubleAttribute("value") - 120.0) <= 1.0e-4,
+            "saving a restored legacy state must materialize missing parameters with defaults");
+}
+
 void testMalformedAndForeignRootStatesAreIgnored() {
     SmartGateAudioProcessor processor;
     setParameter(processor, "threshold", -18.0f);
@@ -570,6 +626,7 @@ int main() {
     testLatestRestoreWinsBeforeAudioCallback();
     testInvalidAndLegacyStatesClearProfile();
     testMalformedAndForeignRootStatesAreIgnored();
+    testLegacyPartialParameterStateUsesDefaults();
     testLearnTargetRequestWaitsUntilAiIsEnabled();
     testExplicitLearningWinsOverPendingProfileRestore();
     testRestoreWithLearningEnabledAfterPreparePreservesProfile();
