@@ -136,7 +136,7 @@ public:
                     input_.size(), inputShape.data(), inputShape.size()),
                 Ort::Value::CreateTensor<float>(*memoryInfo_, recurrentState_.data(),
                     recurrentState_.size(), stateShape.data(), stateShape.size()),
-                Ort::Value::CreateTensor<std::int64_t>(memoryInfo_,
+                Ort::Value::CreateTensor<std::int64_t>(*memoryInfo_,
                     &sampleRate, 1, sampleRateShape.data(), sampleRateShape.size())
             };
 
@@ -277,6 +277,6 @@ private:
     bool hasSourcePosition_ = false;
     std::uint64_t successfulInferenceCount_ = 0;
     std::atomic<std::uint64_t> inferenceFailureCount_{0};
-};
+}; 
 
 } // namespace smartgate
