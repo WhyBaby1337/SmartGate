@@ -16,6 +16,9 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 
 namespace smartgate {
@@ -223,7 +226,7 @@ private:
             std::array<wchar_t, 32768> modulePath{};
             const DWORD pathLength = GetModuleFileNameW(
                 ownerModule, modulePath.data(), static_cast<DWORD>(modulePath.size()));
-            if (pathLength == 0 || pathLength >= modulePath.size())
+            if (pathLength == 0 || pathLength >= static_cast<DWORD>(modulePath.size()))
                 throw std::runtime_error("Could not resolve the Smart Gate module path");
 
             std::wstring runtimePath(modulePath.data(), pathLength);
