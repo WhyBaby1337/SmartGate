@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 
 SmartGateAudioProcessor::SmartGateAudioProcessor()
@@ -467,6 +468,30 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
         // can serialize the previous TARGET_PROFILE and append another copy.
         for (int i = restoredState.getNumChildren(); --i >= 0;) {
             if (restoredState.getChild(i).getType().toString() == "TARGET_PROFILE")
+                restoredState.removeChild(i, nullptr);
+        }
+
+        // APVTS normalisation clamps ordinary out-of-range values, but a NaN
+        // can pass through comparison-based clamping unchanged. Reject malformed
+        // or non-finite values for known parameters so APVTS recreates their
+        // canonical nodes with the declared defaults.
+        for (int i = restoredState.getNumChildren(); --i >= 0;) {
+            const auto child = restoredState.getChild(i);
+            if (!child.hasType("PARAM"))
+                continue;
+
+            const auto id = child.getProperty("id").toString();
+            if (parameters_.getParameter(id) == nullptr)
+                continue;
+
+            const auto valueText = child.getProperty("value").toString();
+            const auto* valueStart = valueText.toRawUTF8();
+            char* valueEnd = nullptr;
+            const auto parsedValue = std::strtod(valueStart, &valueEnd);
+            const bool validValue = valueEnd != valueStart
+                && valueEnd != nullptr && *valueEnd == '\\0'
+                && std::isfinite(parsedValue);
+            if (!validValue)
                 restoredState.removeChild(i, nullptr);
         }
 
