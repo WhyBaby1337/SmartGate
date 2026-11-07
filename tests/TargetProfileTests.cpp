@@ -144,6 +144,15 @@ void runTargetProfileTests() {
     requireFeature(!profile.learn(invalid), "Invalid feature frames must be rejected");
     requireFeature(!profile.learn({-3.0f, 0.2f, 0.2f, 0.3f, 0.5f}),
                    "Out-of-window finite RMS values must be rejected");
+    requireFeature(!profile.learn({-2.5f, 0.2f, 0.2f, 0.3f, 0.5f}),
+                   "The exclusive lower log-RMS learning boundary must be rejected");
+    requireFeature(!profile.learn({-0.03f, 0.2f, 0.2f, 0.3f, 0.5f}),
+                   "The exclusive upper log-RMS learning boundary must be rejected");
+    requireFeature(!smartgate::TargetProfile::isValidLearningFrame(
+                       {-2.5f, 0.2f, 0.2f, 0.3f, 0.5f})
+                   && !smartgate::TargetProfile::isValidLearningFrame(
+                       {-0.03f, 0.2f, 0.2f, 0.3f, 0.5f}),
+                   "Learning eligibility and profile ingestion must share strict RMS boundaries");
     requireFeature(!profile.learn({-1.0f, 1.2f, 0.2f, 0.3f, 0.5f}),
                    "Out-of-range zero-crossing rates must be rejected");
     requireFeature(!profile.learn({-1.0f, 0.2f, 0.8f, 0.3f, 0.5f}),
