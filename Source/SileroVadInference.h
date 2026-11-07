@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef ORT_API_MANUAL_INIT
+#define ORT_API_MANUAL_INIT
+#endif
 #include <onnxruntime_cxx_api.h>
 
 #include <algorithm>
@@ -10,6 +13,8 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <stdexcept>
 
 namespace smartgate {
 
@@ -24,8 +29,16 @@ public:
 
     SileroVadInference(const void* modelData, std::size_t modelSize,
                        double hostSampleRate = 16000.0)
-        : env_(ORT_LOGGING_LEVEL_WARNING, "SmartGate-Silero"),
-          memoryInfo_(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)) {
+        : env_(nullptr), memoryInfo_(nullptr) {
+        // A VST3 is loaded into a host process and may be initialized after
+        // other dynamically loaded modules. Initialize the ONNX C API table
+        // explicitly in this module before constructing any C++ API objects;
+        // relying on the header's lazy default initialization can leave the
+        // module-local API pointer null in this plugin-loading context.
+        initializeOrtApi();
+        env_ = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "SmartGate-Silero");
+        memoryInfo_ = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+
         expectedSourceFrameSamples_ = std::isfinite(hostSampleRate)
             ? std::max(512.0, hostSampleRate * static_cast<double>(frameSize) / 16000.0)
             : static_cast<double>(frameSize);
@@ -194,6 +207,21 @@ public:
     }
 
 private:
+    static void initializeOrtApi() {
+        static std::once_flag initialized;
+        std::call_once(initialized, [] {
+            const OrtApiBase* apiBase = OrtGetApiBase();
+            if (apiBase == nullptr)
+                throw std::runtime_error("ONNX Runtime did not provide an API base");
+
+            const OrtApi* api = apiBase->GetApi(ORT_API_VERSION);
+            if (api == nullptr)
+                throw std::runtime_error("ONNX Runtime does not support the requested C API version");
+
+            Ort::InitApi(api);
+        });
+    }
+
     void recordInferenceFailure() noexcept {
         inferenceFailureCount_.fetch_add(1, std::memory_order_relaxed);
     }
