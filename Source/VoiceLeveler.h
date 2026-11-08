@@ -24,30 +24,37 @@ public:
     }
 
     float process(float input, float amount) noexcept {
-        if (!std::isfinite(input))
-            input = 0.0f;
+        return processStereo(input, input, amount);
+    }
+
+    // One linked detector/gain for both channels keeps the stereo image stable.
+    float processStereo(float left, float right, float amount) noexcept {
+        if (!std::isfinite(left)) left = 0.0f;
+        if (!std::isfinite(right)) right = 0.0f;
         amount = std::clamp(std::isfinite(amount) ? amount : 0.0f, 0.0f, 1.0f);
         if (amount <= 0.0f) {
             reset();
-            return input;
+            return 1.0f;
         }
 
-        const float squared = input * input;
+        const float squared = 0.5f * (left * left + right * right);
         const float coefficient = squared > envelope_ ? envelopeAttack_ : envelopeRelease_;
         envelope_ = squared + coefficient * (envelope_ - squared);
 
-        // Ignore near-silence; the gate remains responsible for room-noise
-        // rejection. This floor prevents the leveler from amplifying tails.
-        constexpr float floorSquared = 0.0001f; // -40 dBFS
-        const float measured = std::sqrt(std::max(envelope_, floorSquared));
+        // Do not add gain to silence or the gate's closed-state residue.
+        constexpr float activityFloorSquared = 1.0e-5f; // -50 dBFS
         constexpr float target = 0.12589254f; // -18 dBFS
-        const float desired = std::clamp(target / measured, 0.25118864f, 3.9810717f);
+        float desired = 1.0f;
+        if (envelope_ > activityFloorSquared) {
+            const float measured = std::sqrt(envelope_);
+            desired = std::clamp(target / measured, 0.25118864f, 3.9810717f);
+        }
         const float shapedAmount = amount * amount;
         const float blended = 1.0f + (desired - 1.0f) * shapedAmount;
 
         const float gainCoefficient = blended < gain_ ? gainAttack_ : gainRelease_;
         gain_ = blended + gainCoefficient * (gain_ - blended);
-        return input * gain_;
+        return gain_;
     }
 
     float gainForDiagnostics() const noexcept { return gain_; }
