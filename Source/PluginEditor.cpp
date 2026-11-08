@@ -77,7 +77,6 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
         toggle->setColour(juce::ToggleButton::textColourId, juce::Colours::white);
         toggle->setColour(juce::ToggleButton::tickColourId, accent);
         toggle->setColour(juce::ToggleButton::tickDisabledColourId, muted);
-        toggle->setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
     }
     addAndMakeVisible(aiButton_);
     addAndMakeVisible(learnButton_);
