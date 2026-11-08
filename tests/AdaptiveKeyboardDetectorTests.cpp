@@ -472,9 +472,14 @@ void runAdaptiveKeyboardDetectorTests() {
         if (i >= 600 && i < 792) {
             const float age = static_cast<float>(i - 600);
             const float envelope = std::exp(-age / 55.0f);
+            // A switch click is a short, broadband resonant transient,
+            // not a perfectly sustained single-frequency sine burst.
+            // Two high-frequency modes model its sharp attack and ringing.
+            const float ageSeconds = static_cast<float>(i - 600) / 48000.0f;
             click = 0.12f * envelope
-                * std::sin(2.0f * 3.14159265f * 6200.0f
-                           * static_cast<float>(i - 600) / 48000.0f);
+                * (std::sin(2.0f * 3.14159265f * 6200.0f * ageSeconds + 1.5707963f)
+                   + 0.4f * std::sin(2.0f * 3.14159265f * 8700.0f * ageSeconds
+                                     + 1.5707963f));
         }
         const float input = voice + click;
         const float output = mouseClick.process(input, 1.0f, 0.65f);
