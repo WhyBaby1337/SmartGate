@@ -4,6 +4,7 @@
 #include "AdaptiveKeyboardDetector.h"
 #include "AudioFeatures.h"
 #include "GateEnvelope.h"
+#include "MouthClickSuppressor.h"
 #include "TargetProfile.h"
 
 #if defined(SMARTGATE_HAS_SILERO)
@@ -83,6 +84,8 @@ private:
     float targetConfidenceSmoothingCoefficient_ = 0.0f;
     float keyboardConfidence_ = 0.0f;
     smartgate::AdaptiveKeyboardGain keyboardGainSmoother_;
+    smartgate::MouthClickSuppressor mouthClickSuppressorLeft_;
+    smartgate::MouthClickSuppressor mouthClickSuppressorRight_;
     bool wasLearningTarget_ = false;
     bool pendingLearningStart_ = false;
     // setStateInformation may run after prepareToPlay; synchronize the restored
