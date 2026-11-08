@@ -54,8 +54,8 @@ public:
         // sustained /s/, /sh/ or /ch/ as a mouse event.
         const float levelFloor = 0.0035f - 0.0010f * context;
         const float levelSpan = 0.030f - 0.006f * context;
-        const float edgeFloor = 0.035f - 0.012f * context;
-        const float edgeSpan = 0.14f - 0.035f * context;
+        const float edgeFloor = 0.060f - 0.015f * context;
+        const float edgeSpan = 0.16f - 0.020f * context;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
         const float confidence = level * impulsiveness;
