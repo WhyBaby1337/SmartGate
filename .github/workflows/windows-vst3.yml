@@ -181,7 +181,7 @@ jobs:
           }
 
           $analysis = Join-Path $env:RUNNER_TEMP "pluginval-dump-analysis.txt"
-          $debugger = Get-ChildItem "C:\Program Files (x86)\\Windows Kits" -Filter "cdb.exe" -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "\\Debuggers\\x64\\cdb\\.exe$" } | Select-Object -First 1
+          $debugger = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Filter "cdb.exe" -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "\\Debuggers\\x64\\cdb\\.exe$" } | Select-Object -First 1
           if (-not $debugger) {
             "CDB debugger was not found on this runner. Dump retained for offline analysis: $($dump.FullName)" | Set-Content -LiteralPath $analysis
             exit 0
