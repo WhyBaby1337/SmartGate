@@ -24,7 +24,8 @@ public:
     }
 
     float process(float input, float amount) noexcept {
-        return processStereo(input, input, amount);
+        const float gain = processStereo(input, input, amount);
+        return input * gain;
     }
 
     // One linked detector/gain for both channels keeps the stereo image stable.
