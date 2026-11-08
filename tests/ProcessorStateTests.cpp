@@ -75,6 +75,7 @@ void testHostMetadataAndAutomationParameters() {
         "threshold", "attack", "release", "hold", "hysteresis", "adaptiveHold",
         "range", "aiEnabled", "learnTarget", "targetAmount", "keyboardMode",
         "keyboardSuppressionEnabled", "keyboardReduction",
+        "mouseClickSuppressionEnabled", "mouseClickReduction",
         "mouthClickSuppressionEnabled", "mouthNoiseReduction", "voiceLeveling"
     };
     require(processor.getParameters().size() == expectedIds.size(),
@@ -100,6 +101,8 @@ void testRuntimeBlockAndToggleTransitions() {
             setParameter(processor, "learnTarget", cycle == 2 ? 1.0f : 0.0f);
             setParameter(processor, "keyboardReduction", cycle == 0 ? 0.0f : 0.8f);
             setParameter(processor, "keyboardSuppressionEnabled", cycle == 1 ? 0.0f : 1.0f);
+            setParameter(processor, "mouseClickSuppressionEnabled", cycle == 1 ? 0.0f : 1.0f);
+            setParameter(processor, "mouseClickReduction", cycle == 2 ? 0.0f : 0.7f);
             setParameter(processor, "mouthClickSuppressionEnabled", cycle == 2 ? 0.0f : 1.0f);
             setParameter(processor, "keyboardMode", static_cast<float>(cycle));
             setParameter(processor, "targetAmount", cycle == 1 ? 0.0f : 0.75f);
@@ -173,6 +176,8 @@ void testAllParametersSurviveStateRoundTrip() {
     setParameter(source, "keyboardMode", 2.0f);
     setParameter(source, "keyboardSuppressionEnabled", 0.0f);
     setParameter(source, "keyboardReduction", 0.64f);
+    setParameter(source, "mouseClickSuppressionEnabled", 0.0f);
+    setParameter(source, "mouseClickReduction", 0.58f);
     setParameter(source, "mouthClickSuppressionEnabled", 1.0f);
     setParameter(source, "mouthNoiseReduction", 0.37f);
     setParameter(source, "voiceLeveling", 0.68f);
@@ -217,6 +222,8 @@ void testAllParametersSurviveStateRoundTrip() {
     expect("keyboardMode", 2.0f);
     expect("keyboardSuppressionEnabled", 0.0f);
     expect("keyboardReduction", 0.64f);
+    expect("mouseClickSuppressionEnabled", 0.0f);
+    expect("mouseClickReduction", 0.58f);
     expect("mouthClickSuppressionEnabled", 1.0f);
     expect("mouthNoiseReduction", 0.37f);
     expect("voiceLeveling", 0.68f);
