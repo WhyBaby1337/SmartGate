@@ -245,7 +245,7 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
                    + juce::String(static_cast<juce::int64>(learnedFrames_)) + " FRAMES",
                status, juce::Justification::centredLeft);
 
-    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - 10) * 0.67f));
+    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - 10) * 0.58f));
     auto intelligencePanel = area;
     g.setColour(panel);
     g.fillRoundedRectangle(gatePanel.toFloat(), 10.0f);
