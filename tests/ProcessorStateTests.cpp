@@ -968,6 +968,7 @@ void testProcessorGateOpensClosesAndReopens() {
     // silence alone cannot prove that the gate closed because zero input
     // produces zero output even while the gate is fully open.
     const float closedPeak = processTone(0.01f, static_cast<int>(sampleRate * 0.05));
+    std::cerr << "Gate close diagnostic: peak=" << closedPeak << "\\n";
     require(closedPeak < 0.001f,
             "gate must attenuate a below-threshold probe after the hold/release interval expires");
 
