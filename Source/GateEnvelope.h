@@ -134,6 +134,7 @@ public:
 
     float getGain() const noexcept { return gain_; }
     float getDetectorLevel() const noexcept { return detectorLevel_; }
+    float getOpeningThreshold() const noexcept { return openingThresholdLinear_; }
 
 private:
     static float coefficientFor(float timeMs, float sampleRate) noexcept {
