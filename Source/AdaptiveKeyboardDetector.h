@@ -221,7 +221,7 @@ public:
         const float localTransient = level * impulsiveness;
         // Frame context only strengthens a transient already localized to
         // this exact delayed sample; it can never duck an entire speech frame.
-        const float confidence = localTransient * (0.70f + 0.30f * frameContext);
+        const float confidence = unit(localTransient * (1.0f + 0.15f * frameContext));
         if (confidence > 0.0f) {
             // The UI amount is perceptual, not a linear amplitude multiplier.
             // A linear mapping made everyday values (0.15-0.30) barely audible
