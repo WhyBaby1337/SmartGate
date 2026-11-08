@@ -178,6 +178,7 @@ public:
             std::exp(-2.0 * 3.14159265358979323846 * 1200.0 / rate));
         releaseCoefficient_ = static_cast<float>(
             std::exp(-1.0 / (0.0025 * rate)));
+        holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0020 * rate)));
         reset();
     }
 
@@ -188,6 +189,8 @@ public:
         previousHighBand_ = 0.0f;
         midBandGain_ = 1.0f;
         highBandGain_ = 1.0f;
+        midHoldCounter_ = 0;
+        highHoldCounter_ = 0;
     }
 
     float process(float input, float reduction, float alignedFrameConfidence = 0.0f) noexcept {
@@ -232,6 +235,9 @@ public:
             const float targetMidGain = 1.0f
                 - 0.45f * perceptualAmount * midTransient;
             midBandGain_ = std::min(midBandGain_, targetMidGain);
+            midHoldCounter_ = holdSamples_;
+        } else if (midHoldCounter_ > 0) {
+            --midHoldCounter_;
         } else {
             midBandGain_ = 1.0f - releaseCoefficient_
                 * (1.0f - midBandGain_);
@@ -262,6 +268,9 @@ public:
             const float perceptualAmount = std::sqrt(amount);
             const float targetGain = 1.0f - 0.92f * perceptualAmount * confidence;
             highBandGain_ = std::min(highBandGain_, targetGain);
+            highHoldCounter_ = holdSamples_;
+        } else if (highHoldCounter_ > 0) {
+            --highHoldCounter_;
         } else {
             highBandGain_ = 1.0f - releaseCoefficient_
                 * (1.0f - highBandGain_);
@@ -287,6 +296,9 @@ private:
     float previousHighBand_ = 0.0f;
     float midBandGain_ = 1.0f;
     float highBandGain_ = 1.0f;
+    int holdSamples_ = 1;
+    int midHoldCounter_ = 0;
+    int highHoldCounter_ = 0;
 };
 
 } // namespace smartgate
