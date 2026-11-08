@@ -64,6 +64,9 @@ SmartGateAudioProcessor::createParameterLayout() {
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"mouthNoiseReduction", 1}, "Mouth Click Reduction",
         juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.25f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"voiceLeveling", 1}, "Voice Leveling",
+        juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.0f));
     return layout;
 }
 
@@ -134,6 +137,7 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     }
 #endif
     lookaheadDelay_.prepare(safeSampleRate, lookaheadMilliseconds_);
+    voiceLeveler_.prepare(safeSampleRate);
     setLatencySamples(static_cast<int>(lookaheadDelay_.latencySamples()));
     gateEnvelope_.prepare(safeSampleRate);
     featureExtractor_.prepare(safeSampleRate);
@@ -318,6 +322,8 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         0.0f, 1.0f, parameters_.getRawParameterValue("keyboardReduction")->load(std::memory_order_relaxed));
     const float mouthNoiseReduction = juce::jlimit(
         0.0f, 1.0f, parameters_.getRawParameterValue("mouthNoiseReduction")->load(std::memory_order_relaxed));
+    const float voiceLeveling = juce::jlimit(
+        0.0f, 1.0f, parameters_.getRawParameterValue("voiceLeveling")->load(std::memory_order_relaxed));
     const int keyboardMode = juce::jlimit(0, 2, static_cast<int>(std::lround(
         parameters_.getRawParameterValue("keyboardMode")->load(std::memory_order_relaxed))));
     // Run the keyboard transient detector either for audible reduction or
@@ -491,9 +497,12 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float mouthProcessedRight = right != nullptr
             ? mouthClickSuppressorRight_.process(keyboardProcessedRight, mouthNoiseReduction)
             : mouthProcessedLeft;
-        left[sample] = mouthProcessedLeft * outputGain;
+        const float leveledLeft = voiceLeveler_.process(mouthProcessedLeft * outputGain,
+                                                          voiceLeveling);
+        const float levelerGain = voiceLeveler_.gainForDiagnostics();
+        left[sample] = leveledLeft;
         if (right != nullptr)
-            right[sample] = mouthProcessedRight * outputGain;
+            right[sample] = mouthProcessedRight * outputGain * levelerGain;
         outputPeak = juce::jmax(outputPeak,
             juce::jmax(std::abs(left[sample]), right != nullptr ? std::abs(right[sample]) : 0.0f));
     }
