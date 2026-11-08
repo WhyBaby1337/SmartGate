@@ -463,6 +463,11 @@ void runAdaptiveKeyboardDetectorTests() {
     smartgate::MouseClickSuppressor mouseTailHold;
     mouseTailHold.prepare(48000.0);
     (void) mouseTailHold.process(0.8f, 1.0f);
+    // The mouse detector confirms an isolated peak on the following sample,
+    // when the expected sharp decay is observable. This one-sample decision
+    // delay is intentional and prevents sustained/noise-like sibilants from
+    // being attenuated on their ordinary waveform edges.
+    (void) mouseTailHold.process(0.0f, 1.0f);
     const float gainAfterMouseAttack = mouseTailHold.getHighBandGain();
     requireKeyboard(gainAfterMouseAttack < 0.80f,
                     "A sharp mouse switch attack must trigger attenuation");
