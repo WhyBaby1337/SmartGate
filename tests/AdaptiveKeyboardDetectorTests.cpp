@@ -449,6 +449,22 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(lowVoiceError < 0.002f,
                     "Keyboard transient suppression must preserve low-frequency voice");
 
+    // Everyday UI values must produce audible-enough transient attenuation;
+    // the former linear amount curve made 0.20 almost ineffective.
+    smartgate::KeyboardTransientSuppressor lowSettingClick;
+    lowSettingClick.prepare(48000.0);
+    float lowSettingMinimumGain = 1.0f;
+    for (int i = 0; i < 1200; ++i) {
+        const float voice = 0.14f * std::sin(2.0f * 3.14159265f * 180.0f
+                                             * static_cast<float>(i) / 48000.0f);
+        const float impulse = i == 300 ? 0.8f : 0.0f;
+        lowSettingClick.process(voice + impulse, 0.20f);
+        lowSettingMinimumGain = std::min(lowSettingMinimumGain,
+            lowSettingClick.getHighBandGain());
+    }
+    requireKeyboard(lowSettingMinimumGain < 0.75f,
+                    "A modest 0.20 keyboard setting must meaningfully attenuate a confident click");
+
     // Sustained /s/ and /sh/-like high-frequency energy is speech, not a click.
     smartgate::KeyboardTransientSuppressor sibilantKeyboardGuard;
     sibilantKeyboardGuard.prepare(48000.0);
