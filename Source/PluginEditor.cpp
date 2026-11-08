@@ -283,10 +283,10 @@ void SmartGateAudioProcessorEditor::resized() {
     area.removeFromTop(28);
 
     const int sectionGap = 10;
-    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - sectionGap) * 0.67f));
+    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - sectionGap) * 0.62f));
     auto intelligencePanel = area;
     gatePanel = gatePanel.reduced(12, 30);
-    intelligencePanel = intelligencePanel.reduced(12, 30);
+    intelligencePanel = intelligencePanel.reduced(12, 8);
 
     const int columnGap = 8;
     const int cellWidth = (gatePanel.getWidth() - 2 * columnGap) / 3;
