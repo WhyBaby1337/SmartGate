@@ -48,6 +48,10 @@ public:
     void getStateInformation(juce::MemoryBlock& destination) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+    // Standalone target-profile backup, independent of host session state.
+    bool exportTargetProfile(const juce::File& file) const;
+    bool importTargetProfile(const juce::File& file);
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void finishFeatureFrame() noexcept;
