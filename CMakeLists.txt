@@ -20,7 +20,8 @@ add_executable(SmartGateDspTests
     tests/VadResamplerTests.cpp
     tests/VadFrameAssemblerTests.cpp
     tests/VadInferenceWorkerTests.cpp
-    tests/LookaheadDelayTests.cpp)
+    tests/LookaheadDelayTests.cpp
+    tests/VoiceLevelerTests.cpp)
 target_link_libraries(SmartGateDspTests PRIVATE smartgate_dsp Threads::Threads)
 add_test(NAME SmartGateDspTests COMMAND SmartGateDspTests)
 
