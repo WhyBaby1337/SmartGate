@@ -185,9 +185,10 @@ public:
         highBandGain_ = 1.0f;
     }
 
-    float process(float input, float reduction) noexcept {
+    float process(float input, float reduction, float alignedFrameConfidence = 0.0f) noexcept {
         const float x = std::isfinite(input) ? input : 0.0f;
         const float amount = unit(reduction);
+        const float frameContext = unit(alignedFrameConfidence);
         const double sample = static_cast<double>(x);
         lowPassState_ = sample + static_cast<double>(lowPassCoefficient_)
             * (lowPassState_ - sample);
@@ -207,15 +208,20 @@ public:
         // Require both a meaningful high-band event and a sharp edge.
         // Sustained sibilants have high-band energy but do not resemble an
         // isolated impulse; low-frequency speech is outside this path.
-        const float level = unit((magnitude - 0.012f) / 0.080f);
-        const float impulsiveness = unit((edge - 0.075f) / 0.24f);
+        // The aligned frame score is context, not a broadband gain command:
+        // sample-local magnitude and edge evidence must still identify the
+        // exact transient. A confident keyboard frame modestly lowers the
+        // local trigger thresholds so quieter clicks over speech are actionable.
+        const float levelFloor = 0.012f - 0.004f * frameContext;
+        const float levelSpan = 0.080f - 0.020f * frameContext;
+        const float edgeFloor = 0.075f - 0.035f * frameContext;
+        const float edgeSpan = 0.24f - 0.06f * frameContext;
+        const float level = unit((magnitude - levelFloor) / levelSpan);
+        const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
         const float localTransient = level * impulsiveness;
-        // Use only evidence measured from this exact delayed audio sample.
-        // The frame classifier runs on undelayed 256-sample frames; without
-        // timestamped frame history its confidence cannot safely be paired
-        // with this 30 ms delayed sample. Keep the fast suppressor local and
-        // sample-accurate rather than risking attenuation on the wrong phoneme.
-        const float confidence = localTransient;
+        // Frame context only strengthens a transient already localized to
+        // this exact delayed sample; it can never duck an entire speech frame.
+        const float confidence = localTransient * (0.70f + 0.30f * frameContext);
         if (confidence > 0.0f) {
             // The UI amount is perceptual, not a linear amplitude multiplier.
             // A linear mapping made everyday values (0.15-0.30) barely audible
