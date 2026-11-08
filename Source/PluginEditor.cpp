@@ -108,7 +108,7 @@ void SmartGateAudioProcessorEditor::configureSlider(
             return numeric.getDoubleValue() / 100.0;
         };
     }
-    static const std::array<const char*, 9> tooltips{
+    static const std::array<const char*, 10> tooltips{
         "Input level below which the gate closes. Start around the room-noise level.",
         "How quickly the gate opens after voice is detected.",
         "How smoothly the gate closes after the voice ends.",
@@ -117,7 +117,8 @@ void SmartGateAudioProcessorEditor::configureSlider(
         "How much the signal is attenuated while the gate is closed.",
         "How strongly the learned target voice profile influences gating. Set to 0 to disable profile influence.",
         "Amount of keyboard-noise suppression. This works independently of the AI Engine toggle.",
-        "Adds phrase-aware hold time so quiet consonants are less likely to be cut off."
+        "Adds phrase-aware hold time so quiet consonants are less likely to be cut off.",
+        "Conservatively attenuates brief high-frequency mouth clicks. It does not remove sustained breaths or nasal noise."
     };
     slider.setTooltip(tooltips[index]);
     slider.setColour(juce::Slider::rotarySliderFillColourId, accent);
@@ -314,7 +315,9 @@ void SmartGateAudioProcessorEditor::resized() {
     profileActions.removeFromLeft(12);
     profileFileStatus_.setBounds(profileActions);
 
-    const int smartCellWidth = (smartContent.getWidth() - 2 * columnGap) / 3;
+    const int smartColumns = 4;
+    const int smartCellWidth = (smartContent.getWidth()
+        - (smartColumns - 1) * columnGap) / smartColumns;
     for (std::size_t i = 6; i < sliders_.size(); ++i) {
         const int column = static_cast<int>(i - 6);
         auto cell = juce::Rectangle<int>(
