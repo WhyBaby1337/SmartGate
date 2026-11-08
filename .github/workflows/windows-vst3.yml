@@ -170,9 +170,16 @@ jobs:
           $dumpDir = Join-Path $env:RUNNER_TEMP "pluginval-dumps"
           New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
 
-          # GitHub-hosted Windows runners are headless; pluginval documents this flag for CI.
-          & $validator.FullName --strictness-level 5 --skip-gui-tests $module
-          $pluginvalExitCode = $LASTEXITCODE
+          # Capture the native process result explicitly and retain its output for diagnostics.
+          $stdoutLog = Join-Path $env:RUNNER_TEMP "pluginval-stdout.log"
+          $stderrLog = Join-Path $env:RUNNER_TEMP "pluginval-stderr.log"
+          $argumentList = '--strictness-level 5 --skip-gui-tests "' + $module + '"'
+          $pluginvalProcess = Start-Process -FilePath $validator.FullName -ArgumentList $argumentList -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+          $pluginvalExitCode = $pluginvalProcess.ExitCode
+
+          if (Test-Path -LiteralPath $stdoutLog) { Get-Content -LiteralPath $stdoutLog }
+          if (Test-Path -LiteralPath $stderrLog) { Get-Content -LiteralPath $stderrLog }
+
           Write-Host "pluginval process exit code: $pluginvalExitCode"
           if ($pluginvalExitCode -ne 0) {
             throw "pluginval rejected or crashed while validating Smart Gate VST3 (exit code $pluginvalExitCode)."
