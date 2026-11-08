@@ -140,7 +140,8 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     mouthClickSuppressorLeft_.prepare(safeSampleRate);
     mouthClickSuppressorRight_.prepare(safeSampleRate);
     keyboardConfidence_ = 0.0f;
-    keyboardGainSmoother_.prepare(safeSampleRate);
+    keyboardSuppressorLeft_.prepare(safeSampleRate);
+    keyboardSuppressorRight_.prepare(safeSampleRate);
     featureFramePosition_ = 0;
     featureFrame_.fill(0.0f);
     targetConfidenceTarget_ = 1.0f;
@@ -439,14 +440,6 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float targetGain = aiEnabled
             ? (1.0f - targetAmount) + targetAmount * targetConfidenceSmoothed_
             : 1.0f;
-        // Keyboard classification controls the output level, not the gate
-        // detector. Feeding this factor into the detector would only make the
-        // gate close sooner; it would not reduce keyboard transients while
-        // speech keeps the gate open. Smooth the gain at sample rate to avoid
-        // 256-sample frame-boundary steps becoming audible zipper noise.
-        const float keyboardOutputGain = keyboardGainSmoother_.process(
-            keyboardReduction, keyboardConfidence_);
-
         // Silero is an assist to the conventional level detector, not a hard
         // gate override. A confident speech result gently lifts the detector
         // above threshold; silence/no result leaves classic gate behavior intact.
@@ -465,14 +458,20 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         // confidence gain only after the gate decision. Silero remains the
         // independent speech assist for opening/holding the gate.
         const float gateGain = gateEnvelope_.process(vadAssistedPeak);
-        const float outputGain = gateGain * keyboardOutputGain * targetGain;
+        // Keyboard/mouse clicks are attenuated locally in the high band,
+        // rather than ducking the entire voice signal for several milliseconds.
+        const float keyboardProcessedLeft = keyboardSuppressorLeft_.process(
+            leftSample, keyboardReduction);
+        const float keyboardProcessedRight = right != nullptr
+            ? keyboardSuppressorRight_.process(rightSample, keyboardReduction)
+            : keyboardProcessedLeft;
+        const float outputGain = gateGain * targetGain;
 
-        // Attenuate only brief high-band mouth clicks; low/mid voice energy is
-        // not passed through this suppressor. Each channel owns its filter state.
+        // Mouth clicks use a separate conservative high-band transient stage.
         const float mouthProcessedLeft = mouthClickSuppressorLeft_.process(
-            leftSample, mouthNoiseReduction);
+            keyboardProcessedLeft, mouthNoiseReduction);
         const float mouthProcessedRight = right != nullptr
-            ? mouthClickSuppressorRight_.process(rightSample, mouthNoiseReduction)
+            ? mouthClickSuppressorRight_.process(keyboardProcessedRight, mouthNoiseReduction)
             : mouthProcessedLeft;
         left[sample] = mouthProcessedLeft * outputGain;
         if (right != nullptr)
