@@ -94,6 +94,8 @@ private:
     float keyboardConfidence_ = 0.0f;
     smartgate::KeyboardTransientSuppressor keyboardSuppressorLeft_;
     smartgate::KeyboardTransientSuppressor keyboardSuppressorRight_;
+    smartgate::MouthClickSuppressor mouseClickSuppressorLeft_;
+    smartgate::MouthClickSuppressor mouseClickSuppressorRight_;
     smartgate::MouthClickSuppressor mouthClickSuppressorLeft_;
     smartgate::MouthClickSuppressor mouthClickSuppressorRight_;
     bool wasLearningTarget_ = false;
