@@ -457,8 +457,13 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float vadAssistedPeak = vadAssist > 0.0f
             ? juce::jmax(linkedPeak, thresholdLinear * (0.75f + 0.75f * vadAssist))
             : linkedPeak;
-        const float gateGain = gateEnvelope_.process(vadAssistedPeak * targetGain);
-        const float outputGain = gateGain * keyboardOutputGain;
+        // Target matching must never sit in the gate detector path: quiet
+        // consonants can be acoustically dissimilar to the learned vowel-heavy
+        // profile and would otherwise fail to open the gate. Apply its smooth
+        // confidence gain only after the gate decision. Silero remains the
+        // independent speech assist for opening/holding the gate.
+        const float gateGain = gateEnvelope_.process(vadAssistedPeak);
+        const float outputGain = gateGain * keyboardOutputGain * targetGain;
 
         // Attenuate only brief high-band mouth clicks; low/mid voice energy is
         // not passed through this suppressor. Each channel owns its filter state.
