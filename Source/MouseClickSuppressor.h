@@ -30,6 +30,9 @@ public:
         holdCounter_ = 0;
         lastEdge_ = 0.0f;
         lastConfidence_ = 0.0f;
+        lastLevel_ = 0.0f;
+        lastImpulsiveness_ = 0.0f;
+        lastNovelty_ = 0.0f;
     }
 
     float process(float input, float reduction, float alignedFrameContext = 0.0f) noexcept {
@@ -73,6 +76,9 @@ public:
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
         const float confidence = level * impulsiveness * novelty;
+        lastLevel_ = level;
+        lastImpulsiveness_ = impulsiveness;
+        lastNovelty_ = novelty;
         lastConfidence_ = confidence;
         if (confidence > 0.0f) {
             const float perceptualAmount = std::sqrt(amount);
@@ -92,6 +98,9 @@ public:
     float getHighBandGain() const noexcept { return highBandGain_; }
     float getLastEdge() const noexcept { return lastEdge_; }
     float getLastConfidence() const noexcept { return lastConfidence_; }
+    float getLastLevel() const noexcept { return lastLevel_; }
+    float getLastImpulsiveness() const noexcept { return lastImpulsiveness_; }
+    float getLastNovelty() const noexcept { return lastNovelty_; }
 
 private:
     static float unit(float value) noexcept {
@@ -107,6 +116,9 @@ private:
     float highBandGain_ = 1.0f;
     float lastEdge_ = 0.0f;
     float lastConfidence_ = 0.0f;
+    float lastLevel_ = 0.0f;
+    float lastImpulsiveness_ = 0.0f;
+    float lastNovelty_ = 0.0f;
     int holdSamples_ = 1;
     int holdCounter_ = 0;
 };

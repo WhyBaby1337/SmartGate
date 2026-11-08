@@ -574,6 +574,9 @@ void runAdaptiveKeyboardDetectorTests() {
         float minimumProfileGain = 1.0f;
         float maximumProfileEdge = 0.0f;
         float maximumProfileConfidence = 0.0f;
+        float maximumProfileLevel = 0.0f;
+        float maximumProfileImpulsiveness = 0.0f;
+        float maximumProfileNovelty = 0.0f;
         for (int i = 0; i < 2400; ++i) {
             const float voice = 0.12f * std::sin(2.0f * 3.14159265f
                 * 180.0f * static_cast<float>(i) / 48000.0f);
@@ -599,6 +602,12 @@ void runAdaptiveKeyboardDetectorTests() {
                     profiledMouseClick.getLastEdge());
                 maximumProfileConfidence = std::max(maximumProfileConfidence,
                     profiledMouseClick.getLastConfidence());
+                maximumProfileLevel = std::max(maximumProfileLevel,
+                    profiledMouseClick.getLastLevel());
+                maximumProfileImpulsiveness = std::max(maximumProfileImpulsiveness,
+                    profiledMouseClick.getLastImpulsiveness());
+                maximumProfileNovelty = std::max(maximumProfileNovelty,
+                    profiledMouseClick.getLastNovelty());
             }
             if (i >= 600 && i < 600 + profile.durationSamples) {
                 inputEnergy += click * click;
@@ -610,12 +619,15 @@ void runAdaptiveKeyboardDetectorTests() {
             const double ratio = inputEnergy > 0.0f
                 ? static_cast<double>(outputEnergy / inputEnergy) : 0.0;
             std::fprintf(stderr,
-                "Mouse profile %.0f/%.0f Hz: input=%.9g output=%.9g ratio=%.6f minGain=%.6f maxEdge=%.6f maxConfidence=%.6f\\n",
+                "Mouse profile %.0f/%.0f Hz: input=%.9g output=%.9g ratio=%.6f minGain=%.6f maxEdge=%.6f maxConfidence=%.6f level=%.6f impulse=%.6f novelty=%.6f\\n",
                 profile.firstFrequency, profile.secondFrequency,
                 static_cast<double>(inputEnergy), static_cast<double>(outputEnergy), ratio,
                 static_cast<double>(minimumProfileGain),
                 static_cast<double>(maximumProfileEdge),
-                static_cast<double>(maximumProfileConfidence));
+                static_cast<double>(maximumProfileConfidence),
+                static_cast<double>(maximumProfileLevel),
+                static_cast<double>(maximumProfileImpulsiveness),
+                static_cast<double>(maximumProfileNovelty));
         }
         requireKeyboard(outputEnergy < inputEnergy * 0.90f,
                         "Mouse detector must reduce varied resonant click profiles over speech");
