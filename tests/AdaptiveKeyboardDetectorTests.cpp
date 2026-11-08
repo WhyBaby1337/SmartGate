@@ -481,31 +481,9 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(lowSettingMinimumGain < 0.75f,
                     "A modest 0.20 keyboard setting must meaningfully attenuate a confident click");
 
-    // The classifier evidence is aligned with the lookahead-delayed audio.
-    // It should strengthen a real click over speech, while local transient
-    // analysis retains a conservative fallback when classifier confidence is low.
-    smartgate::KeyboardTransientSuppressor classifierAssistedClick;
-    smartgate::KeyboardTransientSuppressor localOnlyClick;
-    classifierAssistedClick.prepare(48000.0);
-    localOnlyClick.prepare(48000.0);
-    float classifierAssistedGain = 1.0f;
-    float localOnlyGain = 1.0f;
-    for (int i = 0; i < 1200; ++i) {
-        const float voice = 0.14f * std::sin(2.0f * 3.14159265f * 180.0f
-                                             * static_cast<float>(i) / 48000.0f);
-        const float impulse = i == 300 ? 0.8f : 0.0f;
-        classifierAssistedClick.process(voice + impulse, 0.20f,
-                                        maximumMixedConfidence);
-        localOnlyClick.process(voice + impulse, 0.20f, 0.0f);
-        classifierAssistedGain = std::min(classifierAssistedGain,
-            classifierAssistedClick.getHighBandGain());
-        localOnlyGain = std::min(localOnlyGain, localOnlyClick.getHighBandGain());
-    }
-    requireKeyboard(classifierAssistedGain + 0.08f < localOnlyGain,
-                    "Keyboard classifier evidence must strengthen click attenuation over speech");
-    requireKeyboard(classifierAssistedGain < 0.75f,
-                    "Classifier-assisted keyboard suppression must be useful at a modest setting");
-
+    // The fast suppressor uses only sample-local transient evidence. Its
+    // classifier remains a separate frame-level signal for learning decisions;
+    // it is deliberately not fed into the 30 ms delayed audio path.
     // Sustained /s/ and /sh/-like high-frequency energy is speech, not a click.
     smartgate::KeyboardTransientSuppressor sibilantKeyboardGuard;
     sibilantKeyboardGuard.prepare(48000.0);
