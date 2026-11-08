@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "MouthClickSuppressor.h"
 #include "PluginEditor.h"
 
 #if defined(SMARTGATE_HAS_SILERO)
@@ -60,6 +61,9 @@ SmartGateAudioProcessor::createParameterLayout() {
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"keyboardReduction", 1}, "Keyboard Reduction",
         juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"mouthNoiseReduction", 1}, "Mouth Click Reduction",
+        juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.25f));
     return layout;
 }
 
@@ -131,6 +135,8 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     featureExtractor_.prepare(safeSampleRate);
     stereoAnalysisFoldDown_.prepare(safeSampleRate);
     keyboardDetector_.prepare(safeSampleRate);
+    mouthClickSuppressorLeft_.prepare(safeSampleRate);
+    mouthClickSuppressorRight_.prepare(safeSampleRate);
     keyboardConfidence_ = 0.0f;
     keyboardGainSmoother_.prepare(safeSampleRate);
     featureFramePosition_ = 0;
@@ -301,6 +307,8 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         0.0f, 1.0f, parameters_.getRawParameterValue("targetAmount")->load(std::memory_order_relaxed));
     const float keyboardReduction = juce::jlimit(
         0.0f, 1.0f, parameters_.getRawParameterValue("keyboardReduction")->load(std::memory_order_relaxed));
+    const float mouthNoiseReduction = juce::jlimit(
+        0.0f, 1.0f, parameters_.getRawParameterValue("mouthNoiseReduction")->load(std::memory_order_relaxed));
     const int keyboardMode = juce::jlimit(0, 2, static_cast<int>(std::lround(
         parameters_.getRawParameterValue("keyboardMode")->load(std::memory_order_relaxed))));
     // Run the keyboard transient detector either for audible reduction or
@@ -452,9 +460,16 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float gateGain = gateEnvelope_.process(vadAssistedPeak * targetGain);
         const float outputGain = gateGain * keyboardOutputGain;
 
-        left[sample] = leftSample * outputGain;
+        // Attenuate only brief high-band mouth clicks; low/mid voice energy is
+        // not passed through this suppressor. Each channel owns its filter state.
+        const float mouthProcessedLeft = mouthClickSuppressorLeft_.process(
+            leftSample, mouthNoiseReduction);
+        const float mouthProcessedRight = right != nullptr
+            ? mouthClickSuppressorRight_.process(rightSample, mouthNoiseReduction)
+            : mouthProcessedLeft;
+        left[sample] = mouthProcessedLeft * outputGain;
         if (right != nullptr)
-            right[sample] = rightSample * outputGain;
+            right[sample] = mouthProcessedRight * outputGain;
         outputPeak = juce::jmax(outputPeak,
             juce::jmax(std::abs(left[sample]), right != nullptr ? std::abs(right[sample]) : 0.0f));
     }
