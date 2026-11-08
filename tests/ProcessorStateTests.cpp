@@ -382,6 +382,32 @@ void testInvalidProfileVariantsClearPreviousProfile() {
         missingStatistic, "incomplete profile statistics must clear previous training");
 }
 
+void testExplicitTargetProfileReset() {
+    SmartGateAudioProcessor fixtureProcessor;
+    juce::MemoryBlock fixtureData;
+    auto fixture = saveXml(fixtureProcessor, fixtureData);
+    addValidProfile(*fixture, 73);
+    juce::MemoryBlock encoded;
+    encode(fixtureProcessor, *fixture, encoded);
+
+    SmartGateAudioProcessor processor;
+    processor.prepareToPlay(48000.0, 256);
+    processor.setStateInformation(encoded.getData(), static_cast<int>(encoded.getSize()));
+    juce::MidiBuffer midi;
+    juce::AudioBuffer<float> buffer(2, 1);
+    processor.processBlock(buffer, midi);
+
+    processor.requestTargetProfileReset();
+    processor.processBlock(buffer, midi);
+
+    juce::MemoryBlock saved;
+    auto state = saveXml(processor, saved);
+    require(profile(*state) != nullptr
+                && profile(*state)->getIntAttribute("count", -1) == 0,
+            "explicit target profile reset must clear the learned frame count");
+    processor.releaseResources();
+}
+
 void testLearnTargetRequestWaitsUntilAiIsEnabled() {
     SmartGateAudioProcessor fixtureProcessor;
     juce::MemoryBlock fixtureData;
@@ -1067,6 +1093,7 @@ int main() {
     testMalformedAndNonFiniteParameterValuesAreRejected();
     testMalformedAndForeignRootStatesAreIgnored();
     testLegacyPartialParameterStateUsesDefaults();
+    testExplicitTargetProfileReset();
     testLearnTargetRequestWaitsUntilAiIsEnabled();
     testExplicitLearningWinsOverPendingProfileRestore();
     testRestoreWithLearningEnabledAfterPreparePreservesProfile();
