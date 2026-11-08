@@ -42,12 +42,12 @@ private:
     std::array<juce::Slider, 10> sliders_;
     std::array<juce::Label, 10> labels_;
     std::array<std::unique_ptr<SliderAttachment>, 10> sliderAttachments_;
-    std::array<juce::String, 9> parameterNames_{
+    std::array<juce::String, 10> parameterNames_{
         "threshold", "attack", "release",
         "hold", "hysteresis", "range",
         "targetAmount", "keyboardReduction", "adaptiveHold", "mouthNoiseReduction"
     };
-    std::array<juce::String, 9> displayNames_{
+    std::array<juce::String, 10> displayNames_{
         "THRESHOLD", "ATTACK", "RELEASE",
         "HOLD", "HYSTERESIS", "RANGE",
         "TARGET INFLUENCE", "KEYBOARD REDUCTION", "ADAPTIVE HOLD", "MOUTH CLICK REDUCTION"
