@@ -55,7 +55,7 @@ public:
         // sample edges too, but its magnitude envelope quickly becomes
         // stationary. Use a slow envelope as a novelty reference so random
         // sibilant peaks do not continuously retrigger attenuation.
-        const float novelty = unit((magnitude - 3.0f * highBandEnvelope_) / 0.040f);
+        const float novelty = unit((magnitude - 4.5f * highBandEnvelope_) / 0.040f);
         highBandEnvelope_ = magnitude + envelopeCoefficient_
             * (highBandEnvelope_ - magnitude);
 
