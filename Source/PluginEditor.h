@@ -27,6 +27,8 @@ private:
     void drawMeter(juce::Graphics& g, juce::Rectangle<float> area,
                    const juce::String& label, float levelDb) const;
     void drawCpuMeter(juce::Graphics& g, juce::Rectangle<float> area) const;
+    void chooseProfileExport();
+    void chooseProfileImport();
 
     SmartGateAudioProcessor& processor_;
     float inputMeterDb_ = -100.0f;
@@ -54,6 +56,10 @@ private:
     juce::ToggleButton learnButton_{"LEARN TARGET"};
     juce::ComboBox keyboardModeBox_;
     juce::Label keyboardModeLabel_;
+    juce::TextButton exportProfileButton_{"EXPORT PROFILE"};
+    juce::TextButton importProfileButton_{"IMPORT PROFILE"};
+    juce::Label profileFileStatus_;
+    std::unique_ptr<juce::FileChooser> profileFileChooser_;
     std::unique_ptr<ButtonAttachment> aiAttachment_;
     std::unique_ptr<ButtonAttachment> learnAttachment_;
     std::unique_ptr<ComboAttachment> keyboardModeAttachment_;
