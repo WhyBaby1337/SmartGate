@@ -55,6 +55,8 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     keyboardModeBox_.setColour(juce::ComboBox::textColourId, juce::Colours::white);
     keyboardModeBox_.setColour(juce::ComboBox::outlineColourId, meterTrack);
     addAndMakeVisible(keyboardModeBox_);
+    keyboardModeAttachment_ = std::make_unique<ComboAttachment>(
+        processor_.parameters_, "keyboardMode", keyboardModeBox_);
 
     keyboardModeLabel_.setText("KEYBOARD PROFILE", juce::dontSendNotification);
     keyboardModeLabel_.setColour(juce::Label::textColourId, muted);
