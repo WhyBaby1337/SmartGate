@@ -27,9 +27,9 @@ void drawSectionTitle(juce::Graphics& g, juce::Rectangle<int> area,
 SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     SmartGateAudioProcessor& processor)
     : AudioProcessorEditor(&processor), processor_(processor) {
-    setSize(900, 760);
+    setSize(900, 920);
     setResizable(true, true);
-    setResizeLimits(760, 680, 1200, 960);
+    setResizeLimits(760, 820, 1200, 1100);
 
     for (std::size_t i = 0; i < sliders_.size(); ++i) {
         const juce::String suffix = (i == 0 || i == 4 || i == 5)
@@ -38,6 +38,33 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
         sliderAttachments_[i] = std::make_unique<SliderAttachment>(
             processor_.parameters_, parameterNames_[i], sliders_[i]);
     }
+
+    voiceLevelingSlider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    voiceLevelingSlider_.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 82, 20);
+    voiceLevelingSlider_.setTextValueSuffix(" %");
+    voiceLevelingSlider_.textFromValueFunction = [](double value) {
+        return juce::String(juce::roundToInt(value * 100.0)) + " %";
+    };
+    voiceLevelingSlider_.valueFromTextFunction = [](const juce::String& text) {
+        auto numeric = text;
+        numeric.retainCharacters("0123456789.-");
+        return numeric.getDoubleValue() / 100.0;
+    };
+    voiceLevelingSlider_.setTooltip("Independent voice level control. 0% fully bypasses this module; higher values gently lift quiet speech and control loud speech.");
+    voiceLevelingSlider_.setColour(juce::Slider::rotarySliderFillColourId, accent);
+    voiceLevelingSlider_.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff35404d));
+    voiceLevelingSlider_.setColour(juce::Slider::thumbColourId, juce::Colours::white);
+    voiceLevelingSlider_.setColour(juce::Slider::textBoxTextColourId, juce::Colours::white);
+    voiceLevelingSlider_.setColour(juce::Slider::textBoxBackgroundColourId, panelRaised);
+    voiceLevelingSlider_.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    addAndMakeVisible(voiceLevelingSlider_);
+    voiceLevelingLabel_.setText("VOICE LEVELING", juce::dontSendNotification);
+    voiceLevelingLabel_.setJustificationType(juce::Justification::centred);
+    voiceLevelingLabel_.setColour(juce::Label::textColourId, muted);
+    voiceLevelingLabel_.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
+    addAndMakeVisible(voiceLevelingLabel_);
+    voiceLevelingAttachment_ = std::make_unique<SliderAttachment>(
+        processor_.parameters_, "voiceLeveling", voiceLevelingSlider_);
 
     aiButton_.setTooltip("Enables Silero voice activity assistance and target-profile influence. Off keeps the conventional gate active.");
     learnButton_.setTooltip("Start or pause voice-profile learning. Pausing preserves all collected frames.");
@@ -245,8 +272,13 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
                    + juce::String(static_cast<juce::int64>(learnedFrames_)) + " FRAMES",
                status, juce::Justification::centredLeft);
 
-    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - 10) * 0.58f));
-    auto intelligencePanel = area;
+    const int panelGap = 10;
+    const int usablePanelHeight = area.getHeight() - 2 * panelGap;
+    auto gatePanel = area.removeFromTop(static_cast<int>(usablePanelHeight * 0.42f));
+    area.removeFromTop(panelGap);
+    auto intelligencePanel = area.removeFromTop(static_cast<int>(usablePanelHeight * 0.42f));
+    area.removeFromTop(panelGap);
+    auto voicePanel = area;
     g.setColour(panel);
     g.fillRoundedRectangle(gatePanel.toFloat(), 10.0f);
     g.fillRoundedRectangle(intelligencePanel.toFloat(), 10.0f);
@@ -259,6 +291,11 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
                      aiButton_.getToggleState()
                          ? "Target voice matching and keyboard suppression"
                          : "AI OFF  ·  conventional gate mode");
+    g.setColour(panel);
+    g.fillRoundedRectangle(voicePanel.toFloat(), 10.0f);
+    auto voiceHeading = voicePanel.reduced(14, 8).removeFromTop(22);
+    drawSectionTitle(g, voiceHeading, "AI VOICE STUDIO",
+                     "Independent loudness leveling  ·  0% = OFF");
 
 }
 
@@ -278,8 +315,12 @@ void SmartGateAudioProcessorEditor::resized() {
     area.removeFromTop(28);
 
     const int sectionGap = 10;
-    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - sectionGap) * 0.58f));
-    auto intelligencePanel = area;
+    const int usablePanelHeight = area.getHeight() - 2 * sectionGap;
+    auto gatePanel = area.removeFromTop(static_cast<int>(usablePanelHeight * 0.42f));
+    area.removeFromTop(sectionGap);
+    auto intelligencePanel = area.removeFromTop(static_cast<int>(usablePanelHeight * 0.42f));
+    area.removeFromTop(sectionGap);
+    auto voicePanel = area;
     gatePanel = gatePanel.reduced(12, 30);
     intelligencePanel = intelligencePanel.reduced(12, 8);
 
@@ -321,6 +362,11 @@ void SmartGateAudioProcessorEditor::resized() {
             smartContent.getY(), smartCellWidth, smartContent.getHeight());
         layoutControl(i, cell);
     }
+
+    auto voiceContent = voicePanel.reduced(12, 5);
+    voiceContent.removeFromTop(24);
+    voiceLevelingLabel_.setBounds(voiceContent.removeFromTop(18));
+    voiceLevelingSlider_.setBounds(voiceContent.removeFromTop(voiceContent.getHeight()));
 }
 
 void SmartGateAudioProcessorEditor::confirmProfileReset() {
