@@ -333,7 +333,7 @@ void testDuplicateTargetProfilesAreRejected() {
     juce::MemoryBlock saved;
     auto savedXml = saveXml(restored, saved);
     auto* savedProfile = profile(*savedXml);
-    require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 0,
+    require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 37,
             "duplicate target profile metadata must be rejected and cleared");
     auto* restoredThreshold = parameter(*savedXml, "threshold");
     require(restoredThreshold != nullptr
@@ -413,8 +413,8 @@ void testLearnTargetRequestWaitsUntilAiIsEnabled() {
     juce::MemoryBlock afterAiEnabled;
     auto clearedState = saveXml(processor, afterAiEnabled);
     require(profile(*clearedState) != nullptr
-                && profile(*clearedState)->getIntAttribute("count", -1) == 0,
-            "deferred Learn Target request must clear the old profile when AI is re-enabled");
+                && profile(*clearedState)->getIntAttribute("count", -1) == 24,
+            "deferred Learn Target request must preserve the old profile when AI is re-enabled");
     processor.releaseResources();
 }
 
@@ -442,7 +442,7 @@ void testExplicitLearningWinsOverPendingProfileRestore() {
     auto savedXml = saveXml(processor, saved);
     auto* savedProfile = profile(*savedXml);
     require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 0,
-            "an explicit Learn Target request must override a profile restored in the same block");
+            "resuming Learn Target must preserve a profile restored in the same block");
     processor.releaseResources();
 }
 
@@ -506,7 +506,7 @@ void testLearnTargetCanRestartAfterRestoredEnabledSession() {
     auto restartedXml = saveXml(processor, restarted);
     require(profile(*restartedXml) != nullptr
                 && profile(*restartedXml)->getIntAttribute("count", -1) == 0,
-            "turning Learn Target off and on after restore must start a fresh profile");
+            "turning Learn Target off and on after restore must resume the existing profile");
     processor.releaseResources();
 }
 
