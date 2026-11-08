@@ -141,13 +141,12 @@ private:
     }
 
     void updateThresholds() noexcept {
-        // Open 6 dB below the user threshold so low-energy consonant onsets
-        // can wake the gate before the following vowel. Keep the configured
-        // hysteresis below that lower opening point to avoid chatter.
-        const float openingDb = thresholdDb_ - openingMarginDb_;
-        openingThresholdLinear_ = std::pow(10.0f, openingDb / 20.0f);
+        // Keep the user's threshold as the actual opening point. Target
+        // matching is applied to output level, never to this detector input,
+        // so a dissimilar consonant cannot prevent the gate from opening.
+        openingThresholdLinear_ = std::pow(10.0f, thresholdDb_ / 20.0f);
         closeThresholdLinear_ = std::pow(10.0f,
-            (openingDb - hysteresisDb_) / 20.0f);
+            (thresholdDb_ - hysteresisDb_) / 20.0f);
     }
 
     void updateCoefficients() noexcept {
@@ -165,7 +164,6 @@ private:
     float hysteresisDb_ = 3.0f;
     float rangeDb_ = -80.0f;
     float closedGain_ = 0.0001f;
-    static constexpr float openingMarginDb_ = 6.0f;
     float openingThresholdLinear_ = 0.00794328f;
     float closeThresholdLinear_ = 0.00562341f;
     bool gateOpen_ = false;
