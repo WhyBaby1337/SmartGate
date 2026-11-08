@@ -572,6 +572,8 @@ void runAdaptiveKeyboardDetectorTests() {
         float inputEnergy = 0.0f;
         float outputEnergy = 0.0f;
         float minimumProfileGain = 1.0f;
+        float maximumProfileEdge = 0.0f;
+        float maximumProfileConfidence = 0.0f;
         for (int i = 0; i < 2400; ++i) {
             const float voice = 0.12f * std::sin(2.0f * 3.14159265f
                 * 180.0f * static_cast<float>(i) / 48000.0f);
@@ -593,6 +595,12 @@ void runAdaptiveKeyboardDetectorTests() {
             minimumProfileGain = std::min(minimumProfileGain,
                 profiledMouseClick.getHighBandGain());
             if (i >= 600 && i < 600 + profile.durationSamples) {
+                maximumProfileEdge = std::max(maximumProfileEdge,
+                    profiledMouseClick.getLastEdge());
+                maximumProfileConfidence = std::max(maximumProfileConfidence,
+                    profiledMouseClick.getLastConfidence());
+            }
+            if (i >= 600 && i < 600 + profile.durationSamples) {
                 inputEnergy += click * click;
                 const float outputClick = output - voiceOnlyOutput;
                 outputEnergy += outputClick * outputClick;
@@ -602,10 +610,12 @@ void runAdaptiveKeyboardDetectorTests() {
             const double ratio = inputEnergy > 0.0f
                 ? static_cast<double>(outputEnergy / inputEnergy) : 0.0;
             std::fprintf(stderr,
-                "Mouse profile %.0f/%.0f Hz: input=%.9g output=%.9g ratio=%.6f minGain=%.6f\\n",
+                "Mouse profile %.0f/%.0f Hz: input=%.9g output=%.9g ratio=%.6f minGain=%.6f maxEdge=%.6f maxConfidence=%.6f\\n",
                 profile.firstFrequency, profile.secondFrequency,
                 static_cast<double>(inputEnergy), static_cast<double>(outputEnergy), ratio,
-                static_cast<double>(minimumProfileGain));
+                static_cast<double>(minimumProfileGain),
+                static_cast<double>(maximumProfileEdge),
+                static_cast<double>(maximumProfileConfidence));
         }
         requireKeyboard(outputEnergy < inputEnergy * 0.90f,
                         "Mouse detector must reduce varied resonant click profiles over speech");

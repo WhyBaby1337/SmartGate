@@ -28,6 +28,8 @@ public:
         highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
         holdCounter_ = 0;
+        lastEdge_ = 0.0f;
+        lastConfidence_ = 0.0f;
     }
 
     float process(float input, float reduction, float alignedFrameContext = 0.0f) noexcept {
@@ -49,6 +51,7 @@ public:
         const float magnitude = std::abs(high);
         const float edge = std::abs(high - previousHighBand_);
         previousHighBand_ = high;
+        lastEdge_ = edge;
 
         // A mouse switch produces a brief peak above the recent high-band
         // bed, followed by a decaying ring. Noise-like speech has many sharp
@@ -70,6 +73,7 @@ public:
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
         const float confidence = level * impulsiveness * novelty;
+        lastConfidence_ = confidence;
         if (confidence > 0.0f) {
             const float perceptualAmount = std::sqrt(amount);
             const float targetGain = 1.0f - 0.92f * perceptualAmount * confidence;
@@ -86,6 +90,8 @@ public:
     }
 
     float getHighBandGain() const noexcept { return highBandGain_; }
+    float getLastEdge() const noexcept { return lastEdge_; }
+    float getLastConfidence() const noexcept { return lastConfidence_; }
 
 private:
     static float unit(float value) noexcept {
@@ -99,6 +105,8 @@ private:
     float previousHighBand_ = 0.0f;
     float highBandEnvelope_ = 0.0f;
     float highBandGain_ = 1.0f;
+    float lastEdge_ = 0.0f;
+    float lastConfidence_ = 0.0f;
     int holdSamples_ = 1;
     int holdCounter_ = 0;
 };
