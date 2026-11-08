@@ -314,6 +314,35 @@ void runAdaptiveKeyboardDetectorTests() {
                         "Reset detector must behave like a fresh detector");
     }
 
+    // Mixed transient confidence should reduce click brightness without
+    // substantially attenuating low-frequency voice fundamentals.
+    smartgate::AdaptiveKeyboardSuppressor suppressor;
+    suppressor.prepare(48000.0);
+    float lowIn = 0.0f, lowOut = 0.0f, highIn = 0.0f, highOut = 0.0f;
+    for (int i = 0; i < 2400; ++i) {
+        const float low = 0.2f * std::sin(2.0f * 3.14159265f * 180.0f
+                                         * static_cast<float>(i) / 48000.0f);
+        const float high = 0.08f * std::sin(2.0f * 3.14159265f * 8000.0f
+                                           * static_cast<float>(i) / 48000.0f);
+        const float lowResult = suppressor.process(low, 0, 0.8f, 0.36f);
+        const float highResult = suppressor.process(high, 1, 0.8f, 0.36f);
+        if (i > 600) {
+            lowIn += low * low; lowOut += lowResult * lowResult;
+            highIn += high * high; highOut += highResult * highResult;
+        }
+    }
+    requireKeyboard(lowOut > lowIn * 0.90f,
+                    "Low-frequency voice fundamentals must remain mostly intact");
+    requireKeyboard(highOut < highIn * 0.70f,
+                    "Moderately confident transients must receive useful high-band attenuation");
+    requireKeyboard(suppressor.getHighBandGain(0) < 0.60f
+                    && suppressor.getHighBandGain(1) < 0.60f,
+                    "Stereo channels must independently reach transient attenuation");
+    suppressor.reset();
+    requireKeyboard(suppressor.getHighBandGain(0) == 1.0f
+                    && suppressor.getHighBandGain(1) == 1.0f,
+                    "Suppressor reset must restore transparent output");
+
     // Stereo analysis must not use (L + R) / 2: equal-level anti-phase
     // channels would cancel a valid voice before VAD and feature extraction.
     smartgate::StereoAnalysisFoldDown stereoFoldDown;
