@@ -71,8 +71,12 @@ public:
         // sustained /s/, /sh/ or /ch/ as a mouse event.
         const float levelFloor = 0.0020f - 0.0010f * context;
         const float levelSpan = 0.022f - 0.006f * context;
-        const float edgeFloor = 0.043f - 0.012f * context;
-        const float edgeSpan = 0.13f - 0.020f * context;
+        // A small, context-scaled sensitivity increase targets quieter switch
+        // attacks. Keep this well above the previously tested aggressive range:
+        // novelty remains mandatory, protecting sustained and noise-like
+        // sibilants from being treated as repeated clicks.
+        const float edgeFloor = 0.035f - 0.009f * context;
+        const float edgeSpan = 0.10f - 0.015f * context;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
         const float confidence = level * impulsiveness * novelty;
