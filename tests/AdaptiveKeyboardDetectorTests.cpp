@@ -561,6 +561,26 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(minimumMouseSibilantGain > 0.90f,
                     "Sustained /s/, /sh/ and /ch/ energy must not be treated as mouse clicks");
 
+    // Real sibilants are noise-like rather than clean sine waves. A sustained
+    // high-band noise bed must not repeatedly retrigger the mouse transient
+    // detector simply because adjacent waveform samples differ sharply.
+    smartgate::MouseClickSuppressor noisySibilantGuard;
+    noisySibilantGuard.prepare(48000.0);
+    std::uint32_t sibilantNoiseState = 0x6d2b79f5u;
+    float minimumNoisySibilantGain = 1.0f;
+    for (int i = 0; i < 12000; ++i) {
+        sibilantNoiseState ^= sibilantNoiseState << 13;
+        sibilantNoiseState ^= sibilantNoiseState >> 17;
+        sibilantNoiseState ^= sibilantNoiseState << 5;
+        const float noise = (static_cast<float>(sibilantNoiseState & 0xffffu)
+                             / 32767.5f - 1.0f) * 0.06f;
+        (void) noisySibilantGuard.process(noise, 1.0f, 0.65f);
+        minimumNoisySibilantGain = std::min(minimumNoisySibilantGain,
+            noisySibilantGuard.getHighBandGain());
+    }
+    requireKeyboard(minimumNoisySibilantGain > 0.90f,
+                    "Noise-like sustained sibilants must not be repeatedly attenuated as mouse clicks");
+
     smartgate::MouseClickSuppressor mouseBypass;
     mouseBypass.prepare(48000.0);
     const float bypassSample = 0.1234567f;
