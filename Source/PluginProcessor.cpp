@@ -64,6 +64,11 @@ SmartGateAudioProcessor::createParameterLayout() {
         juce::ParameterID{"keyboardReduction", 1}, "Keyboard Reduction",
         juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{"mouseClickSuppressionEnabled", 1}, "Mouse Click Suppression", true));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"mouseClickReduction", 1}, "Mouse Click Reduction",
+        juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.20f));
+    layout.add(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{"mouthClickSuppressionEnabled", 1}, "Mouth Click Suppression", true));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"mouthNoiseReduction", 1}, "Mouth Click Reduction",
@@ -148,6 +153,8 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     featureExtractor_.prepare(safeSampleRate);
     stereoAnalysisFoldDown_.prepare(safeSampleRate);
     keyboardDetector_.prepare(safeSampleRate);
+    mouseClickSuppressorLeft_.prepare(safeSampleRate);
+    mouseClickSuppressorRight_.prepare(safeSampleRate);
     mouthClickSuppressorLeft_.prepare(safeSampleRate);
     mouthClickSuppressorRight_.prepare(safeSampleRate);
     keyboardConfidence_ = 0.0f;
@@ -329,6 +336,12 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         parameters_.getRawParameterValue("keyboardSuppressionEnabled")->load(std::memory_order_relaxed) >= 0.5f;
     const float effectiveKeyboardReduction = keyboardSuppressionEnabled
         ? keyboardReduction : 0.0f;
+    const float mouseClickReduction = juce::jlimit(
+        0.0f, 1.0f, parameters_.getRawParameterValue("mouseClickReduction")->load(std::memory_order_relaxed));
+    const bool mouseClickSuppressionEnabled =
+        parameters_.getRawParameterValue("mouseClickSuppressionEnabled")->load(std::memory_order_relaxed) >= 0.5f;
+    const float effectiveMouseClickReduction = mouseClickSuppressionEnabled
+        ? mouseClickReduction : 0.0f;
     const float mouthNoiseReduction = juce::jlimit(
         0.0f, 1.0f, parameters_.getRawParameterValue("mouthNoiseReduction")->load(std::memory_order_relaxed));
     const bool mouthClickSuppressionEnabled =
@@ -513,10 +526,15 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float outputGain = gateGain;
 
         // Mouth clicks use a separate conservative high-band transient stage.
+        const float mouseProcessedLeft = mouseClickSuppressorLeft_.process(
+            keyboardProcessedLeft, effectiveMouseClickReduction);
+        const float mouseProcessedRight = right != nullptr
+            ? mouseClickSuppressorRight_.process(keyboardProcessedRight, effectiveMouseClickReduction)
+            : mouseProcessedLeft;
         const float mouthProcessedLeft = mouthClickSuppressorLeft_.process(
-            keyboardProcessedLeft, effectiveMouthNoiseReduction);
+            mouseProcessedLeft, effectiveMouthNoiseReduction);
         const float mouthProcessedRight = right != nullptr
-            ? mouthClickSuppressorRight_.process(keyboardProcessedRight, effectiveMouthNoiseReduction)
+            ? mouthClickSuppressorRight_.process(mouseProcessedRight, effectiveMouthNoiseReduction)
             : mouthProcessedLeft;
         const float levelerGain = voiceLeveler_.processStereo(
             mouthProcessedLeft * outputGain,
