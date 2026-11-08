@@ -133,6 +133,8 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
         }
     }
 #endif
+    lookaheadDelay_.prepare(safeSampleRate, lookaheadMilliseconds_);
+    setLatencySamples(static_cast<int>(lookaheadDelay_.latencySamples()));
     gateEnvelope_.prepare(safeSampleRate);
     featureExtractor_.prepare(safeSampleRate);
     stereoAnalysisFoldDown_.prepare(safeSampleRate);
@@ -221,7 +223,10 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     gateEnvelope_.setThresholdDb(*parameters_.getRawParameterValue("threshold"));
     gateEnvelope_.setTimes(*parameters_.getRawParameterValue("attack"),
                            *parameters_.getRawParameterValue("release"));
-    gateEnvelope_.setHoldTime(*parameters_.getRawParameterValue("hold"));
+    // The detector hears the live input while output audio is delayed. Add the
+    // same lookahead interval to Hold so closing does not cut the delayed tail.
+    gateEnvelope_.setHoldTime(*parameters_.getRawParameterValue("hold")
+                              + static_cast<float>(lookaheadMilliseconds_));
     const float baseAdaptiveHold = juce::jlimit(0.0f, 1.0f,
         parameters_.getRawParameterValue("adaptiveHold")->load(std::memory_order_relaxed));
     gateEnvelope_.setHysteresisDb(*parameters_.getRawParameterValue("hysteresis"));
@@ -405,6 +410,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float rightSample = right != nullptr
             ? smartgate::finiteSampleOrZero(right[sample]) : leftSample;
         const float linkedPeak = juce::jmax(std::abs(leftSample), std::abs(rightSample));
+        float delayedLeft = 0.0f;
+        float delayedRight = 0.0f;
+        lookaheadDelay_.process(leftSample, rightSample, delayedLeft, delayedRight);
         inputPeak = juce::jmax(inputPeak, linkedPeak);
         const float mono = analyzeFrames && right != nullptr
             ? stereoAnalysisFoldDown_.process(leftSample, rightSample)
@@ -471,9 +479,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         // Keyboard/mouse clicks are attenuated locally in the high band,
         // rather than ducking the entire voice signal for several milliseconds.
         const float keyboardProcessedLeft = keyboardSuppressorLeft_.process(
-            leftSample, keyboardReduction);
+            delayedLeft, keyboardReduction);
         const float keyboardProcessedRight = right != nullptr
-            ? keyboardSuppressorRight_.process(rightSample, keyboardReduction)
+            ? keyboardSuppressorRight_.process(delayedRight, keyboardReduction)
             : keyboardProcessedLeft;
         const float outputGain = gateGain;
 
