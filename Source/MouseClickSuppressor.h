@@ -25,6 +25,8 @@ public:
     void reset() noexcept {
         lowPassState_ = 0.0;
         previousHighBand_ = 0.0f;
+        previousHighMagnitude_ = 0.0f;
+        previousOnsetConfidence_ = 0.0f;
         highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
         holdCounter_ = 0;
@@ -47,13 +49,19 @@ public:
 
         if (amount <= 0.0f) {
             previousHighBand_ = high;
+            previousHighMagnitude_ = std::abs(high);
+            previousOnsetConfidence_ = 0.0f;
+            highBandEnvelope_ = std::abs(high);
             highBandGain_ = 1.0f;
             return x;
         }
 
         const float magnitude = std::abs(high);
         const float edge = std::abs(high - previousHighBand_);
+        const float magnitudeRise = std::max(0.0f, magnitude - previousHighMagnitude_);
+        const float magnitudeFallRatio = magnitude / std::max(previousHighMagnitude_, 1.0e-6f);
         previousHighBand_ = high;
+        previousHighMagnitude_ = magnitude;
         lastEdge_ = edge;
 
         // A mouse switch produces a brief peak above the recent high-band
@@ -62,6 +70,12 @@ public:
         // stationary. Use a slow envelope as a novelty reference so random
         // sibilant peaks do not continuously retrigger attenuation.
         const float novelty = unit((magnitude - 2.0f * highBandEnvelope_) / 0.020f);
+        // A true switch strike can begin at a resonant peak and collapse on
+        // the very next sample. Require that isolated peak-and-drop shape;
+        // a sustained sibilant rises into its first peak instead of collapsing.
+        // The stronger pre-event bed test also rejects random peaks in steady
+        // noise, without changing the existing general transient detector.
+        const float onsetNovelty = unit((magnitude - 4.5f * highBandEnvelope_) / 0.015f);
         highBandEnvelope_ = magnitude + envelopeCoefficient_
             * (highBandEnvelope_ - magnitude);
 
@@ -76,7 +90,17 @@ public:
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
 
-        const float confidence = level * impulsiveness * novelty;
+        // Store a narrowly qualified onset for one sample. Confirm it only
+        // when the following sample falls sharply; this avoids reacting to
+        // the rising quarter-cycle of a sustained /s/ or /sh/ tone.
+        const bool onsetCandidate = magnitudeRise > 0.012f
+            && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.6f;
+        const float onsetDrop = unit((0.55f - magnitudeFallRatio) / 0.25f);
+        const float onsetConfidence = previousOnsetConfidence_ * onsetDrop;
+        previousOnsetConfidence_ = onsetCandidate ? level * onsetNovelty : 0.0f;
+
+        const float confidence = std::max(level * impulsiveness * novelty,
+                                          onsetConfidence);
         lastLevel_ = level;
         lastImpulsiveness_ = impulsiveness;
         lastNovelty_ = novelty;
@@ -113,6 +137,8 @@ private:
     float envelopeCoefficient_ = 0.0f;
     double lowPassState_ = 0.0;
     float previousHighBand_ = 0.0f;
+    float previousHighMagnitude_ = 0.0f;
+    float previousOnsetConfidence_ = 0.0f;
     float highBandEnvelope_ = 0.0f;
     float highBandGain_ = 1.0f;
     float lastEdge_ = 0.0f;
