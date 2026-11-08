@@ -56,7 +56,10 @@ public:
         const float impulsiveness = unit((edge - 0.12f) / 0.28f);
         const float confidence = level * impulsiveness;
         if (confidence > 0.0f) {
-            const float targetGain = 1.0f - 0.78f * amount * confidence;
+            // Perceptual mapping gives the lower UI range useful control; the cap
+            // remains confined to the detected high-band transient.
+            const float perceptualAmount = std::sqrt(amount);
+            const float targetGain = 1.0f - 0.88f * perceptualAmount * confidence;
             // Transient-only attack, confined to the high band.
             highBandGain_ = std::min(highBandGain_, targetGain);
         } else {
