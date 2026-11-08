@@ -74,7 +74,8 @@ void testHostMetadataAndAutomationParameters() {
     const juce::StringArray expectedIds{
         "threshold", "attack", "release", "hold", "hysteresis", "adaptiveHold",
         "range", "aiEnabled", "learnTarget", "targetAmount", "keyboardMode",
-        "keyboardReduction", "mouthNoiseReduction", "voiceLeveling"
+        "keyboardSuppressionEnabled", "keyboardReduction",
+        "mouthClickSuppressionEnabled", "mouthNoiseReduction", "voiceLeveling"
     };
     require(processor.getParameters().size() == expectedIds.size(),
             "host parameter count must match the stable parameter layout");
@@ -98,6 +99,8 @@ void testRuntimeBlockAndToggleTransitions() {
             setParameter(processor, "aiEnabled", cycle == 1 ? 0.0f : 1.0f);
             setParameter(processor, "learnTarget", cycle == 2 ? 1.0f : 0.0f);
             setParameter(processor, "keyboardReduction", cycle == 0 ? 0.0f : 0.8f);
+            setParameter(processor, "keyboardSuppressionEnabled", cycle == 1 ? 0.0f : 1.0f);
+            setParameter(processor, "mouthClickSuppressionEnabled", cycle == 2 ? 0.0f : 1.0f);
             setParameter(processor, "keyboardMode", static_cast<float>(cycle));
             setParameter(processor, "targetAmount", cycle == 1 ? 0.0f : 0.75f);
             for (const int blockSize : blockSizes) {
@@ -168,7 +171,9 @@ void testAllParametersSurviveStateRoundTrip() {
     setParameter(source, "learnTarget", 1.0f);
     setParameter(source, "targetAmount", 0.82f);
     setParameter(source, "keyboardMode", 2.0f);
+    setParameter(source, "keyboardSuppressionEnabled", 0.0f);
     setParameter(source, "keyboardReduction", 0.64f);
+    setParameter(source, "mouthClickSuppressionEnabled", 1.0f);
     setParameter(source, "mouthNoiseReduction", 0.37f);
     setParameter(source, "voiceLeveling", 0.68f);
 
@@ -210,7 +215,9 @@ void testAllParametersSurviveStateRoundTrip() {
     expect("learnTarget", 1.0f);
     expect("targetAmount", 0.82f);
     expect("keyboardMode", 2.0f);
+    expect("keyboardSuppressionEnabled", 0.0f);
     expect("keyboardReduction", 0.64f);
+    expect("mouthClickSuppressionEnabled", 1.0f);
     expect("mouthNoiseReduction", 0.37f);
     expect("voiceLeveling", 0.68f);
 }
