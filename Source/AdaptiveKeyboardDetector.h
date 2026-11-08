@@ -185,7 +185,8 @@ public:
         highBandGain_ = 1.0f;
     }
 
-    float process(float input, float reduction) noexcept {
+    float process(float input, float reduction,
+                  float classifierConfidence = 1.0f) noexcept {
         const float x = std::isfinite(input) ? input : 0.0f;
         const float amount = unit(reduction);
         const double sample = static_cast<double>(x);
@@ -209,7 +210,15 @@ public:
         // isolated impulse; low-frequency speech is outside this path.
         const float level = unit((magnitude - 0.012f) / 0.080f);
         const float impulsiveness = unit((edge - 0.075f) / 0.24f);
-        const float confidence = level * impulsiveness;
+        const float localTransient = level * impulsiveness;
+        // The frame classifier sees the undelayed input, while this suppressor
+        // processes audio after the 30 ms lookahead. Its confidence therefore
+        // describes the same transient before it reaches this sample. Keep a
+        // 25% local-detector floor so unusual clicks are not completely missed,
+        // but let keyboard-profile evidence strengthen genuine mechanical hits.
+        const float classifierEvidence = unit((unit(classifierConfidence) - 0.08f) / 0.32f);
+        const float classifierWeight = 0.25f + 0.75f * classifierEvidence;
+        const float confidence = localTransient * classifierWeight;
         if (confidence > 0.0f) {
             // The UI amount is perceptual, not a linear amplitude multiplier.
             // A linear mapping made everyday values (0.15-0.30) barely audible
