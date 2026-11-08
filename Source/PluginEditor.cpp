@@ -70,10 +70,11 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     learnButton_.setTooltip("Start or pause voice-profile learning. Pausing preserves all collected frames.");
     keyboardSuppressionButton_.setTooltip("Completely bypass keyboard and mouse transient suppression without changing its slider value.");
     mouthClickSuppressionButton_.setTooltip("Completely bypass mouth-click suppression without changing its slider value.");
+    mouseClickSuppressionButton_.setTooltip("Independently bypass the mouse-click transient stage without changing its reduction setting.");
     resetProfileButton_.setTooltip("Permanently clear the learned profile and start a fresh training session.");
     keyboardModeBox_.setTooltip("Choose the keyboard-noise profile that best matches your keyboard.");
     for (auto* toggle : {&aiButton_, &learnButton_,
-                           &keyboardSuppressionButton_, &mouthClickSuppressionButton_}) {
+                           &keyboardSuppressionButton_, &mouthClickSuppressionButton_, &mouseClickSuppressionButton_}) {
         toggle->setColour(juce::ToggleButton::textColourId, juce::Colours::white);
         toggle->setColour(juce::ToggleButton::tickColourId, accent);
         toggle->setColour(juce::ToggleButton::tickDisabledColourId, muted);
@@ -82,6 +83,7 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     addAndMakeVisible(learnButton_);
     addAndMakeVisible(keyboardSuppressionButton_);
     addAndMakeVisible(mouthClickSuppressionButton_);
+    addAndMakeVisible(mouseClickSuppressionButton_);
     resetProfileButton_.setColour(juce::TextButton::buttonColourId, panelRaised);
     resetProfileButton_.setColour(juce::TextButton::textColourOffId, warning);
     addAndMakeVisible(resetProfileButton_);
@@ -94,6 +96,8 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
         processor_.parameters_, "keyboardSuppressionEnabled", keyboardSuppressionButton_);
     mouthClickSuppressionAttachment_ = std::make_unique<ButtonAttachment>(
         processor_.parameters_, "mouthClickSuppressionEnabled", mouthClickSuppressionButton_);
+    mouseClickSuppressionAttachment_ = std::make_unique<ButtonAttachment>(
+        processor_.parameters_, "mouseClickSuppressionEnabled", mouseClickSuppressionButton_);
 
     keyboardModeBox_.addItemList({"Universal", "Mechanical", "Membrane"}, 1);
     keyboardModeBox_.setColour(juce::ComboBox::backgroundColourId, panelRaised);
@@ -324,6 +328,7 @@ void SmartGateAudioProcessorEditor::resized() {
     keyboardModeBox_.setBounds(keyboardArea.removeFromTop(29));
     keyboardSuppressionButton_.setBounds(modeArea.removeFromLeft(105).reduced(2, 5));
     mouthClickSuppressionButton_.setBounds(modeArea.removeFromLeft(105).reduced(2, 5));
+    mouseClickSuppressionButton_.setBounds(modeArea.removeFromLeft(105).reduced(2, 5));
 
     area.removeFromTop(78);
     area.removeFromTop(28);
