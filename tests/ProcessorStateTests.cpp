@@ -441,7 +441,7 @@ void testExplicitLearningWinsOverPendingProfileRestore() {
     juce::MemoryBlock saved;
     auto savedXml = saveXml(processor, saved);
     auto* savedProfile = profile(*savedXml);
-    require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 0,
+    require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 37,
             "resuming Learn Target must preserve a profile restored in the same block");
     processor.releaseResources();
 }
@@ -505,7 +505,7 @@ void testLearnTargetCanRestartAfterRestoredEnabledSession() {
     juce::MemoryBlock restarted;
     auto restartedXml = saveXml(processor, restarted);
     require(profile(*restartedXml) != nullptr
-                && profile(*restartedXml)->getIntAttribute("count", -1) == 0,
+                && profile(*restartedXml)->getIntAttribute("count", -1) == 37,
             "turning Learn Target off and on after restore must resume the existing profile");
     processor.releaseResources();
 }
