@@ -295,19 +295,25 @@ void SmartGateAudioProcessorEditor::resized() {
         layoutControl(i, cell);
     }
 
-    auto profileActions = intelligencePanel.removeFromBottom(34);
+    // Keep the section title, three full-size controls, and backup actions
+    // in separate vertical bands. Previously the whole panel was reduced by
+    // 30 px at both ends before reserving the buttons, leaving the smart
+    // sliders only ~70 px tall and making their labels/readouts look cramped.
+    auto smartContent = intelligencePanel.reduced(12, 8);
+    smartContent.removeFromTop(22); // section heading
+    auto profileActions = smartContent.removeFromBottom(34);
     exportProfileButton_.setBounds(profileActions.removeFromLeft(142));
     profileActions.removeFromLeft(8);
     importProfileButton_.setBounds(profileActions.removeFromLeft(142));
     profileActions.removeFromLeft(12);
     profileFileStatus_.setBounds(profileActions);
 
-    const int smartCellWidth = (intelligencePanel.getWidth() - 2 * columnGap) / 3;
+    const int smartCellWidth = (smartContent.getWidth() - 2 * columnGap) / 3;
     for (std::size_t i = 6; i < sliders_.size(); ++i) {
         const int column = static_cast<int>(i - 6);
         auto cell = juce::Rectangle<int>(
-            intelligencePanel.getX() + column * (smartCellWidth + columnGap),
-            intelligencePanel.getY(), smartCellWidth, intelligencePanel.getHeight());
+            smartContent.getX() + column * (smartCellWidth + columnGap),
+            smartContent.getY(), smartCellWidth, smartContent.getHeight());
         layoutControl(i, cell);
     }
 }
