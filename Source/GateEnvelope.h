@@ -19,6 +19,7 @@ public:
         maximumAdaptiveDurationSamples_ = static_cast<std::uint64_t>(
             std::llround(2.0 * sampleRate_));
         updateCoefficients();
+        updateThresholds();
         reset();
     }
 
@@ -165,8 +166,8 @@ private:
     float hysteresisDb_ = 3.0f;
     float rangeDb_ = -80.0f;
     float closedGain_ = 0.0001f;
-    float openingThresholdLinear_ = 0.00794328f;
-    float closeThresholdLinear_ = 0.00562341f;
+    float openingThresholdLinear_ = 0.01584893f;
+    float closeThresholdLinear_ = 0.01122018f;
     bool gateOpen_ = false;
     float attackCoefficient_ = 0.0f;
     float releaseCoefficient_ = 0.0f;
