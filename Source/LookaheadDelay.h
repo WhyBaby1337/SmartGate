@@ -35,10 +35,14 @@ public:
             return;
         }
         ring_[writePosition_] = {left, right};
-        const auto readPosition = (writePosition_ + ring_.size() - delaySamples_) % ring_.size();
+        auto readPosition = writePosition_ + 1;
+        if (readPosition == ring_.size())
+            readPosition = 0;
         delayedLeft = ring_[readPosition][0];
         delayedRight = ring_[readPosition][1];
-        writePosition_ = (writePosition_ + 1) % ring_.size();
+        ++writePosition_;
+        if (writePosition_ == ring_.size())
+            writePosition_ = 0;
     }
 
     std::size_t latencySamples() const noexcept { return delaySamples_; }
