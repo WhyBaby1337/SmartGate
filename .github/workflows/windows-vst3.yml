@@ -94,9 +94,40 @@ jobs:
       - name: Validate VST3 with pluginval
         shell: pwsh
         run: |
+          function Get-DownloadWithRetry {
+            param(
+              [Parameter(Mandatory = $true)][string]$Uri,
+              [Parameter(Mandatory = $true)][string]$Destination,
+              [int]$MaxAttempts = 5
+            )
+
+            for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+              try {
+                if (Test-Path -LiteralPath $Destination) {
+                  Remove-Item -LiteralPath $Destination -Force
+                }
+                Write-Host "Downloading $Uri (attempt $attempt/$MaxAttempts)"
+                Invoke-WebRequest -Uri $Uri -OutFile $Destination -TimeoutSec 180
+                if (-not (Test-Path -LiteralPath $Destination -PathType Leaf) -or
+                    (Get-Item -LiteralPath $Destination).Length -le 0) {
+                  throw "Download produced a missing or empty file."
+                }
+                return
+              }
+              catch {
+                if ($attempt -eq $MaxAttempts) {
+                  throw "Download failed after $MaxAttempts attempts: $Uri. Last error: $($_.Exception.Message)"
+                }
+                $delay = [Math]::Min(60, 10 * [Math]::Pow(2, $attempt - 1))
+                Write-Warning "Download attempt $attempt failed: $($_.Exception.Message). Retrying in $delay seconds."
+                Start-Sleep -Seconds $delay
+              }
+            }
+          }
+
           $archive = Join-Path $env:RUNNER_TEMP "pluginval_Windows.zip"
           $tools = Join-Path $env:RUNNER_TEMP "pluginval"
-          Invoke-WebRequest -Uri "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip" -OutFile $archive
+          Get-DownloadWithRetry -Uri "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip" -Destination $archive
           Expand-Archive -LiteralPath $archive -DestinationPath $tools -Force
 
           $validator = Get-ChildItem -LiteralPath $tools -Filter "pluginval.exe" -File -Recurse | Select-Object -First 1
@@ -117,7 +148,7 @@ jobs:
           New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
           $procdumpZip = Join-Path $env:RUNNER_TEMP "procdump.zip"
           $procdumpDir = Join-Path $env:RUNNER_TEMP "procdump"
-          Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Procdump.zip" -OutFile $procdumpZip
+          Get-DownloadWithRetry -Uri "https://download.sysinternals.com/files/Procdump.zip" -Destination $procdumpZip
           Expand-Archive -LiteralPath $procdumpZip -DestinationPath $procdumpDir -Force
           $procdump = Join-Path $procdumpDir "procdump64.exe"
           if (-not (Test-Path -LiteralPath $procdump -PathType Leaf)) {
@@ -150,14 +181,14 @@ jobs:
           }
 
           $analysis = Join-Path $env:RUNNER_TEMP "pluginval-dump-analysis.txt"
-          $debugger = Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Filter "cdb.exe" -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "\\Debuggers\\x64\\cdb\.exe$" } | Select-Object -First 1
+          $debugger = Get-ChildItem "C:\\Program Files (x86)\\Windows Kits" -Filter "cdb.exe" -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "\\\\Debuggers\\\\x64\\\\cdb\\.exe$" } | Select-Object -First 1
           if (-not $debugger) {
             "CDB debugger was not found on this runner. Dump retained for offline analysis: $($dump.FullName)" | Set-Content -LiteralPath $analysis
             exit 0
           }
 
           $pdbDirectories = Get-ChildItem -LiteralPath "build" -Filter "*.pdb" -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.DirectoryName } | Sort-Object -Unique
-          $symbolPath = (@($pdbDirectories) + @("srv*$env:RUNNER_TEMP\\symbols*https://msdl.microsoft.com/download/symbols")) -join ";"
+          $symbolPath = (@($pdbDirectories) + @("srv*$env:RUNNER_TEMP\\\\symbols*https://msdl.microsoft.com/download/symbols")) -join ";"
           "Dump: $($dump.FullName)" | Set-Content -LiteralPath $analysis
           "Debugger: $($debugger.FullName)" | Add-Content -LiteralPath $analysis
           "Symbol path: $symbolPath" | Add-Content -LiteralPath $analysis
