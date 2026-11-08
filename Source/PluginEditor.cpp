@@ -68,14 +68,21 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
 
     aiButton_.setTooltip("Enables Silero voice activity assistance and target-profile influence. Off keeps the conventional gate active.");
     learnButton_.setTooltip("Start or pause voice-profile learning. Pausing preserves all collected frames.");
+    keyboardSuppressionButton_.setTooltip("Completely bypass keyboard and mouse transient suppression without changing its slider value.");
+    mouthClickSuppressionButton_.setTooltip("Completely bypass mouth-click suppression without changing its slider value.");
     resetProfileButton_.setTooltip("Permanently clear the learned profile and start a fresh training session.");
     keyboardModeBox_.setTooltip("Choose the keyboard-noise profile that best matches your keyboard.");
-    aiButton_.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
-    learnButton_.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
-    aiButton_.setColour(juce::ToggleButton::tickColourId, accent);
-    learnButton_.setColour(juce::ToggleButton::tickColourId, accent);
+    for (auto* toggle : {&aiButton_, &learnButton_,
+                           &keyboardSuppressionButton_, &mouthClickSuppressionButton_}) {
+        toggle->setColour(juce::ToggleButton::textColourId, juce::Colours::white);
+        toggle->setColour(juce::ToggleButton::tickColourId, accent);
+        toggle->setColour(juce::ToggleButton::tickDisabledColourId, muted);
+        toggle->setFont(juce::Font(juce::FontOptions(9.0f, juce::Font::bold)));
+    }
     addAndMakeVisible(aiButton_);
     addAndMakeVisible(learnButton_);
+    addAndMakeVisible(keyboardSuppressionButton_);
+    addAndMakeVisible(mouthClickSuppressionButton_);
     resetProfileButton_.setColour(juce::TextButton::buttonColourId, panelRaised);
     resetProfileButton_.setColour(juce::TextButton::textColourOffId, warning);
     addAndMakeVisible(resetProfileButton_);
@@ -84,6 +91,10 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
         processor_.parameters_, "aiEnabled", aiButton_);
     learnAttachment_ = std::make_unique<ButtonAttachment>(
         processor_.parameters_, "learnTarget", learnButton_);
+    keyboardSuppressionAttachment_ = std::make_unique<ButtonAttachment>(
+        processor_.parameters_, "keyboardSuppressionEnabled", keyboardSuppressionButton_);
+    mouthClickSuppressionAttachment_ = std::make_unique<ButtonAttachment>(
+        processor_.parameters_, "mouthClickSuppressionEnabled", mouthClickSuppressionButton_);
 
     keyboardModeBox_.addItemList({"Universal", "Mechanical", "Membrane"}, 1);
     keyboardModeBox_.setColour(juce::ComboBox::backgroundColourId, panelRaised);
@@ -304,12 +315,16 @@ void SmartGateAudioProcessorEditor::resized() {
     area.removeFromTop(66);
 
     auto modeArea = area.removeFromTop(58).reduced(12, 5);
-    aiButton_.setBounds(modeArea.removeFromLeft(125).reduced(4, 5));
-    learnButton_.setBounds(modeArea.removeFromLeft(155).reduced(4, 5));
-    resetProfileButton_.setBounds(modeArea.removeFromLeft(125).reduced(4, 5));
-    auto keyboardArea = modeArea.removeFromLeft(205);
+    // Compact responsive widths keep both independent bypasses visible even
+    // at the minimum editor width, without stealing vertical space from sliders.
+    aiButton_.setBounds(modeArea.removeFromLeft(88).reduced(2, 5));
+    learnButton_.setBounds(modeArea.removeFromLeft(116).reduced(2, 5));
+    resetProfileButton_.setBounds(modeArea.removeFromLeft(98).reduced(2, 5));
+    auto keyboardArea = modeArea.removeFromLeft(150);
     keyboardModeLabel_.setBounds(keyboardArea.removeFromTop(15));
     keyboardModeBox_.setBounds(keyboardArea.removeFromTop(29));
+    keyboardSuppressionButton_.setBounds(modeArea.removeFromLeft(94).reduced(2, 5));
+    mouthClickSuppressionButton_.setBounds(modeArea.removeFromLeft(94).reduced(2, 5));
 
     area.removeFromTop(78);
     area.removeFromTop(28);
