@@ -211,7 +211,12 @@ public:
         const float impulsiveness = unit((edge - 0.075f) / 0.24f);
         const float confidence = level * impulsiveness;
         if (confidence > 0.0f) {
-            const float targetGain = 1.0f - 0.82f * amount * confidence;
+            // The UI amount is perceptual, not a linear amplitude multiplier.
+            // A linear mapping made everyday values (0.15-0.30) barely audible
+            // in effect. The square-root curve gives useful transient reduction
+            // at modest settings while retaining a gentle zero end and a hard cap.
+            const float perceptualAmount = std::sqrt(amount);
+            const float targetGain = 1.0f - 0.92f * perceptualAmount * confidence;
             highBandGain_ = std::min(highBandGain_, targetGain);
         } else {
             highBandGain_ = 1.0f - releaseCoefficient_
