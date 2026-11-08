@@ -283,7 +283,7 @@ void SmartGateAudioProcessorEditor::resized() {
     area.removeFromTop(28);
 
     const int sectionGap = 10;
-    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - sectionGap) * 0.62f));
+    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - sectionGap) * 0.58f));
     auto intelligencePanel = area;
     gatePanel = gatePanel.reduced(12, 30);
     intelligencePanel = intelligencePanel.reduced(12, 8);
@@ -307,7 +307,7 @@ void SmartGateAudioProcessorEditor::resized() {
     // 30 px at both ends before reserving the buttons, leaving the smart
     // sliders only ~70 px tall and making their labels/readouts look cramped.
     auto smartContent = intelligencePanel.reduced(12, 8);
-    smartContent.removeFromTop(22); // section heading
+    smartContent.removeFromTop(38); // reserve a clear band below the section heading
     auto profileActions = smartContent.removeFromBottom(34);
     exportProfileButton_.setBounds(profileActions.removeFromLeft(142));
     profileActions.removeFromLeft(8);
