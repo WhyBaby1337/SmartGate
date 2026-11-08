@@ -369,6 +369,55 @@ void runAdaptiveKeyboardDetectorTests() {
                         "Mono input must pass through stereo analysis unchanged");
     }
 
+    // Mouth-click suppression must be exactly transparent when disabled.
+    smartgate::MouthClickSuppressor mouthBypass;
+    mouthBypass.prepare(48000.0);
+    for (int i = 0; i < 256; ++i) {
+        const float sample = 0.2f * std::sin(2.0f * 3.14159265f * 4200.0f
+                                             * static_cast<float>(i) / 48000.0f);
+        requireKeyboard(mouthBypass.process(sample, 0.0f) == sample,
+                        "Zero mouth-click reduction must remain bit-transparent");
+    }
+
+    // A sharp click-like impulse should reduce the high-band tail while the
+    // low-frequency voice component remains effectively unchanged.
+    smartgate::MouthClickSuppressor mouthClick;
+    mouthClick.prepare(48000.0);
+    float minimumHighBandGain = 1.0f;
+    float maximumLowToneError = 0.0f;
+    for (int i = 0; i < 1800; ++i) {
+        const float tone = 0.12f * std::sin(2.0f * 3.14159265f * 180.0f
+                                            * static_cast<float>(i) / 48000.0f);
+        const float click = i == 300 ? 0.9f : (i > 300 && i < 340
+            ? 0.20f * std::exp(-0.12f * static_cast<float>(i - 300))
+                * std::sin(2.0f * 3.14159265f * 6200.0f
+                           * static_cast<float>(i - 300) / 48000.0f)
+            : 0.0f);
+        const float output = mouthClick.process(tone + click, 1.0f);
+        minimumHighBandGain = std::min(minimumHighBandGain,
+                                       mouthClick.getHighBandGain());
+        if (i > 700)
+            maximumLowToneError = std::max(maximumLowToneError, std::abs(output - tone));
+    }
+    requireKeyboard(minimumHighBandGain < 0.8f,
+                    "A sharp high-band click must trigger transient attenuation");
+    requireKeyboard(maximumLowToneError < 0.002f,
+                    "Mouth-click processing must leave low-frequency voice nearly unchanged");
+
+    // Sustained sibilant-like energy must not be classified as a short click.
+    smartgate::MouthClickSuppressor sibilantGuard;
+    sibilantGuard.prepare(48000.0);
+    float minimumSibilantGain = 1.0f;
+    for (int i = 0; i < 12000; ++i) {
+        const float sibilant = 0.08f * std::sin(2.0f * 3.14159265f * 6200.0f
+                                                * static_cast<float>(i) / 48000.0f);
+        sibilantGuard.process(sibilant, 1.0f);
+        minimumSibilantGain = std::min(minimumSibilantGain,
+                                       sibilantGuard.getHighBandGain());
+    }
+    requireKeyboard(minimumSibilantGain > 0.90f,
+                    "Sustained high-frequency speech must not trigger mouth-click attenuation");
+
     stereoFoldDown.prepare(96000.0);
     requireKeyboard(std::abs(stereoFoldDown.process(0.1f, 0.3f) - 0.3f) < 1.0e-6f,
                     "Reprepare must clear stereo channel history and select the first stronger channel");
