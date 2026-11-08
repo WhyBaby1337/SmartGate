@@ -652,6 +652,70 @@ void SmartGateAudioProcessor::setStateInformation(const void* data, int sizeInBy
     }
 }
 
+bool SmartGateAudioProcessor::exportTargetProfile(const juce::File& file) const {
+    if (file == juce::File{} || !file.getParentDirectory().isDirectory())
+        return false;
+
+    smartgate::TargetProfile::Snapshot snapshot;
+    if (!smartgate::readLatestTargetProfileForPersistence(
+            pendingTargetProfile_, publishedTargetProfile_,
+            lastAppliedTargetProfileVersion_, snapshot)
+        || snapshot.count == 0)
+        return false;
+
+    smartgate::TargetProfile validator;
+    if (!validator.restore(snapshot))
+        return false;
+
+    juce::XmlElement xml("SMARTGATE_TARGET_PROFILE");
+    xml.setAttribute("version", 1);
+    xml.setAttribute("count", static_cast<juce::int64>(snapshot.count));
+    for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
+        const auto index = juce::String(static_cast<int>(i));
+        xml.setAttribute("mean" + index, snapshot.mean[i]);
+        xml.setAttribute("m2_" + index, snapshot.m2[i]);
+    }
+    return file.replaceWithText(xml.toString());
+}
+
+bool SmartGateAudioProcessor::importTargetProfile(const juce::File& file) {
+    if (!file.existsAsFile() || file.getSize() <= 0
+        || file.getSize() > 64 * 1024)
+        return false;
+
+    auto xml = juce::XmlDocument::parse(file);
+    if (xml == nullptr || !xml->hasTagName("SMARTGATE_TARGET_PROFILE")
+        || xml->getIntAttribute("version", -1) != 1)
+        return false;
+
+    // Reject unexpected children and duplicate/ambiguous profile payloads.
+    if (xml->getNumChildElements() != 0)
+        return false;
+
+    const auto count = xml->getIntAttribute("count", -1);
+    if (count <= 0)
+        return false;
+
+    smartgate::TargetProfile::Snapshot snapshot;
+    snapshot.count = static_cast<std::uint64_t>(count);
+    for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
+        const auto index = juce::String(static_cast<int>(i));
+        snapshot.mean[i] = xml->getDoubleAttribute("mean" + index,
+            std::numeric_limits<double>::quiet_NaN());
+        snapshot.m2[i] = xml->getDoubleAttribute("m2_" + index,
+            std::numeric_limits<double>::quiet_NaN());
+    }
+
+    smartgate::TargetProfile validator;
+    if (!validator.restore(snapshot))
+        return false;
+
+    // Publish a validated immutable snapshot. The audio thread applies it at
+    // the next block boundary; no profile object is mutated from the UI thread.
+    pendingTargetProfile_.publish(snapshot);
+    return true;
+}
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {
     return new SmartGateAudioProcessor();
 }
