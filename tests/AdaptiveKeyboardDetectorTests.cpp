@@ -6,6 +6,7 @@
 #include "LookaheadDelay.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -593,6 +594,14 @@ void runAdaptiveKeyboardDetectorTests() {
                 const float outputClick = output - voiceOnlyOutput;
                 outputEnergy += outputClick * outputClick;
             }
+        }
+        if (!(outputEnergy < inputEnergy * 0.90f)) {
+            const double ratio = inputEnergy > 0.0f
+                ? static_cast<double>(outputEnergy / inputEnergy) : 0.0;
+            std::fprintf(stderr,
+                "Mouse profile %.0f/%.0f Hz: input=%.9g output=%.9g ratio=%.6f\\n",
+                profile.firstFrequency, profile.secondFrequency,
+                static_cast<double>(inputEnergy), static_cast<double>(outputEnergy), ratio);
         }
         requireKeyboard(outputEnergy < inputEnergy * 0.90f,
                         "Mouse detector must reduce varied resonant click profiles over speech");
