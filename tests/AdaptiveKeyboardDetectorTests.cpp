@@ -651,6 +651,37 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(contextualMinimumGain > 0.0f && std::isfinite(contextualMinimumGain),
                     "Context-assisted click attenuation must remain finite and bounded");
 
+    // A quieter mechanical keyboard switch has a short resonant tail rather
+    // than a full-scale single-sample impulse. Verify that aligned classifier
+    // context can still catch it over a speaking voice at an everyday setting.
+    smartgate::KeyboardTransientSuppressor quietMechanicalKeyboard;
+    quietMechanicalKeyboard.prepare(48000.0);
+    float quietKeyboardMinimumGain = 1.0f;
+    float quietKeyboardVoiceError = 0.0f;
+    for (int i = 0; i < 2400; ++i) {
+        const float voice = 0.10f * std::sin(2.0f * 3.14159265f * 180.0f
+                                             * static_cast<float>(i) / 48000.0f);
+        float switchRing = 0.0f;
+        if (i >= 300) {
+            const float elapsed = static_cast<float>(i - 300);
+            const float envelope = std::exp(-elapsed / 96.0f);
+            switchRing = 0.12f * envelope * (
+                std::sin(2.0f * 3.14159265f * 4100.0f * elapsed / 48000.0f)
+                + 0.45f * std::sin(2.0f * 3.14159265f * 6700.0f * elapsed / 48000.0f));
+        }
+        const float output = quietMechanicalKeyboard.process(
+            voice + switchRing, 0.35f, 0.75f);
+        quietKeyboardMinimumGain = std::min(quietKeyboardMinimumGain,
+            quietMechanicalKeyboard.getHighBandGain());
+        if (i > 1200)
+            quietKeyboardVoiceError = std::max(quietKeyboardVoiceError,
+                std::abs(output - voice));
+    }
+    requireKeyboard(quietKeyboardMinimumGain < 0.95f,
+                    "Aligned keyboard detection must reduce a quiet resonant switch click");
+    requireKeyboard(quietKeyboardVoiceError < 0.003f,
+                    "Quiet keyboard click suppression must preserve the low voice fundamental");
+
     // Sustained /s/ and /sh/-like high-frequency energy is speech, not a click.
     smartgate::KeyboardTransientSuppressor sibilantKeyboardGuard;
     sibilantKeyboardGuard.prepare(48000.0);
