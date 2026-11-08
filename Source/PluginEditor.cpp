@@ -7,18 +7,29 @@
 namespace {
 const auto background = juce::Colour(0xff101318);
 const auto panel = juce::Colour(0xff191f27);
+const auto panelRaised = juce::Colour(0xff202833);
 const auto accent = juce::Colour(0xff65d6b0);
 const auto muted = juce::Colour(0xff8b98a8);
 const auto meterTrack = juce::Colour(0xff29333e);
 const auto warning = juce::Colour(0xffffc36b);
+
+void drawSectionTitle(juce::Graphics& g, juce::Rectangle<int> area,
+                      const juce::String& title, const juce::String& detail) {
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
+    g.drawText(title, area.removeFromLeft(190), juce::Justification::centredLeft);
+    g.setColour(muted);
+    g.setFont(juce::Font(juce::FontOptions(10.0f)));
+    g.drawText(detail, area, juce::Justification::centredLeft);
+}
 }
 
 SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     SmartGateAudioProcessor& processor)
     : AudioProcessorEditor(&processor), processor_(processor) {
-    setSize(800, 640);
+    setSize(900, 760);
     setResizable(true, true);
-    setResizeLimits(680, 560, 1200, 900);
+    setResizeLimits(760, 680, 1200, 960);
 
     for (std::size_t i = 0; i < sliders_.size(); ++i) {
         const juce::String suffix = (i == 0 || i == 4 || i == 5)
@@ -40,15 +51,14 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
         processor_.parameters_, "learnTarget", learnButton_);
 
     keyboardModeBox_.addItemList({"Universal", "Mechanical", "Membrane"}, 1);
-    keyboardModeBox_.setColour(juce::ComboBox::backgroundColourId, panel);
+    keyboardModeBox_.setColour(juce::ComboBox::backgroundColourId, panelRaised);
     keyboardModeBox_.setColour(juce::ComboBox::textColourId, juce::Colours::white);
+    keyboardModeBox_.setColour(juce::ComboBox::outlineColourId, meterTrack);
     addAndMakeVisible(keyboardModeBox_);
-    keyboardModeAttachment_ = std::make_unique<ComboAttachment>(
-        processor_.parameters_, "keyboardMode", keyboardModeBox_);
 
-    keyboardModeLabel_.setText("KEYBOARD TYPE", juce::dontSendNotification);
+    keyboardModeLabel_.setText("KEYBOARD PROFILE", juce::dontSendNotification);
     keyboardModeLabel_.setColour(juce::Label::textColourId, muted);
-    keyboardModeLabel_.setFont(juce::Font(juce::FontOptions(11.0f, juce::Font::bold)));
+    keyboardModeLabel_.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     addAndMakeVisible(keyboardModeLabel_);
 
     timerCallback();
@@ -59,13 +69,13 @@ void SmartGateAudioProcessorEditor::configureSlider(
     std::size_t index, const juce::String& label, const juce::String& suffix) {
     auto& slider = sliders_[index];
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 76, 20);
+    slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 82, 20);
     slider.setTextValueSuffix(suffix);
     slider.setColour(juce::Slider::rotarySliderFillColourId, accent);
     slider.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff35404d));
     slider.setColour(juce::Slider::thumbColourId, juce::Colours::white);
     slider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::white);
-    slider.setColour(juce::Slider::textBoxBackgroundColourId, panel);
+    slider.setColour(juce::Slider::textBoxBackgroundColourId, panelRaised);
     slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     addAndMakeVisible(slider);
 
@@ -73,14 +83,14 @@ void SmartGateAudioProcessorEditor::configureSlider(
     title.setText(label, juce::dontSendNotification);
     title.setJustificationType(juce::Justification::centred);
     title.setColour(juce::Label::textColourId, muted);
-    title.setFont(juce::Font(juce::FontOptions(10.5f, juce::Font::bold)));
+    title.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     addAndMakeVisible(title);
 }
 
 void SmartGateAudioProcessorEditor::layoutControl(
     std::size_t index, juce::Rectangle<int> area) {
-    labels_[index].setBounds(area.removeFromTop(20));
-    sliders_[index].setBounds(area.reduced(4, 0));
+    labels_[index].setBounds(area.removeFromTop(19));
+    sliders_[index].setBounds(area.reduced(3, 0));
 }
 
 void SmartGateAudioProcessorEditor::drawMeter(
@@ -89,7 +99,7 @@ void SmartGateAudioProcessorEditor::drawMeter(
     g.setColour(muted);
     g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     g.drawText(label, area.removeFromTop(15.0f), juce::Justification::left);
-    auto valueArea = area.removeFromTop(17.0f);
+    auto valueArea = area.removeFromTop(18.0f);
     const auto valueText = levelDb <= -99.0f ? juce::String("-inf dB")
                                               : juce::String(levelDb, 1) + " dB";
     g.setColour(juce::Colours::white);
@@ -109,10 +119,10 @@ void SmartGateAudioProcessorEditor::drawCpuMeter(
     g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     g.drawText("PLUGIN CPU", area.removeFromTop(15.0f), juce::Justification::left);
 
-    const auto valueArea = area.removeFromTop(17.0f);
+    const auto valueArea = area.removeFromTop(18.0f);
     g.setColour(cpuPeakPercent_ >= 100.0f ? warning : juce::Colours::white);
     g.setFont(juce::Font(juce::FontOptions(11.0f)));
-    g.drawText(juce::String(cpuLoadPercent_, 1) + "%  PEAK "
+    g.drawText(juce::String(cpuLoadPercent_, 1) + "%  /  PEAK "
                    + juce::String(cpuPeakPercent_, 1) + "%",
                valueArea, juce::Justification::right);
 
@@ -120,11 +130,9 @@ void SmartGateAudioProcessorEditor::drawCpuMeter(
     g.fillRoundedRectangle(area, 4.0f);
     const float normalized = juce::jlimit(0.0f, 1.0f, cpuLoadPercent_ / 100.0f);
     auto fill = area.withWidth(area.getWidth() * normalized);
-    g.setColour(cpuLoadPercent_ >= 100.0f ? warning
-        : (cpuLoadPercent_ >= 75.0f ? warning : accent));
+    g.setColour(cpuLoadPercent_ >= 75.0f ? warning : accent);
     g.fillRoundedRectangle(fill, 4.0f);
 
-    // Peak marker remains visible even when the current average has fallen.
     const float peakX = area.getX()
         + area.getWidth() * juce::jlimit(0.0f, 1.0f, cpuPeakPercent_ / 100.0f);
     g.setColour(cpuPeakPercent_ >= 100.0f ? warning : juce::Colours::white);
@@ -133,84 +141,123 @@ void SmartGateAudioProcessorEditor::drawCpuMeter(
 
 void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
     g.fillAll(background);
-    auto bounds = getLocalBounds().toFloat();
+    auto area = getLocalBounds().reduced(24);
 
-    g.setColour(panel);
-    g.fillRoundedRectangle(bounds.reduced(12.0f), 14.0f);
-
+    auto header = area.removeFromTop(66);
     g.setColour(accent);
-    g.fillRoundedRectangle(juce::Rectangle<float>(28.0f, 28.0f, 4.0f, 34.0f), 2.0f);
-
+    g.fillRoundedRectangle(juce::Rectangle<float>(
+        static_cast<float>(header.getX()), static_cast<float>(header.getY() + 9),
+        4.0f, 38.0f), 2.0f);
     g.setColour(juce::Colours::white);
-    g.setFont(juce::Font(juce::FontOptions(25.0f, juce::Font::bold)));
-    g.drawText("SMART GATE", 44, 25, 260, 30, juce::Justification::left);
-
+    g.setFont(juce::Font(juce::FontOptions(27.0f, juce::Font::bold)));
+    g.drawText("SMART GATE", header.getX() + 16, header.getY() + 3, 280, 32,
+               juce::Justification::left);
     g.setColour(muted);
     g.setFont(juce::Font(juce::FontOptions(11.0f)));
-    g.drawText("TARGET-AWARE NOISE CONTROL", 46, 55, 300, 18,
+    g.drawText("INTELLIGENT VOICE & NOISE CONTROL",
+               header.getX() + 18, header.getY() + 35, 360, 18,
                juce::Justification::left);
 
-    g.setColour(juce::Colour(0xff2a333e));
-    g.drawHorizontalLine(91, 28.0f, getWidth() - 28.0f);
+    auto modeCard = area.removeFromTop(58);
+    g.setColour(panel);
+    g.fillRoundedRectangle(modeCard.toFloat(), 10.0f);
 
-    auto meterArea = getLocalBounds().toFloat().reduced(30.0f, 0.0f);
-    meterArea.setY(155.0f);
-    meterArea.setHeight(48.0f);
+    auto meterCard = area.removeFromTop(78);
+    g.setColour(panel);
+    g.fillRoundedRectangle(meterCard.toFloat(), 10.0f);
+    auto meters = meterCard.toFloat().reduced(14.0f, 10.0f);
     const float gap = 18.0f;
-    const float meterWidth = (meterArea.getWidth() - 3.0f * gap) / 4.0f;
-    drawMeter(g, meterArea.removeFromLeft(meterWidth), "INPUT", inputMeterDb_);
-    meterArea.removeFromLeft(gap);
-    drawMeter(g, meterArea.removeFromLeft(meterWidth), "OUTPUT", outputMeterDb_);
-    meterArea.removeFromLeft(gap);
+    const float meterWidth = (meters.getWidth() - 3.0f * gap) / 4.0f;
+    drawMeter(g, meters.removeFromLeft(meterWidth), "INPUT", inputMeterDb_);
+    meters.removeFromLeft(gap);
+    drawMeter(g, meters.removeFromLeft(meterWidth), "OUTPUT", outputMeterDb_);
+    meters.removeFromLeft(gap);
 
-    auto gateArea = meterArea.removeFromLeft(meterWidth);
+    auto gateArea = meters.removeFromLeft(meterWidth);
     g.setColour(muted);
     g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     g.drawText("GATE", gateArea.removeFromTop(15.0f), juce::Justification::left);
     const auto gateText = gateGain_ > 0.95f ? "OPEN"
         : (gateGain_ > 0.02f ? "CLOSING" : "CLOSED");
     g.setColour(gateGain_ > 0.95f ? accent : juce::Colours::white);
-    g.setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
-    g.drawText(gateText, gateArea.removeFromTop(17.0f), juce::Justification::left);
-    meterArea.removeFromLeft(gap);
-    drawCpuMeter(g, meterArea.removeFromLeft(meterWidth));
+    g.setFont(juce::Font(juce::FontOptions(13.0f, juce::Font::bold)));
+    g.drawText(gateText, gateArea.removeFromTop(18.0f), juce::Justification::left);
+    meters.removeFromLeft(gap);
+    drawCpuMeter(g, meters.removeFromLeft(meterWidth));
 
-    auto status = getLocalBounds().reduced(30, 0);
-    status.setY(207);
-    status.setHeight(18);
-    g.setFont(juce::Font(juce::FontOptions(10.0f)));
+    auto status = area.removeFromTop(28);
+    g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     g.setColour(vadReady_ ? accent : warning);
-    g.drawText(vadReady_ ? "SILERO VAD: READY" : "SILERO VAD: NOT AVAILABLE",
-               status.removeFromLeft(210), juce::Justification::left);
+    g.drawText(vadReady_ ? "●  VOICE AI READY" : "●  VOICE AI UNAVAILABLE",
+               status.removeFromLeft(205), juce::Justification::centredLeft);
     g.setColour(muted);
-    g.drawText("TARGET PROFILE: " + juce::String(static_cast<juce::int64>(learnedFrames_))
-                   + " FRAMES", status, juce::Justification::left);
+    g.drawText("TARGET PROFILE  /  "
+                   + juce::String(static_cast<juce::int64>(learnedFrames_)) + " FRAMES",
+               status, juce::Justification::centredLeft);
+
+    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - 10) * 0.67f));
+    auto intelligencePanel = area;
+    g.setColour(panel);
+    g.fillRoundedRectangle(gatePanel.toFloat(), 10.0f);
+    g.fillRoundedRectangle(intelligencePanel.toFloat(), 10.0f);
+
+    auto gateHeading = gatePanel.reduced(14, 8).removeFromTop(22);
+    drawSectionTitle(g, gateHeading, "GATE CONTROLS",
+                     "Shape how the gate opens, holds and closes");
+    auto intelligenceHeading = intelligencePanel.reduced(14, 8).removeFromTop(22);
+    drawSectionTitle(g, intelligenceHeading, "SMART PROCESSING",
+                     "Target voice matching and keyboard suppression");
+
+    if (!aiButton_.getToggleState()) {
+        g.setColour(muted);
+        g.setFont(juce::Font(juce::FontOptions(9.0f)));
+        g.drawText("AI OFF  ·  conventional gate mode",
+                   intelligencePanel.getX() + 14, intelligencePanel.getBottom() - 18,
+                   intelligencePanel.getWidth() - 28, 12, juce::Justification::right);
+    }
 }
 
 void SmartGateAudioProcessorEditor::resized() {
-    auto area = getLocalBounds().reduced(28);
-    area.removeFromTop(76);
+    auto area = getLocalBounds().reduced(24);
+    area.removeFromTop(66);
 
-    auto modeArea = area.removeFromTop(48);
-    aiButton_.setBounds(modeArea.removeFromLeft(145).reduced(4, 7));
-    learnButton_.setBounds(modeArea.removeFromLeft(170).reduced(4, 7));
-    auto keyboardArea = modeArea.removeFromLeft(190);
+    auto modeArea = area.removeFromTop(58).reduced(12, 5);
+    aiButton_.setBounds(modeArea.removeFromLeft(145).reduced(4, 5));
+    learnButton_.setBounds(modeArea.removeFromLeft(170).reduced(4, 5));
+    auto keyboardArea = modeArea.removeFromLeft(205);
     keyboardModeLabel_.setBounds(keyboardArea.removeFromTop(15));
-    keyboardModeBox_.setBounds(keyboardArea.removeFromTop(28));
+    keyboardModeBox_.setBounds(keyboardArea.removeFromTop(29));
 
-    area.removeFromTop(116);
-    const int gap = 8;
-    const int cellWidth = (area.getWidth() - 2 * gap) / 3;
-    const int cellHeight = (area.getHeight() - 2 * gap) / 3;
+    area.removeFromTop(78);
+    area.removeFromTop(28);
 
-    for (std::size_t i = 0; i < sliders_.size(); ++i) {
+    const int sectionGap = 10;
+    auto gatePanel = area.removeFromTop(static_cast<int>((area.getHeight() - sectionGap) * 0.67f));
+    auto intelligencePanel = area;
+    gatePanel = gatePanel.reduced(12, 30);
+    intelligencePanel = intelligencePanel.reduced(12, 30);
+
+    const int columnGap = 8;
+    const int cellWidth = (gatePanel.getWidth() - 2 * columnGap) / 3;
+    const int rowGap = 3;
+    const int cellHeight = (gatePanel.getHeight() - rowGap) / 2;
+    for (std::size_t i = 0; i < 6; ++i) {
         const int row = static_cast<int>(i / 3);
         const int column = static_cast<int>(i % 3);
         auto cell = juce::Rectangle<int>(
-            area.getX() + column * (cellWidth + gap),
-            area.getY() + row * (cellHeight + gap),
+            gatePanel.getX() + column * (cellWidth + columnGap),
+            gatePanel.getY() + row * (cellHeight + rowGap),
             cellWidth, cellHeight);
-        layoutControl(i, cell.reduced(4));
+        layoutControl(i, cell);
+    }
+
+    const int smartCellWidth = (intelligencePanel.getWidth() - 2 * columnGap) / 3;
+    for (std::size_t i = 6; i < sliders_.size(); ++i) {
+        const int column = static_cast<int>(i - 6);
+        auto cell = juce::Rectangle<int>(
+            intelligencePanel.getX() + column * (smartCellWidth + columnGap),
+            intelligencePanel.getY(), smartCellWidth, intelligencePanel.getHeight());
+        layoutControl(i, cell);
     }
 }
 
