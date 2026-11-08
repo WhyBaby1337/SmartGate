@@ -439,8 +439,6 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             ? juce::jmax(linkedPeak, thresholdLinear * (0.75f + 0.75f * vadAssist))
             : linkedPeak;
         const float gateGain = gateEnvelope_.process(vadAssistedPeak * targetGain);
-        const float outputGain = gateGain * keyboardOutputGain;
-
         left[sample] = keyboardOutputLeft * gateGain * targetGain;
         if (right != nullptr)
             right[sample] = keyboardOutputRight * gateGain * targetGain;
