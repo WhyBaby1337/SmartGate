@@ -29,6 +29,7 @@ private:
     void drawCpuMeter(juce::Graphics& g, juce::Rectangle<float> area) const;
     void chooseProfileExport();
     void chooseProfileImport();
+    void confirmProfileReset();
 
     SmartGateAudioProcessor& processor_;
     float inputMeterDb_ = -100.0f;
@@ -53,7 +54,8 @@ private:
     };
 
     juce::ToggleButton aiButton_{"AI ENGINE"};
-    juce::ToggleButton learnButton_{"LEARN TARGET"};
+    juce::ToggleButton learnButton_{"START LEARNING"};
+    juce::TextButton resetProfileButton_{"RESET PROFILE"};
     juce::ComboBox keyboardModeBox_;
     juce::Label keyboardModeLabel_;
     juce::TextButton exportProfileButton_{"EXPORT PROFILE"};
