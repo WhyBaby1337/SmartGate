@@ -32,14 +32,33 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v7
-      - name: Configure
-        run: >-
-          cmake -S . -B build -A x64
-          -DSMARTGATE_BUILD_PLUGIN=ON
-          "-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Zi"
-          "-DCMAKE_SHARED_LINKER_FLAGS_RELEASE=/DEBUG:FULL"
-          "-DCMAKE_MODULE_LINKER_FLAGS_RELEASE=/DEBUG:FULL"
-          "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FULL"
+      - name: Configure (retry transient dependency downloads)
+        shell: pwsh
+        run: |
+          $configureArgs = @(
+            "-S", ".", "-B", "build", "-A", "x64",
+            "-DSMARTGATE_BUILD_PLUGIN=ON",
+            "-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Zi",
+            "-DCMAKE_SHARED_LINKER_FLAGS_RELEASE=/DEBUG:FULL",
+            "-DCMAKE_MODULE_LINKER_FLAGS_RELEASE=/DEBUG:FULL",
+            "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FULL"
+          )
+
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Write-Host "CMake configure attempt $attempt of 3"
+            & cmake @configureArgs
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            if ($attempt -lt 3) {
+              $delay = 15 * $attempt
+              Write-Warning "CMake configure failed (exit $LASTEXITCODE); retrying in $delay seconds. This also retries transient ONNX Runtime/Silero download failures."
+              Start-Sleep -Seconds $delay
+            }
+          }
+
+          throw "CMake configure failed after 3 attempts."
       - name: Build VST3 and tests
         run: cmake --build build --config Release --parallel 2
       - name: Run DSP tests
