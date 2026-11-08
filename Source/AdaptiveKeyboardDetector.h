@@ -178,7 +178,7 @@ public:
             std::exp(-2.0 * 3.14159265358979323846 * 1200.0 / rate));
         releaseCoefficient_ = static_cast<float>(
             std::exp(-1.0 / (0.0025 * rate)));
-        holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0020 * rate)));
+        holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0025 * rate)));
         reset();
     }
 

@@ -457,6 +457,28 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(std::abs(stereoFoldDown.process(0.1f, 0.3f) - 0.3f) < 1.0e-6f,
                     "Reprepare must clear stereo channel history and select the first stronger channel");
 
+    // Keep dedicated mouse attenuation engaged through the mechanical
+    // switch's short resonant tail, while retaining an exact zero-setting bypass.
+    smartgate::MouseClickSuppressor mouseTailHold;
+    mouseTailHold.prepare(48000.0);
+    (void) mouseTailHold.process(0.8f, 1.0f);
+    const float gainAfterMouseAttack = mouseTailHold.getHighBandGain();
+    requireKeyboard(gainAfterMouseAttack < 0.80f,
+                    "A sharp mouse switch attack must trigger attenuation");
+    for (int i = 0; i < 100; ++i)
+        (void) mouseTailHold.process(0.0f, 1.0f);
+    requireKeyboard(mouseTailHold.getHighBandGain()
+                        <= gainAfterMouseAttack + 0.01f,
+                    "Mouse attenuation must hold through the first two milliseconds of switch ringdown");
+    smartgate::MouseClickSuppressor mouseBypass;
+    mouseBypass.prepare(48000.0);
+    for (int i = 0; i < 256; ++i) {
+        const float sample = 0.17f * std::sin(2.0f * 3.14159265f
+            * 7100.0f * static_cast<float>(i) / 48000.0f);
+        requireKeyboard(mouseBypass.process(sample, 0.0f, 1.0f) == sample,
+                        "Zero mouse reduction must remain an exact audio bypass");
+    }
+
     // Dedicated mouse stage: model a short switch click as a decaying,
     // high-frequency burst over a voiced fundamental. The attenuation must
     // persist across the click body, not only the first edge sample.
@@ -566,11 +588,11 @@ void runAdaptiveKeyboardDetectorTests() {
     const float gainAfterKeyboardAttack = keyboardTailHold.getHighBandGain();
     requireKeyboard(gainAfterKeyboardAttack < 0.80f,
                     "A sharp keyboard switch attack must trigger attenuation");
-    for (int i = 0; i < 48; ++i)
+    for (int i = 0; i < 100; ++i)
         (void) keyboardTailHold.process(0.0f, 1.0f);
     requireKeyboard(keyboardTailHold.getHighBandGain()
                         <= gainAfterKeyboardAttack + 0.01f,
-                    "Keyboard attenuation must hold through the first millisecond of switch ringdown");
+                    "Keyboard attenuation must hold through the first two milliseconds of switch ringdown");
 
     // The fast suppressor uses only sample-local transient evidence. Its
     // classifier remains a separate frame-level signal for learning decisions;
