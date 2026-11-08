@@ -320,15 +320,15 @@ void SmartGateAudioProcessorEditor::resized() {
     auto modeArea = area.removeFromTop(58).reduced(12, 5);
     // Compact responsive widths keep both independent bypasses visible even
     // at the minimum editor width, without stealing vertical space from sliders.
-    aiButton_.setBounds(modeArea.removeFromLeft(88).reduced(2, 5));
-    learnButton_.setBounds(modeArea.removeFromLeft(116).reduced(2, 5));
-    resetProfileButton_.setBounds(modeArea.removeFromLeft(98).reduced(2, 5));
-    auto keyboardArea = modeArea.removeFromLeft(150);
+    aiButton_.setBounds(modeArea.removeFromLeft(76).reduced(2, 5));
+    learnButton_.setBounds(modeArea.removeFromLeft(96).reduced(2, 5));
+    resetProfileButton_.setBounds(modeArea.removeFromLeft(86).reduced(2, 5));
+    auto keyboardArea = modeArea.removeFromLeft(130);
     keyboardModeLabel_.setBounds(keyboardArea.removeFromTop(15));
     keyboardModeBox_.setBounds(keyboardArea.removeFromTop(29));
-    keyboardSuppressionButton_.setBounds(modeArea.removeFromLeft(105).reduced(2, 5));
-    mouthClickSuppressionButton_.setBounds(modeArea.removeFromLeft(105).reduced(2, 5));
-    mouseClickSuppressionButton_.setBounds(modeArea.removeFromLeft(105).reduced(2, 5));
+    keyboardSuppressionButton_.setBounds(modeArea.removeFromLeft(90).reduced(2, 5));
+    mouthClickSuppressionButton_.setBounds(modeArea.removeFromLeft(90).reduced(2, 5));
+    mouseClickSuppressionButton_.setBounds(modeArea.removeFromLeft(90).reduced(2, 5));
 
     area.removeFromTop(78);
     area.removeFromTop(28);
