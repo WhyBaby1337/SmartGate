@@ -37,6 +37,7 @@ public:
         double energy = 0.0;
         double highEnergy = 0.0;
         float peak = 0.0f;
+        float highPeak = 0.0f;
         for (std::size_t i = 0; i < count; ++i) {
             const float x = std::isfinite(samples[i]) ? samples[i] : 0.0f;
             // Keep recursive filter state and the high-band residual in
@@ -49,23 +50,35 @@ public:
             energy += sample * sample;
             highEnergy += high * high;
             peak = std::max(peak, std::abs(x));
+            highPeak = std::max(highPeak, static_cast<float>(std::abs(high)));
         }
 
         const float rms = static_cast<float>(std::sqrt(energy / static_cast<double>(count)));
         const float highRatio = static_cast<float>(highEnergy / std::max(energy, 1.0e-12));
         const float crest = peak / std::max(rms, 1.0e-6f);
+        const float highRms = static_cast<float>(
+            std::sqrt(highEnergy / static_cast<double>(count)));
+        const float highCrest = highPeak / std::max(highRms, 1.0e-6f);
         const float onset = hasReference_
             ? rms / std::max(referenceRms_, 0.005f) : 1.0f;
 
         // Broadband energy alone is not enough: sustained hiss/noise must
         // score lower than a short, high-crest transient. Keep onset and
         // crest factor dominant, with spectral brightness as supporting data.
-        const float mechanical = 0.55f * unit((crest - 2.5f) / 7.0f)
-                               + 0.15f * unit((highRatio - 0.04f) / 0.45f)
-                               + 0.30f * unit((onset - 1.3f) / 4.0f);
-        const float membrane = 0.50f * unit((crest - 1.8f) / 5.0f)
-                             + 0.10f * unit((highRatio - 0.015f) / 0.25f)
-                             + 0.40f * unit((onset - 1.2f) / 3.0f);
+        // A click mixed into speech may barely change the full-band crest or
+        // RMS. Measure the peak-to-average ratio of the high-pass residual as
+        // a second, independent transient cue. Sustained high-frequency speech
+        // (for example a long sibilant) has energy but a much lower crest than
+        // a short mouse/key switch impulse.
+        const float highTransient = unit((highCrest - 3.5f) / 10.0f);
+        const float mechanicalBase = 0.45f * unit((crest - 2.5f) / 7.0f)
+                                   + 0.15f * unit((highRatio - 0.04f) / 0.45f)
+                                   + 0.25f * unit((onset - 1.3f) / 4.0f);
+        const float membraneBase = 0.40f * unit((crest - 1.8f) / 5.0f)
+                                 + 0.10f * unit((highRatio - 0.015f) / 0.25f)
+                                 + 0.30f * unit((onset - 1.2f) / 3.0f);
+        const float mechanical = 0.75f * mechanicalBase + 0.25f * highTransient;
+        const float membrane = 0.70f * membraneBase + 0.30f * highTransient;
 
         float target = 0.0f;
         switch (mode_) {
