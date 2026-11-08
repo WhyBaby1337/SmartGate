@@ -66,6 +66,23 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     keyboardModeLabel_.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     addAndMakeVisible(keyboardModeLabel_);
 
+    exportProfileButton_.setTooltip("Save the learned voice profile to a standalone .sgprofile backup file.");
+    importProfileButton_.setTooltip("Load a previously exported .sgprofile backup. The current learned profile will be replaced.");
+    for (auto* button : {&exportProfileButton_, &importProfileButton_}) {
+        button->setColour(juce::TextButton::buttonColourId, panelRaised);
+        button->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+        button->setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+        addAndMakeVisible(button);
+    }
+    exportProfileButton_.onClick = [this] { chooseProfileExport(); };
+    importProfileButton_.onClick = [this] { chooseProfileImport(); };
+
+    profileFileStatus_.setText("PROFILE BACKUP  ·  .sgprofile", juce::dontSendNotification);
+    profileFileStatus_.setColour(juce::Label::textColourId, muted);
+    profileFileStatus_.setFont(juce::Font(juce::FontOptions(9.0f)));
+    profileFileStatus_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(profileFileStatus_);
+
     timerCallback();
     startTimerHz(30);
 }
@@ -278,6 +295,13 @@ void SmartGateAudioProcessorEditor::resized() {
         layoutControl(i, cell);
     }
 
+    auto profileActions = intelligencePanel.removeFromBottom(34);
+    exportProfileButton_.setBounds(profileActions.removeFromLeft(142));
+    profileActions.removeFromLeft(8);
+    importProfileButton_.setBounds(profileActions.removeFromLeft(142));
+    profileActions.removeFromLeft(12);
+    profileFileStatus_.setBounds(profileActions);
+
     const int smartCellWidth = (intelligencePanel.getWidth() - 2 * columnGap) / 3;
     for (std::size_t i = 6; i < sliders_.size(); ++i) {
         const int column = static_cast<int>(i - 6);
@@ -286,6 +310,54 @@ void SmartGateAudioProcessorEditor::resized() {
             intelligencePanel.getY(), smartCellWidth, intelligencePanel.getHeight());
         layoutControl(i, cell);
     }
+}
+
+void SmartGateAudioProcessorEditor::chooseProfileExport() {
+    profileFileChooser_ = std::make_unique<juce::FileChooser>(
+        "Export Smart Gate target profile",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("SmartGate-Voice-Profile.sgprofile"),
+        "*.sgprofile");
+    profileFileChooser_->launchAsync(
+        juce::FileBrowserComponent::saveMode
+            | juce::FileBrowserComponent::canSelectFiles
+            | juce::FileBrowserComponent::warnAboutOverwriting,
+        [this](const juce::FileChooser& chooser) {
+            auto file = chooser.getResult();
+            if (file == juce::File{})
+                return;
+            if (file.getFileExtension().isEmpty())
+                file = file.withFileExtension(".sgprofile");
+            const bool saved = processor_.exportTargetProfile(file);
+            profileFileStatus_.setText(saved
+                ? "PROFILE EXPORTED  ·  " + file.getFileName()
+                : "EXPORT FAILED  ·  no valid learned profile",
+                juce::dontSendNotification);
+            profileFileStatus_.setColour(juce::Label::textColourId,
+                saved ? accent : warning);
+        });
+}
+
+void SmartGateAudioProcessorEditor::chooseProfileImport() {
+    profileFileChooser_ = std::make_unique<juce::FileChooser>(
+        "Import Smart Gate target profile",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
+        "*.sgprofile");
+    profileFileChooser_->launchAsync(
+        juce::FileBrowserComponent::openMode
+            | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& chooser) {
+            const auto file = chooser.getResult();
+            if (file == juce::File{})
+                return;
+            const bool loaded = processor_.importTargetProfile(file);
+            profileFileStatus_.setText(loaded
+                ? "PROFILE IMPORTED  ·  applied on next audio block"
+                : "IMPORT FAILED  ·  invalid or unsupported file",
+                juce::dontSendNotification);
+            profileFileStatus_.setColour(juce::Label::textColourId,
+                loaded ? accent : warning);
+        });
 }
 
 void SmartGateAudioProcessorEditor::timerCallback() {
