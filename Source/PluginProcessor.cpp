@@ -132,7 +132,7 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     stereoAnalysisFoldDown_.prepare(safeSampleRate);
     keyboardDetector_.prepare(safeSampleRate);
     keyboardConfidence_ = 0.0f;
-    keyboardSuppressor_.prepare(safeSampleRate);
+    keyboardGainSmoother_.prepare(safeSampleRate);
     featureFramePosition_ = 0;
     featureFrame_.fill(0.0f);
     targetConfidenceTarget_ = 1.0f;
@@ -419,12 +419,8 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         // gate close sooner; it would not reduce keyboard transients while
         // speech keeps the gate open. Smooth the gain at sample rate to avoid
         // 256-sample frame-boundary steps becoming audible zipper noise.
-        // Attenuate the bright transient band only; keep voice fundamentals intact.
-        const float keyboardOutputLeft = keyboardSuppressor_.process(
-            leftSample, 0, keyboardReduction, keyboardConfidence_);
-        const float keyboardOutputRight = right != nullptr
-            ? keyboardSuppressor_.process(rightSample, 1, keyboardReduction, keyboardConfidence_)
-            : keyboardOutputLeft;
+        const float keyboardOutputGain = keyboardGainSmoother_.process(
+            keyboardReduction, keyboardConfidence_);
 
         // Silero is an assist to the conventional level detector, not a hard
         // gate override. A confident speech result gently lifts the detector
@@ -439,9 +435,11 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             ? juce::jmax(linkedPeak, thresholdLinear * (0.75f + 0.75f * vadAssist))
             : linkedPeak;
         const float gateGain = gateEnvelope_.process(vadAssistedPeak * targetGain);
-        left[sample] = keyboardOutputLeft * gateGain * targetGain;
+        const float outputGain = gateGain * keyboardOutputGain;
+
+        left[sample] = leftSample * outputGain;
         if (right != nullptr)
-            right[sample] = keyboardOutputRight * gateGain * targetGain;
+            right[sample] = rightSample * outputGain;
         outputPeak = juce::jmax(outputPeak,
             juce::jmax(std::abs(left[sample]), right != nullptr ? std::abs(right[sample]) : 0.0f));
     }

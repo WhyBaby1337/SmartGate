@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 
@@ -145,57 +144,6 @@ private:
     float attackCoefficient_ = 0.0f;
     float releaseCoefficient_ = 0.0f;
     float gain_ = 1.0f;
-};
-
-
-// Frequency-selective transient suppression: attenuate the bright attack of
-// keyboard/mouse clicks without ducking the entire voice signal.
-class AdaptiveKeyboardSuppressor {
-public:
-    void prepare(double sampleRate) noexcept {
-        const double rate = std::isfinite(sampleRate)
-            ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
-        lowPassCoefficient_ = static_cast<float>(
-            std::exp(-2.0 * 3.14159265358979323846 * 3200.0 / rate));
-        attackCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.003 * rate)));
-        releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.030 * rate)));
-        reset();
-    }
-
-    void reset() noexcept {
-        lowPassState_.fill(0.0);
-        highBandGain_.fill(1.0f);
-    }
-
-    float process(float sample, int channel, float reduction,
-                  float confidence) noexcept {
-        const auto index = static_cast<std::size_t>(std::clamp(channel, 0, 1));
-        const double input = std::isfinite(sample) ? static_cast<double>(sample) : 0.0;
-        auto& low = lowPassState_[index];
-        low = input + static_cast<double>(lowPassCoefficient_) * (low - input);
-        const float high = static_cast<float>(input - low);
-        const float amount = std::clamp(std::isfinite(reduction) ? reduction : 0.0f,
-                                        0.0f, 1.0f);
-        const float certainty = std::sqrt(std::clamp(
-            std::isfinite(confidence) ? confidence : 0.0f, 0.0f, 1.0f));
-        const float targetGain = 1.0f - amount * certainty;
-        auto& gain = highBandGain_[index];
-        const float coefficient = targetGain < gain
-            ? attackCoefficient_ : releaseCoefficient_;
-        gain = targetGain + coefficient * (gain - targetGain);
-        return static_cast<float>(low) + high * gain;
-    }
-
-    float getHighBandGain(int channel) const noexcept {
-        return highBandGain_[static_cast<std::size_t>(std::clamp(channel, 0, 1))];
-    }
-
-private:
-    float lowPassCoefficient_ = 0.0f;
-    float attackCoefficient_ = 0.0f;
-    float releaseCoefficient_ = 0.0f;
-    std::array<double, 2> lowPassState_{};
-    std::array<float, 2> highBandGain_{{1.0f, 1.0f}};
 };
 
 } // namespace smartgate

@@ -77,7 +77,7 @@ private:
     float targetConfidenceSmoothed_ = 1.0f;
     float targetConfidenceSmoothingCoefficient_ = 0.0f;
     float keyboardConfidence_ = 0.0f;
-    smartgate::AdaptiveKeyboardSuppressor keyboardSuppressor_;
+    smartgate::AdaptiveKeyboardGain keyboardGainSmoother_;
     bool wasLearningTarget_ = false;
     bool pendingLearningStart_ = false;
     // setStateInformation may run after prepareToPlay; synchronize the restored
