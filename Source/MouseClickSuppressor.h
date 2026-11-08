@@ -83,7 +83,11 @@ public:
         const bool warmedUp = startupSamplesRemaining_ <= 0;
         if (startupSamplesRemaining_ > 0)
             --startupSamplesRemaining_;
-        const float confidence = warmedUp ? level * impulsiveness * novelty : 0.0f;
+        // Preserve unmistakable full-scale attacks even during startup; only
+        // defer low-level decisions until the novelty reference has settled.
+        const bool strongStartupTransient = magnitude >= 0.10f;
+        const float confidence = (warmedUp || strongStartupTransient)
+            ? level * impulsiveness * novelty : 0.0f;
         lastLevel_ = level;
         lastImpulsiveness_ = impulsiveness;
         lastNovelty_ = novelty;
