@@ -152,9 +152,9 @@ void SmartGateAudioProcessorEditor::configureSlider(
         "Minimum time the gate stays open after the signal falls below threshold.",
         "Difference between opening and closing thresholds; helps prevent chatter.",
         "How much the signal is attenuated while the gate is closed.",
-        "How strongly the learned target voice profile influences gating. Set to 0 to disable profile influence.",
+        "How strongly a learned target profile extends phrase hold. It only acts after a profile is ready and never attenuates the voice.",
         "Amount of keyboard-noise suppression. This works independently of the AI Engine toggle.",
-        "Adds phrase-aware hold time so quiet consonants are less likely to be cut off.",
+        "Controls phrase-aware hold extension. Higher values keep the gate open longer between syllables; lower values follow the base Hold setting more closely.",
         "Conservatively attenuates brief high-frequency mouth clicks. It does not remove sustained breaths or nasal noise."
     };
     slider.setTooltip(tooltips[index]);
@@ -322,8 +322,8 @@ void SmartGateAudioProcessorEditor::resized() {
     auto keyboardArea = modeArea.removeFromLeft(150);
     keyboardModeLabel_.setBounds(keyboardArea.removeFromTop(15));
     keyboardModeBox_.setBounds(keyboardArea.removeFromTop(29));
-    keyboardSuppressionButton_.setBounds(modeArea.removeFromLeft(94).reduced(2, 5));
-    mouthClickSuppressionButton_.setBounds(modeArea.removeFromLeft(94).reduced(2, 5));
+    keyboardSuppressionButton_.setBounds(modeArea.removeFromLeft(105).reduced(2, 5));
+    mouthClickSuppressionButton_.setBounds(modeArea.removeFromLeft(105).reduced(2, 5));
 
     area.removeFromTop(78);
     area.removeFromTop(28);
