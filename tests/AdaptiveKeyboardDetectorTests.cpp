@@ -470,12 +470,12 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(mouseTailHold.getHighBandGain()
                         <= gainAfterMouseAttack + 0.01f,
                     "Mouse attenuation must hold through the first two milliseconds of switch ringdown");
-    smartgate::MouseClickSuppressor mouseBypass;
-    mouseBypass.prepare(48000.0);
+    smartgate::MouseClickSuppressor mouseZeroBypass;
+    mouseZeroBypass.prepare(48000.0);
     for (int i = 0; i < 256; ++i) {
         const float sample = 0.17f * std::sin(2.0f * 3.14159265f
             * 7100.0f * static_cast<float>(i) / 48000.0f);
-        requireKeyboard(mouseBypass.process(sample, 0.0f, 1.0f) == sample,
+        requireKeyboard(mouseZeroBypass.process(sample, 0.0f, 1.0f) == sample,
                         "Zero mouse reduction must remain an exact audio bypass");
     }
 
