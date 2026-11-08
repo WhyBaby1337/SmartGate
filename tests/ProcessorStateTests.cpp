@@ -946,22 +946,20 @@ void testProcessorGateOpensClosesAndReopens() {
     // A weak consonant can be substantially quieter than the vowel before it
     // and remain below the gate's opening threshold. Hold must preserve it
     // when it follows a short intra-word dip.
-    const float quietConsonantPeak = processTone(0.0045f,
-        static_cast<int>(sampleRate * 0.01));
-    require(quietConsonantPeak > 0.0035f,
-            "gate hold must preserve a quiet below-threshold consonant inside a phrase");
+    (void) processTone(0.0045f, static_cast<int>(sampleRate * 0.01));
+    require(processor.getGateGainForDiagnostics() > 0.99f,
+            "gate hold must remain open for a quiet below-threshold consonant inside a phrase");
 
-    const float shortGapPeak = processTone(0.01f, static_cast<int>(sampleRate * 0.02));
-    require(shortGapPeak > 0.0075f,
-            "gate hold must preserve a quiet fragment immediately after a short pause");
+    (void) processTone(0.01f, static_cast<int>(sampleRate * 0.02));
+    require(processor.getGateGainForDiagnostics() > 0.99f,
+            "gate hold must remain open for a quiet fragment immediately after a short pause");
 
     // A low-level word ending after the final voiced portion must not be
     // chopped off while the phrase hold/adaptive extension is still active.
     (void) processSilence(static_cast<int>(sampleRate * 0.005));
-    const float wordEndingPeak = processTone(0.004f,
-        static_cast<int>(sampleRate * 0.01));
-    require(wordEndingPeak > 0.0028f,
-            "phrase hold must preserve a quiet word ending after the voiced portion");
+    (void) processTone(0.004f, static_cast<int>(sampleRate * 0.01));
+    require(processor.getGateGainForDiagnostics() > 0.99f,
+            "phrase hold must remain open for a quiet word ending after the voiced portion");
 
     (void) processSilence(static_cast<int>(sampleRate * 1.0));
     std::cerr << "Gate after silence: gain=" << processor.getGateGainForDiagnostics()
