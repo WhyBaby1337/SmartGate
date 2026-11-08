@@ -52,10 +52,10 @@ public:
         // suppression by itself. A local, sample-accurate edge is mandatory.
         // This catches quieter switch clicks over speech without treating a
         // sustained /s/, /sh/ or /ch/ as a mouse event.
-        const float levelFloor = 0.0035f - 0.0010f * context;
-        const float levelSpan = 0.030f - 0.006f * context;
-        const float edgeFloor = 0.060f - 0.015f * context;
-        const float edgeSpan = 0.16f - 0.020f * context;
+        const float levelFloor = 0.0030f - 0.0010f * context;
+        const float levelSpan = 0.027f - 0.006f * context;
+        const float edgeFloor = 0.055f - 0.012f * context;
+        const float edgeSpan = 0.15f - 0.020f * context;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
         const float confidence = level * impulsiveness;

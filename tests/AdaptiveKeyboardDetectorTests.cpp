@@ -518,6 +518,36 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(mouseVoiceError < 0.003f,
                     "Mouse click suppression must preserve the low-frequency voice body");
 
+    // A quieter mechanical click should still be reduced when it sits over
+    // speech. This guards the useful lower end of the mouse detector without
+    // broadening it into a continuous high-frequency voice attenuator.
+    smartgate::MouseClickSuppressor quietMouseClick;
+    quietMouseClick.prepare(48000.0);
+    float quietMouseInputEnergy = 0.0f;
+    float quietMouseOutputEnergy = 0.0f;
+    for (int i = 0; i < 2400; ++i) {
+        const float voice = 0.12f * std::sin(2.0f * 3.14159265f * 180.0f
+                                             * static_cast<float>(i) / 48000.0f);
+        float click = 0.0f;
+        if (i >= 600 && i < 792) {
+            const float age = static_cast<float>(i - 600);
+            const float envelope = std::exp(-age / 55.0f);
+            const float ageSeconds = static_cast<float>(i - 600) / 48000.0f;
+            click = 0.06f * envelope
+                * (std::sin(2.0f * 3.14159265f * 6200.0f * ageSeconds + 1.5707963f)
+                   + 0.4f * std::sin(2.0f * 3.14159265f * 8700.0f * ageSeconds
+                                     + 1.5707963f));
+        }
+        const float output = quietMouseClick.process(voice + click, 1.0f, 0.65f);
+        if (i >= 600 && i < 792) {
+            quietMouseInputEnergy += click * click;
+            const float outputHigh = output - voice;
+            quietMouseOutputEnergy += outputHigh * outputHigh;
+        }
+    }
+    requireKeyboard(quietMouseOutputEnergy < quietMouseInputEnergy * 0.97f,
+                    "Mouse stage must detect and reduce a quieter switch click over speech");
+
     smartgate::MouseClickSuppressor mouseSibilantGuard;
     mouseSibilantGuard.prepare(48000.0);
     float minimumMouseSibilantGain = 1.0f;
