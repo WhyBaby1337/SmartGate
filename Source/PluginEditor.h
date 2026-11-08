@@ -59,8 +59,8 @@ private:
 
     juce::ToggleButton aiButton_{"AI ENGINE"};
     juce::ToggleButton learnButton_{"START LEARNING"};
-    juce::ToggleButton keyboardSuppressionButton_{"KEYS"};
-    juce::ToggleButton mouthClickSuppressionButton_{"MOUTH"};
+    juce::ToggleButton keyboardSuppressionButton_{"KEYS + MOUSE"};
+    juce::ToggleButton mouthClickSuppressionButton_{"MOUTH CLICKS"};
     juce::TextButton resetProfileButton_{"RESET PROFILE"};
     juce::ComboBox keyboardModeBox_;
     juce::Label keyboardModeLabel_;
