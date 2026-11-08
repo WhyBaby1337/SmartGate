@@ -60,6 +60,7 @@ jobs:
 
           throw "CMake configure failed after 3 attempts."
       - name: Build VST3 and tests
+        id: build_vst3
         run: cmake --build build --config Release --parallel 2
       - name: Run DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
@@ -70,6 +71,7 @@ jobs:
       - name: Measure DSP CPU budget
         run: .\\build\\Release\\SmartGateDspBenchmark.exe
       - name: Verify VST3 bundle dependencies
+        id: verify_bundle
         shell: pwsh
         run: |
           $bundle = Get-ChildItem "build/SmartGate_artefacts/Release/VST3" -Directory -Filter "*.vst3" | Select-Object -First 1
@@ -249,6 +251,8 @@ jobs:
           if-no-files-found: ignore
 
       - name: Stage distributable VST3 bundle
+        id: stage_vst3
+        if: ${{ always() && steps.build_vst3.outcome == 'success' && steps.verify_bundle.outcome == 'success' }}
         shell: pwsh
         run: |
           $bundle = Get-ChildItem "build/SmartGate_artefacts/Release/VST3" -Directory -Filter "*.vst3" | Select-Object -First 1
@@ -261,6 +265,7 @@ jobs:
           Write-Host "Staged distributable bundle: $(Join-Path $stage $bundle.Name)"
 
       - name: Upload VST3
+        if: ${{ always() && steps.stage_vst3.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: SmartGate-Windows-x64-VST3
