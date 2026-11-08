@@ -253,9 +253,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (!learningRequested)
         pendingLearningStart_ = false;
 
-    // Apply a pending session restore before a new Learn Target transition.
-    // If both arrive in the same audio block, the explicit learn request wins
-    // and starts with a clean profile instead of resurrecting the old session.
+    // Apply a pending session restore before resuming Learn Target.
+    // Toggling Learn Target is pause/resume: preserve the accumulated profile
+    // and only discard the incomplete feature frame at the transition.
     smartgate::TargetProfile::Snapshot restored;
     std::uint64_t restoredVersion = 0;
     if (pendingTargetProfile_.read(restored, restoredVersion)
@@ -268,12 +268,10 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
 
     // A requested Learn Target transition is remembered while AI is disabled.
-    // Turning AI off pauses analysis without silently erasing an existing model.
+    // Learning is resumable: toggling the control never clears accumulated data.
     if (aiEnabled && pendingLearningStart_) {
-        targetProfile_.clear();
-        const auto emptyProfile = targetProfile_.makeSnapshot();
-        publishedTargetProfile_.publish(emptyProfile);
-        learnedFramesForUi_.store(emptyProfile.count, std::memory_order_relaxed);
+        // Start/resume collection without discarding a previously learned
+        // target. The next complete feature frame belongs to this session.
         featureExtractor_.reset();
         featureFramePosition_ = 0;
         targetConfidenceTarget_ = 1.0f;
