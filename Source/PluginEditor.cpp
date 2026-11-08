@@ -79,12 +79,12 @@ void SmartGateAudioProcessorEditor::configureSlider(
     if (index >= 6) {
         slider.textFromValueFunction = [](double value) {
             return juce::String(juce::roundToInt(value * 100.0)) + " %";
-        });
+        };
         slider.valueFromTextFunction = [](const juce::String& text) {
             auto numeric = text;
             numeric.retainCharacters("0123456789.-");
             return numeric.getDoubleValue() / 100.0;
-        });
+        };
     }
     static const std::array<const char*, 9> tooltips{
         "Input level below which the gate closes. Start around the room-noise level.",
