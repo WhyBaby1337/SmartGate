@@ -51,6 +51,7 @@ public:
     // Standalone target-profile backup, independent of host session state.
     bool exportTargetProfile(const juce::File& file) const;
     bool importTargetProfile(const juce::File& file);
+    void requestTargetProfileReset() noexcept;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -88,6 +89,7 @@ private:
     // Learn Target toggle on the audio thread without treating it as a user edge.
     std::atomic<bool> stateRestorePending_{false};
     std::atomic<bool> restoredLearningTarget_{false};
+    std::atomic<bool> targetProfileResetRequested_{false};
     // Lock-free UI telemetry snapshots written by the audio thread and polled by the editor.
     std::atomic<float> inputPeakDbForUi_{-100.0f};
     std::atomic<float> outputPeakDbForUi_{-100.0f};
