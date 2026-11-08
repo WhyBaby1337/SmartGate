@@ -75,7 +75,7 @@ public:
         // a sustained sibilant rises into its first peak instead of collapsing.
         // The stronger pre-event bed test also rejects random peaks in steady
         // noise, without changing the existing general transient detector.
-        const float onsetNovelty = unit((magnitude - 4.5f * highBandEnvelope_) / 0.015f);
+        const float onsetNovelty = unit((magnitude - 5.0f * highBandEnvelope_) / 0.015f);
         highBandEnvelope_ = magnitude + envelopeCoefficient_
             * (highBandEnvelope_ - magnitude);
 
@@ -94,7 +94,7 @@ public:
         // when the following sample falls sharply; this avoids reacting to
         // the rising quarter-cycle of a sustained /s/ or /sh/ tone.
         const bool onsetCandidate = magnitudeRise > 0.012f
-            && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.6f;
+            && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.95f;
         const float onsetDrop = unit((0.55f - magnitudeFallRatio) / 0.25f);
         const float onsetConfidence = previousOnsetConfidence_ * onsetDrop;
         previousOnsetConfidence_ = onsetCandidate ? level * onsetNovelty : 0.0f;
