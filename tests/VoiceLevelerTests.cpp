@@ -39,6 +39,16 @@ void runVoiceLevelerTests() {
     requireLeveler(loudGain < 0.8f && loudGain >= 0.2511f,
                    "Full Voice Leveling must reduce loud sustained input within its attenuation cap");
 
+    smartgate::VoiceLeveler stereo;
+    stereo.prepare(48000.0);
+    float linkedGain = 1.0f;
+    for (int i = 0; i < 48000; ++i)
+        linkedGain = stereo.processStereo(
+            0.04f * std::sin(0.03f * static_cast<float>(i)),
+            0.4f * std::sin(0.03f * static_cast<float>(i)), 1.0f);
+    requireLeveler(linkedGain < 1.0f && linkedGain > 0.2511f,
+                   "Stereo leveler must derive one shared gain from both channels");
+
     loud.reset();
     requireLeveler(loud.gainForDiagnostics() == 1.0f,
                    "Reset must restore unity gain");
