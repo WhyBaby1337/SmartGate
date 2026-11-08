@@ -53,4 +53,47 @@ private:
     std::size_t writePosition_ = 0;
 };
 
+
+// Scalar companion to LookaheadDelay. It keeps frame-level analysis metadata
+// aligned with the exact audio samples emitted by the lookahead buffer.
+class ScalarLookaheadDelay {
+public:
+    bool prepare(double sampleRate, double milliseconds = 30.0) {
+        const double safeRate = std::isfinite(sampleRate) && sampleRate > 0.0
+            ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
+        const double safeMs = std::isfinite(milliseconds)
+            ? std::clamp(milliseconds, 0.0, 30.0) : 30.0;
+        delaySamples_ = static_cast<std::size_t>(std::llround(safeRate * safeMs * 0.001));
+        ring_.assign(delaySamples_ + 1, 0.0f);
+        writePosition_ = 0;
+        return !ring_.empty();
+    }
+
+    void reset() noexcept {
+        std::fill(ring_.begin(), ring_.end(), 0.0f);
+        writePosition_ = 0;
+    }
+
+    float process(float input) noexcept {
+        if (delaySamples_ == 0 || ring_.empty())
+            return input;
+        ring_[writePosition_] = std::isfinite(input) ? input : 0.0f;
+        auto readPosition = writePosition_ + 1;
+        if (readPosition == ring_.size())
+            readPosition = 0;
+        const float output = ring_[readPosition];
+        ++writePosition_;
+        if (writePosition_ == ring_.size())
+            writePosition_ = 0;
+        return output;
+    }
+
+    std::size_t latencySamples() const noexcept { return delaySamples_; }
+
+private:
+    std::vector<float> ring_;
+    std::size_t delaySamples_ = 0;
+    std::size_t writePosition_ = 0;
+};
+
 } // namespace smartgate
