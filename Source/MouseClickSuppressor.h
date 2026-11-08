@@ -16,7 +16,8 @@ public:
             ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
         lowPassCoefficient_ = static_cast<float>(
             std::exp(-2.0 * 3.14159265358979323846 * 3200.0 / rate));
-        releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.0012 * rate)));
+        releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.0025 * rate)));
+        holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0025 * rate)));
         reset();
     }
 
@@ -24,6 +25,7 @@ public:
         lowPassState_ = 0.0;
         previousHighBand_ = 0.0f;
         highBandGain_ = 1.0f;
+        holdCounter_ = 0;
     }
 
     float process(float input, float reduction, float alignedFrameContext = 0.0f) noexcept {
@@ -59,8 +61,11 @@ public:
         const float confidence = level * impulsiveness;
         if (confidence > 0.0f) {
             const float perceptualAmount = std::sqrt(amount);
-            const float targetGain = 1.0f - 0.90f * perceptualAmount * confidence;
+            const float targetGain = 1.0f - 0.92f * perceptualAmount * confidence;
             highBandGain_ = std::min(highBandGain_, targetGain);
+            holdCounter_ = holdSamples_;
+        } else if (holdCounter_ > 0) {
+            --holdCounter_;
         } else {
             highBandGain_ = 1.0f - releaseCoefficient_
                 * (1.0f - highBandGain_);
@@ -81,6 +86,8 @@ private:
     double lowPassState_ = 0.0;
     float previousHighBand_ = 0.0f;
     float highBandGain_ = 1.0f;
+    int holdSamples_ = 1;
+    int holdCounter_ = 0;
 };
 
 } // namespace smartgate

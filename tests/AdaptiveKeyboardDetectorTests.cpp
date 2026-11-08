@@ -457,6 +457,59 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(std::abs(stereoFoldDown.process(0.1f, 0.3f) - 0.3f) < 1.0e-6f,
                     "Reprepare must clear stereo channel history and select the first stronger channel");
 
+    // Dedicated mouse stage: model a short switch click as a decaying,
+    // high-frequency burst over a voiced fundamental. The attenuation must
+    // persist across the click body, not only the first edge sample.
+    smartgate::MouseClickSuppressor mouseClick;
+    mouseClick.prepare(48000.0);
+    float mouseBurstInputEnergy = 0.0f;
+    float mouseBurstOutputEnergy = 0.0f;
+    float mouseVoiceError = 0.0f;
+    for (int i = 0; i < 2400; ++i) {
+        const float voice = 0.12f * std::sin(2.0f * 3.14159265f * 180.0f
+                                             * static_cast<float>(i) / 48000.0f);
+        float click = 0.0f;
+        if (i >= 600 && i < 792) {
+            const float age = static_cast<float>(i - 600);
+            const float envelope = std::exp(-age / 55.0f);
+            click = 0.12f * envelope
+                * std::sin(2.0f * 3.14159265f * 6200.0f
+                           * static_cast<float>(i - 600) / 48000.0f);
+        }
+        const float input = voice + click;
+        const float output = mouseClick.process(input, 1.0f, 0.65f);
+        if (i >= 600 && i < 792) {
+            mouseBurstInputEnergy += click * click;
+            const float outputHigh = output - voice;
+            mouseBurstOutputEnergy += outputHigh * outputHigh;
+        }
+        if (i > 1200)
+            mouseVoiceError = std::max(mouseVoiceError, std::abs(output - voice));
+    }
+    requireKeyboard(mouseBurstOutputEnergy < mouseBurstInputEnergy * 0.75f,
+                    "Dedicated mouse stage must reduce a short switch-click burst over speech");
+    requireKeyboard(mouseVoiceError < 0.003f,
+                    "Mouse click suppression must preserve the low-frequency voice body");
+
+    smartgate::MouseClickSuppressor mouseSibilantGuard;
+    mouseSibilantGuard.prepare(48000.0);
+    float minimumMouseSibilantGain = 1.0f;
+    for (int i = 0; i < 12000; ++i) {
+        const float sibilant = 0.08f * std::sin(2.0f * 3.14159265f * 6200.0f
+                                                * static_cast<float>(i) / 48000.0f);
+        mouseSibilantGuard.process(sibilant, 1.0f, 0.65f);
+        minimumMouseSibilantGain = std::min(minimumMouseSibilantGain,
+            mouseSibilantGuard.getHighBandGain());
+    }
+    requireKeyboard(minimumMouseSibilantGain > 0.90f,
+                    "Sustained /s/, /sh/ and /ch/ energy must not be treated as mouse clicks");
+
+    smartgate::MouseClickSuppressor mouseBypass;
+    mouseBypass.prepare(48000.0);
+    const float bypassSample = 0.1234567f;
+    requireKeyboard(mouseBypass.process(bypassSample, 0.0f, 1.0f) == bypassSample,
+                    "Zero mouse reduction must remain bit-transparent");
+
     // Keyboard/mouse suppression must not attenuate the entire voice signal.
     // A broadband impulse is reduced in the high band while a low voice tone
     // remains effectively unchanged.
