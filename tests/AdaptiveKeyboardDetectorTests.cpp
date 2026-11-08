@@ -636,13 +636,28 @@ void runAdaptiveKeyboardDetectorTests() {
     smartgate::MouseClickSuppressor mouseSibilantGuard;
     mouseSibilantGuard.prepare(48000.0);
     float minimumMouseSibilantGain = 1.0f;
+    float maximumSibilantEdge = 0.0f;
+    float maximumSibilantConfidence = 0.0f;
+    float maximumSibilantImpulsiveness = 0.0f;
     for (int i = 0; i < 12000; ++i) {
         const float sibilant = 0.08f * std::sin(2.0f * 3.14159265f * 6200.0f
                                                 * static_cast<float>(i) / 48000.0f);
         mouseSibilantGuard.process(sibilant, 1.0f, 0.65f);
         minimumMouseSibilantGain = std::min(minimumMouseSibilantGain,
             mouseSibilantGuard.getHighBandGain());
+        maximumSibilantEdge = std::max(maximumSibilantEdge,
+            mouseSibilantGuard.getLastEdge());
+        maximumSibilantConfidence = std::max(maximumSibilantConfidence,
+            mouseSibilantGuard.getLastConfidence());
+        maximumSibilantImpulsiveness = std::max(maximumSibilantImpulsiveness,
+            mouseSibilantGuard.getLastImpulsiveness());
     }
+    std::fprintf(stderr,
+        "Sibilant guard: minGain=%.6f maxEdge=%.6f maxConfidence=%.6f maxImpulse=%.6f\\n",
+        static_cast<double>(minimumMouseSibilantGain),
+        static_cast<double>(maximumSibilantEdge),
+        static_cast<double>(maximumSibilantConfidence),
+        static_cast<double>(maximumSibilantImpulsiveness));
     requireKeyboard(minimumMouseSibilantGain > 0.90f,
                     "Sustained /s/, /sh/ and /ch/ energy must not be treated as mouse clicks");
 
