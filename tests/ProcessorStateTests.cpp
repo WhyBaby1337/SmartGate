@@ -74,7 +74,7 @@ void testHostMetadataAndAutomationParameters() {
     const juce::StringArray expectedIds{
         "threshold", "attack", "release", "hold", "hysteresis", "adaptiveHold",
         "range", "aiEnabled", "learnTarget", "targetAmount", "keyboardMode",
-        "keyboardReduction", "mouthNoiseReduction"
+        "keyboardReduction", "mouthNoiseReduction", "voiceLeveling"
     };
     require(processor.getParameters().size() == expectedIds.size(),
             "host parameter count must match the stable parameter layout");
@@ -170,6 +170,7 @@ void testAllParametersSurviveStateRoundTrip() {
     setParameter(source, "keyboardMode", 2.0f);
     setParameter(source, "keyboardReduction", 0.64f);
     setParameter(source, "mouthNoiseReduction", 0.37f);
+    setParameter(source, "voiceLeveling", 0.68f);
 
     juce::MemoryBlock saved;
     (void) saveXml(source, saved);
@@ -211,6 +212,7 @@ void testAllParametersSurviveStateRoundTrip() {
     expect("keyboardMode", 2.0f);
     expect("keyboardReduction", 0.64f);
     expect("mouthNoiseReduction", 0.37f);
+    expect("voiceLeveling", 0.68f);
 }
 
 void testImmediateRoundTrip() {
