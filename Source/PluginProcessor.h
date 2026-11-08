@@ -7,6 +7,7 @@
 #include "MouthClickSuppressor.h"
 #include "LookaheadDelay.h"
 #include "TargetProfile.h"
+#include "VoiceLeveler.h"
 
 #if defined(SMARTGATE_HAS_SILERO)
 #include "SileroVadInference.h"
@@ -71,6 +72,7 @@ private:
     juce::AudioProcessorValueTreeState parameters_;
     static constexpr double lookaheadMilliseconds_ = 30.0;
     smartgate::LookaheadDelay lookaheadDelay_;
+    smartgate::VoiceLeveler voiceLeveler_;
     smartgate::GateEnvelope gateEnvelope_;
     smartgate::FeatureExtractor featureExtractor_;
     smartgate::StereoAnalysisFoldDown stereoAnalysisFoldDown_;
