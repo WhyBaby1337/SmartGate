@@ -669,7 +669,7 @@ bool SmartGateAudioProcessor::exportTargetProfile(const juce::File& file) const 
 
     juce::XmlElement xml("SMARTGATE_TARGET_PROFILE");
     xml.setAttribute("version", 1);
-    xml.setAttribute("count", static_cast<juce::int64>(snapshot.count));
+    xml.setAttribute("count", juce::String(static_cast<juce::int64>(snapshot.count)));
     for (std::size_t i = 0; i < snapshot.mean.size(); ++i) {
         const auto index = juce::String(static_cast<int>(i));
         xml.setAttribute("mean" + index, snapshot.mean[i]);
@@ -694,7 +694,7 @@ bool SmartGateAudioProcessor::importTargetProfile(const juce::File& file) {
     if (xml->getNumAttributes() != 12 || xml->getNumChildElements() != 0)
         return false;
 
-    const auto count = xml->getIntAttribute("count", -1);
+    const auto count = xml->getStringAttribute("count").getLargeIntValue();
     if (count <= 0)
         return false;
 
