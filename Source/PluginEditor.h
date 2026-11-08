@@ -59,6 +59,8 @@ private:
 
     juce::ToggleButton aiButton_{"AI ENGINE"};
     juce::ToggleButton learnButton_{"START LEARNING"};
+    juce::ToggleButton keyboardSuppressionButton_{"KEYS"};
+    juce::ToggleButton mouthClickSuppressionButton_{"MOUTH"};
     juce::TextButton resetProfileButton_{"RESET PROFILE"};
     juce::ComboBox keyboardModeBox_;
     juce::Label keyboardModeLabel_;
@@ -68,6 +70,8 @@ private:
     std::unique_ptr<juce::FileChooser> profileFileChooser_;
     std::unique_ptr<ButtonAttachment> aiAttachment_;
     std::unique_ptr<ButtonAttachment> learnAttachment_;
+    std::unique_ptr<ButtonAttachment> keyboardSuppressionAttachment_;
+    std::unique_ptr<ButtonAttachment> mouthClickSuppressionAttachment_;
     std::unique_ptr<ComboAttachment> keyboardModeAttachment_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SmartGateAudioProcessorEditor)
