@@ -43,7 +43,9 @@ if(SMARTGATE_BUILD_PLUGIN)
         endif()
 
         FetchContent_Declare(onnxruntime
-            URL https://github.com/microsoft/onnxruntime/releases/download/v1.30.1/onnxruntime-win-x64-1.30.1.zip
+            URL
+                https://github.com/microsoft/onnxruntime/releases/download/v1.30.1/onnxruntime-win-x64-1.30.1.zip
+                https://sourceforge.net/projects/onnx-runtime.mirror/files/v1.30.1/onnxruntime-win-x64-1.30.1.zip/download
             URL_HASH SHA256=9e70d829a7c2014c6f6d2889cd3578733c2e5bbe919e186b5f2038d59176ab13
             DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
         # Populate the pinned SDK archive without invoking a project-level
