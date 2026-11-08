@@ -86,7 +86,8 @@ private:
     float targetConfidenceSmoothed_ = 1.0f;
     float targetConfidenceSmoothingCoefficient_ = 0.0f;
     float keyboardConfidence_ = 0.0f;
-    smartgate::AdaptiveKeyboardGain keyboardGainSmoother_;
+    smartgate::KeyboardTransientSuppressor keyboardSuppressorLeft_;
+    smartgate::KeyboardTransientSuppressor keyboardSuppressorRight_;
     smartgate::MouthClickSuppressor mouthClickSuppressorLeft_;
     smartgate::MouthClickSuppressor mouthClickSuppressorRight_;
     bool wasLearningTarget_ = false;
