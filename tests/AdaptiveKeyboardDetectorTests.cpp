@@ -154,8 +154,8 @@ void runAdaptiveKeyboardDetectorTests() {
                     "Uncertain voiced speech must not be heavily attenuated");
 
     // Speech remains present while occasional broadband key transients occur.
-    // The mixed signal should score higher than speech alone, but must not
-    // drive the detector into near-certain keyboard classification.
+    // High-band peak-to-average analysis should make those short impulses
+    // actionable even though full-band speech energy masks their RMS change.
     smartgate::AdaptiveKeyboardDetector mixedDetector;
     mixedDetector.prepare(48000.0);
     float maximumMixedConfidence = 0.0f;
@@ -185,11 +185,12 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(!smartgate::TargetProfile::isKeyboardQualifiedForLearning(
                         maximumMixedConfidence),
                     "Mixed speech and keyboard transients must pause target learning");
-    requireKeyboard(maximumMixedConfidence < 0.50f,
+    requireKeyboard(maximumMixedConfidence < 0.65f,
                     "Mixed speech and keyboard input must not accumulate near-certain keyboard confidence");
-    requireKeyboard(smartgate::AdaptiveKeyboardDetector::gainForReduction(
-                        1.0f, maximumMixedConfidence) > 0.80f,
-                    "Mixed speech and intermittent clicks must retain most speech level");
+    const float mixedSpeechGain = smartgate::AdaptiveKeyboardDetector::gainForReduction(
+        1.0f, maximumMixedConfidence);
+    requireKeyboard(mixedSpeechGain < 0.85f && mixedSpeechGain > 0.55f,
+                    "Keyboard transients over speech must receive useful but bounded attenuation");
 
     // Exercise each user-selectable classifier mode with voiced speech. The
     // more sensitive membrane weighting must still avoid a strong false
