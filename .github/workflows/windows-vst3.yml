@@ -163,33 +163,19 @@ jobs:
             throw "Built Smart Gate VST3 module is missing: $module"
           }
 
-          # ProcDump captures the native exception context when pluginval or the plugin crashes.
-          # This is CI-only diagnostics; the plugin binary and runtime behavior are unchanged.
+          # Crash-dump capture is optional diagnostics. Do not make VST3 validation
+          # depend on downloading Sysinternals from a second external host: that
+          # download can stall the entire Windows job before pluginval even starts.
+          # pluginval's own exit code remains the authoritative validation result.
           $dumpDir = Join-Path $env:RUNNER_TEMP "pluginval-dumps"
           New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
-          $procdumpZip = Join-Path $env:RUNNER_TEMP "procdump.zip"
-          $procdumpDir = Join-Path $env:RUNNER_TEMP "procdump"
-          Get-DownloadWithRetry -Uri "https://download.sysinternals.com/files/Procdump.zip" -Destination $procdumpZip
-          Expand-Archive -LiteralPath $procdumpZip -DestinationPath $procdumpDir -Force
-          $procdump = Join-Path $procdumpDir "procdump64.exe"
-          if (-not (Test-Path -LiteralPath $procdump -PathType Leaf)) {
-            throw "Sysinternals ProcDump executable was not found."
-          }
 
           # GitHub-hosted Windows runners are headless; pluginval documents this flag for CI.
-          # ProcDump launches pluginval and writes a full dump on an unhandled exception.
-          $stdout = Join-Path $env:RUNNER_TEMP "pluginval-stdout.log"
-          $stderr = Join-Path $env:RUNNER_TEMP "pluginval-stderr.log"
-          $process = Start-Process -FilePath $procdump `
-            -ArgumentList @("-accepteula", "-ma", "-e", "-x", ('"{0}"' -f $dumpDir), $validator.FullName, "--strictness-level", "5", "--skip-gui-tests", ('"{0}"' -f $module)) `
-            -Wait -PassThru -NoNewWindow `
-            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-
-          if (Test-Path -LiteralPath $stdout) { Get-Content -LiteralPath $stdout }
-          if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr }
-          Write-Host "pluginval process exit code: $($process.ExitCode)"
-          if ($process.ExitCode -ne 0) {
-            throw "pluginval rejected or crashed while validating Smart Gate VST3 (exit code $($process.ExitCode))."
+          & $validator.FullName --strictness-level 5 --skip-gui-tests $module
+          $pluginvalExitCode = $LASTEXITCODE
+          Write-Host "pluginval process exit code: $pluginvalExitCode"
+          if ($pluginvalExitCode -ne 0) {
+            throw "pluginval rejected or crashed while validating Smart Gate VST3 (exit code $pluginvalExitCode)."
           }
       - name: Analyze pluginval crash dump
         if: always()
