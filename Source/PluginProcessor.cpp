@@ -88,6 +88,7 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     inputPeakDbForUi_.store(-100.0f, std::memory_order_relaxed);
     outputPeakDbForUi_.store(-100.0f, std::memory_order_relaxed);
     gateGainForUi_.store(0.0f, std::memory_order_relaxed);
+    gateDetectorLevelForUi_.store(0.0f, std::memory_order_relaxed);
     // Use one validated host rate for every time-based subsystem. A malformed
     // or extreme host value must not make smoothing unstable or desynchronize
     // the gate, feature extractors, keyboard detector, and VAD resampler.
@@ -519,6 +520,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     inputPeakDbForUi_.store(toDb(inputPeak), std::memory_order_relaxed);
     outputPeakDbForUi_.store(toDb(outputPeak), std::memory_order_relaxed);
     gateGainForUi_.store(gateEnvelope_.getGain(), std::memory_order_relaxed);
+    gateDetectorLevelForUi_.store(gateEnvelope_.getDetectorLevel(), std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor* SmartGateAudioProcessor::createEditor() {
