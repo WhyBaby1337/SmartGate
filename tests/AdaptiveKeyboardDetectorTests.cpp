@@ -557,6 +557,21 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(lowSettingMinimumGain < 0.75f,
                     "A modest 0.20 keyboard setting must meaningfully attenuate a confident click");
 
+    // Mechanical keyboard switches produce a short resonant tail after the
+    // initial attack. Keep the detected attenuation stable through that tail
+    // instead of releasing immediately after the first high-band peak.
+    smartgate::KeyboardTransientSuppressor keyboardTailHold;
+    keyboardTailHold.prepare(48000.0);
+    (void) keyboardTailHold.process(0.8f, 1.0f);
+    const float gainAfterKeyboardAttack = keyboardTailHold.getHighBandGain();
+    requireKeyboard(gainAfterKeyboardAttack < 0.80f,
+                    "A sharp keyboard switch attack must trigger attenuation");
+    for (int i = 0; i < 48; ++i)
+        (void) keyboardTailHold.process(0.0f, 1.0f);
+    requireKeyboard(keyboardTailHold.getHighBandGain()
+                        <= gainAfterKeyboardAttack + 0.01f,
+                    "Keyboard attenuation must hold through the first millisecond of switch ringdown");
+
     // The fast suppressor uses only sample-local transient evidence. Its
     // classifier remains a separate frame-level signal for learning decisions;
     // it is deliberately not fed into the 30 ms delayed audio path.
