@@ -225,7 +225,7 @@ public:
         // Requiring both cues keeps the new path inactive on ordinary speech.
         const float midContext = unit((frameContext - 0.30f) / 0.40f);
         const float midLevel = unit((midMagnitude - 0.004f) / 0.030f);
-        const float midImpulsiveness = unit((midEdge - 0.045f) / 0.18f);
+        const float midImpulsiveness = unit((midEdge - 0.015f) / 0.080f);
         const float midTransient = midLevel * midImpulsiveness * midContext;
         if (midTransient > 0.0f) {
             const float perceptualAmount = std::sqrt(amount);
