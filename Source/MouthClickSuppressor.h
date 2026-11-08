@@ -35,6 +35,8 @@ public:
             const double sample = static_cast<double>(x);
             lowPassState_ = sample + static_cast<double>(lowPassCoefficient_)
                 * (lowPassState_ - sample);
+            previousHighBand_ = x - static_cast<float>(lowPassState_);
+            highBandGain_ = 1.0f;
             return x;
         }
 
