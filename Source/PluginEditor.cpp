@@ -256,15 +256,10 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
                      "Shape how the gate opens, holds and closes");
     auto intelligenceHeading = intelligencePanel.reduced(14, 8).removeFromTop(22);
     drawSectionTitle(g, intelligenceHeading, "SMART PROCESSING",
-                     "Target voice matching and keyboard suppression");
+                     aiButton_.getToggleState()
+                         ? "Target voice matching and keyboard suppression"
+                         : "AI OFF  ·  conventional gate mode");
 
-    if (!aiButton_.getToggleState()) {
-        g.setColour(muted);
-        g.setFont(juce::Font(juce::FontOptions(9.0f)));
-        g.drawText("AI OFF  ·  conventional gate mode",
-                   intelligencePanel.getX() + 14, intelligencePanel.getBottom() - 18,
-                   intelligencePanel.getWidth() - 28, 12, juce::Justification::right);
-    }
 }
 
 void SmartGateAudioProcessorEditor::resized() {
