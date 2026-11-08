@@ -847,9 +847,25 @@ void testProcessorGateOpensClosesAndReopens() {
     // below the closing threshold, but remain inside the configured 80 ms
     // Hold interval. The next quiet probe therefore tests Hold itself.
     (void) processSilence(static_cast<int>(sampleRate * 0.06));
+    // A weak consonant can be substantially quieter than the vowel before it
+    // and remain below the gate's opening threshold. Hold must preserve it
+    // when it follows a short intra-word dip.
+    const float quietConsonantPeak = processTone(0.0045f,
+        static_cast<int>(sampleRate * 0.01));
+    require(quietConsonantPeak > 0.0035f,
+            "gate hold must preserve a quiet below-threshold consonant inside a phrase");
+
     const float shortGapPeak = processTone(0.01f, static_cast<int>(sampleRate * 0.02));
     require(shortGapPeak > 0.0075f,
             "gate hold must preserve a quiet fragment immediately after a short pause");
+
+    // A low-level word ending after the final voiced portion must not be
+    // chopped off while the phrase hold/adaptive extension is still active.
+    (void) processSilence(static_cast<int>(sampleRate * 0.005));
+    const float wordEndingPeak = processTone(0.004f,
+        static_cast<int>(sampleRate * 0.01));
+    require(wordEndingPeak > 0.0028f,
+            "phrase hold must preserve a quiet word ending after the voiced portion");
 
     (void) processSilence(static_cast<int>(sampleRate * 1.0));
     // Probe with a non-zero signal below the opening threshold. Measuring
@@ -868,6 +884,79 @@ void testProcessorGateOpensClosesAndReopens() {
 
 } // namespace
 
+
+void testTargetInfluenceAndAiOffBypass() {
+    constexpr double sampleRate = 48000.0;
+    constexpr int blockSize = 256;
+    constexpr int totalSamples = static_cast<int>(sampleRate * 0.50);
+    constexpr int measurementStart = static_cast<int>(sampleRate * 0.30);
+
+    const auto measureOutputRms = [&](bool aiEnabled, float targetAmount) {
+        SmartGateAudioProcessor fixture;
+        setParameter(fixture, "aiEnabled", aiEnabled ? 1.0f : 0.0f);
+        setParameter(fixture, "learnTarget", 0.0f);
+        setParameter(fixture, "targetAmount", targetAmount);
+        setParameter(fixture, "keyboardReduction", 0.0f);
+
+        juce::MemoryBlock fixtureData;
+        auto fixtureXml = saveXml(fixture, fixtureData);
+        // This valid but deliberately dissimilar acoustic profile represents
+        // a learned target whose spectral signature does not match the test
+        // tone. It lets the integration test exercise the actual processor
+        // path rather than only testing TargetProfile::confidence() in isolation.
+        addValidProfile(*fixtureXml, 32);
+        juce::MemoryBlock encodedState;
+        encode(fixture, *fixtureXml, encodedState);
+
+        SmartGateAudioProcessor processor;
+        processor.prepareToPlay(sampleRate, blockSize);
+        processor.setStateInformation(encodedState.getData(),
+                                      static_cast<int>(encodedState.getSize()));
+
+        juce::MidiBuffer midi;
+        double sumSquares = 0.0;
+        std::uint64_t measuredSamples = 0;
+        for (int position = 0; position < totalSamples; position += blockSize) {
+            juce::AudioBuffer<float> buffer(2, blockSize);
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+                auto* samples = buffer.getWritePointer(channel);
+                for (int i = 0; i < blockSize; ++i) {
+                    const double phase = 2.0 * juce::MathConstants<double>::pi
+                        * 220.0 * static_cast<double>(position + i) / sampleRate;
+                    samples[i] = 0.08f * static_cast<float>(std::sin(phase));
+                }
+            }
+            processor.processBlock(buffer, midi);
+            if (position + blockSize > measurementStart) {
+                for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+                    const auto* samples = buffer.getReadPointer(channel);
+                    for (int i = 0; i < blockSize; ++i) {
+                        require(std::isfinite(samples[i]),
+                                "target influence integration output must remain finite");
+                        sumSquares += static_cast<double>(samples[i]) * samples[i];
+                        ++measuredSamples;
+                    }
+                }
+            }
+        }
+        processor.releaseResources();
+        require(measuredSamples > 0,
+                "target influence integration test must collect steady-state samples");
+        return static_cast<float>(std::sqrt(sumSquares
+            / static_cast<double>(measuredSamples)));
+    };
+
+    const float aiOffRms = measureOutputRms(false, 1.0f);
+    const float aiOnZeroInfluenceRms = measureOutputRms(true, 0.0f);
+    const float aiOnFullInfluenceRms = measureOutputRms(true, 1.0f);
+
+    require(aiOffRms > 0.045f,
+            "AI OFF must preserve conventional gate behavior despite a mismatched stored target");
+    require(std::abs(aiOffRms - aiOnZeroInfluenceRms) < 0.001f,
+            "zero Target Influence must leave the conventional gate signal unchanged");
+    require(aiOnFullInfluenceRms < aiOffRms * 0.25f,
+            "full Target Influence must attenuate a strongly mismatched target signal");
+}
 
 void testRepeatedPrepareWithoutRelease() {
     SmartGateAudioProcessor processor;
@@ -916,6 +1005,7 @@ int main() {
     testDuplicateTargetProfilesAreRejected();
     testRuntimeBlockAndToggleTransitions();
     testProcessorGateOpensClosesAndReopens();
+    testTargetInfluenceAndAiOffBypass();
     testRepeatedPrepareWithoutRelease();
     testMonoRuntimeProcessing();
     std::cout << "All processor state integration tests passed.\n";
