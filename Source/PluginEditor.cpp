@@ -303,7 +303,8 @@ void SmartGateAudioProcessorEditor::resized() {
     // sliders only ~70 px tall and making their labels/readouts look cramped.
     auto smartContent = intelligencePanel.reduced(12, 8);
     smartContent.removeFromTop(38); // reserve a clear band below the section heading
-    auto profileActions = smartContent.removeFromBottom(34);
+    auto profileActionBand = smartContent.removeFromBottom(42);
+    auto profileActions = profileActionBand.removeFromBottom(34);
     exportProfileButton_.setBounds(profileActions.removeFromLeft(142));
     profileActions.removeFromLeft(8);
     importProfileButton_.setBounds(profileActions.removeFromLeft(142));
