@@ -39,6 +39,9 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
             processor_.parameters_, parameterNames_[i], sliders_[i]);
     }
 
+    aiButton_.setTooltip("Enables Silero voice activity assistance and target-profile influence. Off keeps the conventional gate active.");
+    learnButton_.setTooltip("Learn your voice profile while speaking naturally. Keep this enabled briefly in a quiet environment.");
+    keyboardModeBox_.setTooltip("Choose the keyboard-noise profile that best matches your keyboard.");
     aiButton_.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     learnButton_.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     aiButton_.setColour(juce::ToggleButton::tickColourId, accent);
@@ -73,6 +76,28 @@ void SmartGateAudioProcessorEditor::configureSlider(
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 82, 20);
     slider.setTextValueSuffix(suffix);
+    if (index >= 6) {
+        slider.setTextFromValueFunction([](double value) {
+            return juce::String(juce::roundToInt(value * 100.0)) + " %";
+        });
+        slider.setValueFromTextFunction([](const juce::String& text) {
+            auto numeric = text;
+            numeric.retainCharacters("0123456789.-");
+            return numeric.getDoubleValue() / 100.0;
+        });
+    }
+    static const std::array<const char*, 9> tooltips{
+        "Input level below which the gate closes. Start around the room-noise level.",
+        "How quickly the gate opens after voice is detected.",
+        "How smoothly the gate closes after the voice ends.",
+        "Minimum time the gate stays open after the signal falls below threshold.",
+        "Difference between opening and closing thresholds; helps prevent chatter.",
+        "How much the signal is attenuated while the gate is closed.",
+        "How strongly the learned target voice profile influences gating. Set to 0 to disable profile influence.",
+        "Amount of keyboard-noise suppression. This works independently of the AI Engine toggle.",
+        "Adds phrase-aware hold time so quiet consonants are less likely to be cut off."
+    };
+    slider.setTooltip(tooltips[index]);
     slider.setColour(juce::Slider::rotarySliderFillColourId, accent);
     slider.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff35404d));
     slider.setColour(juce::Slider::thumbColourId, juce::Colours::white);
