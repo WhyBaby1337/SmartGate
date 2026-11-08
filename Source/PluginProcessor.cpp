@@ -485,10 +485,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         // Keyboard/mouse clicks are attenuated locally in the high band,
         // rather than ducking the entire voice signal for several milliseconds.
         const float keyboardProcessedLeft = keyboardSuppressorLeft_.process(
-            delayedLeft, keyboardReduction, keyboardConfidence_);
+            delayedLeft, keyboardReduction);
         const float keyboardProcessedRight = right != nullptr
-            ? keyboardSuppressorRight_.process(
-                delayedRight, keyboardReduction, keyboardConfidence_)
+            ? keyboardSuppressorRight_.process(delayedRight, keyboardReduction)
             : keyboardProcessedLeft;
         const float outputGain = gateGain;
 
