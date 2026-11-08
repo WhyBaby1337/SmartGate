@@ -1060,8 +1060,8 @@ void testTargetInfluenceAndAiOffBypass() {
             "AI OFF must preserve conventional gate behavior despite a mismatched stored target");
     require(std::abs(aiOffRms - aiOnZeroInfluenceRms) < 0.001f,
             "zero Target Influence must leave the conventional gate signal unchanged");
-    require(aiOnFullInfluenceRms < aiOffRms * 0.25f,
-            "full Target Influence must attenuate a strongly mismatched target signal");
+    require(aiOnFullInfluenceRms > aiOffRms * 0.99f,
+            "Target Influence must never attenuate a voice-like signal when its spectral profile mismatches");
 }
 
 void testRepeatedPrepareWithoutRelease() {
