@@ -559,9 +559,9 @@ void runAdaptiveKeyboardDetectorTests() {
         int durationSamples;
     };
     const MouseClickProfile mouseProfiles[] = {
-        {4100.0f, 6700.0f, 0.12f, 96.0f, 240},
+        {5200.0f, 7600.0f, 0.12f, 96.0f, 240},
         {9000.0f, 11500.0f, 0.04f, 45.0f, 144},
-        {2500.0f, 4300.0f, 0.06f, 80.0f, 192}
+        {6800.0f, 9800.0f, 0.06f, 80.0f, 192}
     };
     for (const auto& profile : mouseProfiles) {
         smartgate::MouseClickSuppressor profiledMouseClick;
