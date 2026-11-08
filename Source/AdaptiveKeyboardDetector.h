@@ -174,6 +174,8 @@ public:
             ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
         lowPassCoefficient_ = static_cast<float>(
             std::exp(-2.0 * 3.14159265358979323846 * 2400.0 / rate));
+        midLowPassCoefficient_ = static_cast<float>(
+            std::exp(-2.0 * 3.14159265358979323846 * 1200.0 / rate));
         releaseCoefficient_ = static_cast<float>(
             std::exp(-1.0 / (0.0025 * rate)));
         reset();
@@ -181,7 +183,10 @@ public:
 
     void reset() noexcept {
         lowPassState_ = 0.0;
+        midLowPassState_ = 0.0;
+        previousMidBand_ = 0.0f;
         previousHighBand_ = 0.0f;
+        midBandGain_ = 1.0f;
         highBandGain_ = 1.0f;
     }
 
@@ -192,18 +197,45 @@ public:
         const double sample = static_cast<double>(x);
         lowPassState_ = sample + static_cast<double>(lowPassCoefficient_)
             * (lowPassState_ - sample);
-        const float low = static_cast<float>(lowPassState_);
-        const float high = x - low;
+        midLowPassState_ = sample + static_cast<double>(midLowPassCoefficient_)
+            * (midLowPassState_ - sample);
+        const float low = static_cast<float>(midLowPassState_);
+        const float belowHigh = static_cast<float>(lowPassState_);
+        const float mid = belowHigh - low;
+        const float high = x - belowHigh;
 
         if (amount <= 0.0f) {
+            previousMidBand_ = mid;
             previousHighBand_ = high;
+            midBandGain_ = 1.0f;
             highBandGain_ = 1.0f;
             return x;
         }
 
+        const float midMagnitude = std::abs(mid);
+        const float midEdge = std::abs(mid - previousMidBand_);
+        previousMidBand_ = mid;
         const float magnitude = std::abs(high);
         const float edge = std::abs(high - previousHighBand_);
         previousHighBand_ = high;
+
+        // Only attenuate the 1.2-2.4 kHz band when aligned classifier context
+        // and a sample-local impulsive event agree. This band can carry the
+        // body of mechanical clicks, but also speech formants and consonants.
+        // Requiring both cues keeps the new path inactive on ordinary speech.
+        const float midContext = unit((frameContext - 0.30f) / 0.40f);
+        const float midLevel = unit((midMagnitude - 0.004f) / 0.030f);
+        const float midImpulsiveness = unit((midEdge - 0.045f) / 0.18f);
+        const float midTransient = midLevel * midImpulsiveness * midContext;
+        if (midTransient > 0.0f) {
+            const float perceptualAmount = std::sqrt(amount);
+            const float targetMidGain = 1.0f
+                - 0.45f * perceptualAmount * midTransient;
+            midBandGain_ = std::min(midBandGain_, targetMidGain);
+        } else {
+            midBandGain_ = 1.0f - releaseCoefficient_
+                * (1.0f - midBandGain_);
+        }
 
         // Require both a meaningful high-band event and a sharp edge.
         // Sustained sibilants have high-band energy but do not resemble an
@@ -235,10 +267,11 @@ public:
                 * (1.0f - highBandGain_);
         }
 
-        return low + high * unit(highBandGain_);
+        return low + mid * unit(midBandGain_) + high * unit(highBandGain_);
     }
 
     float getHighBandGain() const noexcept { return highBandGain_; }
+    float getMidBandGain() const noexcept { return midBandGain_; }
 
 private:
     static float unit(float value) noexcept {
@@ -246,9 +279,13 @@ private:
     }
 
     float lowPassCoefficient_ = 0.0f;
+    float midLowPassCoefficient_ = 0.0f;
     float releaseCoefficient_ = 0.0f;
     double lowPassState_ = 0.0;
+    double midLowPassState_ = 0.0;
+    float previousMidBand_ = 0.0f;
     float previousHighBand_ = 0.0f;
+    float midBandGain_ = 1.0f;
     float highBandGain_ = 1.0f;
 };
 
