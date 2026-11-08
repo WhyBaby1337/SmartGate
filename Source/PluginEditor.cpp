@@ -40,7 +40,8 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     }
 
     aiButton_.setTooltip("Enables Silero voice activity assistance and target-profile influence. Off keeps the conventional gate active.");
-    learnButton_.setTooltip("Learn your voice profile while speaking naturally. Keep this enabled briefly in a quiet environment.");
+    learnButton_.setTooltip("Start or pause voice-profile learning. Pausing preserves all collected frames.");
+    resetProfileButton_.setTooltip("Permanently clear the learned profile and start a fresh training session.");
     keyboardModeBox_.setTooltip("Choose the keyboard-noise profile that best matches your keyboard.");
     aiButton_.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     learnButton_.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
@@ -48,6 +49,10 @@ SmartGateAudioProcessorEditor::SmartGateAudioProcessorEditor(
     learnButton_.setColour(juce::ToggleButton::tickColourId, accent);
     addAndMakeVisible(aiButton_);
     addAndMakeVisible(learnButton_);
+    resetProfileButton_.setColour(juce::TextButton::buttonColourId, panelRaised);
+    resetProfileButton_.setColour(juce::TextButton::textColourOffId, warning);
+    addAndMakeVisible(resetProfileButton_);
+    resetProfileButton_.onClick = [this] { confirmProfileReset(); };
     aiAttachment_ = std::make_unique<ButtonAttachment>(
         processor_.parameters_, "aiEnabled", aiButton_);
     learnAttachment_ = std::make_unique<ButtonAttachment>(
@@ -266,8 +271,9 @@ void SmartGateAudioProcessorEditor::resized() {
     area.removeFromTop(66);
 
     auto modeArea = area.removeFromTop(58).reduced(12, 5);
-    aiButton_.setBounds(modeArea.removeFromLeft(145).reduced(4, 5));
-    learnButton_.setBounds(modeArea.removeFromLeft(170).reduced(4, 5));
+    aiButton_.setBounds(modeArea.removeFromLeft(125).reduced(4, 5));
+    learnButton_.setBounds(modeArea.removeFromLeft(155).reduced(4, 5));
+    resetProfileButton_.setBounds(modeArea.removeFromLeft(125).reduced(4, 5));
     auto keyboardArea = modeArea.removeFromLeft(205);
     keyboardModeLabel_.setBounds(keyboardArea.removeFromTop(15));
     keyboardModeBox_.setBounds(keyboardArea.removeFromTop(29));
@@ -316,6 +322,25 @@ void SmartGateAudioProcessorEditor::resized() {
             smartContent.getY(), smartCellWidth, smartContent.getHeight());
         layoutControl(i, cell);
     }
+}
+
+void SmartGateAudioProcessorEditor::confirmProfileReset() {
+    juce::AlertWindow::showAsync(
+        juce::MessageBoxOptions()
+            .withIconType(juce::MessageBoxIconType::WarningIcon)
+            .withTitle("Reset target profile?")
+            .withMessage("This will permanently clear the collected FRAMES. "
+                         "You can then start a completely new learning session.")
+            .withButton("RESET")
+            .withButton("CANCEL"),
+        [this](int result) {
+            if (result == 1) {
+                processor_.requestTargetProfileReset();
+                profileFileStatus_.setText("PROFILE RESET  ·  ready for new learning",
+                                           juce::dontSendNotification);
+                profileFileStatus_.setColour(juce::Label::textColourId, warning);
+            }
+        });
 }
 
 void SmartGateAudioProcessorEditor::chooseProfileExport() {
@@ -377,6 +402,9 @@ void SmartGateAudioProcessorEditor::timerCallback() {
     gateGain_ = juce::jlimit(0.0f, 1.0f,
         processor_.gateGainForUi_.load(std::memory_order_relaxed));
     learnedFrames_ = processor_.learnedFramesForUi_.load(std::memory_order_relaxed);
+    learnButton_.setButtonText(learnButton_.getToggleState()
+        ? "PAUSE LEARNING"
+        : (learnedFrames_ > 0 ? "RESUME LEARNING" : "START LEARNING"));
     vadReady_ = processor_.vadReadyForUi_.load(std::memory_order_relaxed);
     cpuLoadPercent_ = juce::jlimit(0.0f, 1000.0f,
         processor_.cpuLoadPercentForUi_.load(std::memory_order_relaxed));
