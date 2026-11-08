@@ -45,12 +45,12 @@ private:
     std::array<juce::String, 10> parameterNames_{
         "threshold", "attack", "release",
         "hold", "hysteresis", "range",
-        "targetAmount", "keyboardReduction", "adaptiveHold", "mouthNoiseReduction"
+        "targetAmount", "keyboardReduction", "adaptiveHold", "mouseClickReduction"
     };
     std::array<juce::String, 10> displayNames_{
         "THRESHOLD", "ATTACK", "RELEASE",
         "HOLD", "HYSTERESIS", "RANGE",
-        "TARGET INFLUENCE", "KEYBOARD REDUCTION", "ADAPTIVE HOLD", "MOUTH CLICK REDUCTION"
+        "TARGET INFLUENCE", "KEYBOARD REDUCTION", "ADAPTIVE HOLD", "MOUSE CLICK REDUCTION"
     };
 
     juce::Slider voiceLevelingSlider_;
@@ -61,6 +61,7 @@ private:
     juce::ToggleButton learnButton_{"START LEARNING"};
     juce::ToggleButton keyboardSuppressionButton_{"KEYS + MOUSE"};
     juce::ToggleButton mouthClickSuppressionButton_{"MOUTH CLICKS"};
+    juce::ToggleButton mouseClickSuppressionButton_{"MOUSE CLICKS"};
     juce::TextButton resetProfileButton_{"RESET PROFILE"};
     juce::ComboBox keyboardModeBox_;
     juce::Label keyboardModeLabel_;
@@ -72,6 +73,7 @@ private:
     std::unique_ptr<ButtonAttachment> learnAttachment_;
     std::unique_ptr<ButtonAttachment> keyboardSuppressionAttachment_;
     std::unique_ptr<ButtonAttachment> mouthClickSuppressionAttachment_;
+    std::unique_ptr<ButtonAttachment> mouseClickSuppressionAttachment_;
     std::unique_ptr<ComboAttachment> keyboardModeAttachment_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SmartGateAudioProcessorEditor)
