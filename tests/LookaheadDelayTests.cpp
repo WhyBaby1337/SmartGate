@@ -1,7 +1,7 @@
 #include "LookaheadDelay.h"
 
 #include <cmath>
-#include <cstdlib>
+#include <stdexcept>
 #include <iostream>
 
 namespace {
@@ -13,7 +13,7 @@ void require(bool condition, const char* message) {
 }
 }
 
-int main() {
+void runLookaheadDelayTests() {
     smartgate::LookaheadDelay delay;
     require(delay.prepare(48000.0, 30.0), "prepare succeeds");
     require(delay.latencySamples() == 1440, "30 ms at 48 kHz is 1440 samples");
