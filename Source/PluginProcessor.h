@@ -55,6 +55,7 @@ public:
     void requestTargetProfileReset() noexcept;
     float getGateGainForDiagnostics() const noexcept { return gateGainForUi_.load(std::memory_order_relaxed); }
     float getGateDetectorLevelForDiagnostics() const noexcept { return gateDetectorLevelForUi_.load(std::memory_order_relaxed); }
+    float getGateOpeningThresholdForDiagnostics() const noexcept { return gateOpeningThresholdForUi_.load(std::memory_order_relaxed); }
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -100,6 +101,7 @@ private:
     std::atomic<float> outputPeakDbForUi_{-100.0f};
     std::atomic<float> gateGainForUi_{0.0f};
     std::atomic<float> gateDetectorLevelForUi_{0.0f};
+    std::atomic<float> gateOpeningThresholdForUi_{0.0f};
     std::atomic<float> cpuLoadPercentForUi_{0.0f};
     std::atomic<float> cpuPeakPercentForUi_{0.0f};
     float cpuLoadAverage_ = 0.0f;
