@@ -222,7 +222,8 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     gateEnvelope_.setTimes(*parameters_.getRawParameterValue("attack"),
                            *parameters_.getRawParameterValue("release"));
     gateEnvelope_.setHoldTime(*parameters_.getRawParameterValue("hold"));
-    gateEnvelope_.setAdaptiveHoldAmount(*parameters_.getRawParameterValue("adaptiveHold"));
+    const float baseAdaptiveHold = juce::jlimit(0.0f, 1.0f,
+        parameters_.getRawParameterValue("adaptiveHold")->load(std::memory_order_relaxed));
     gateEnvelope_.setHysteresisDb(*parameters_.getRawParameterValue("hysteresis"));
     gateEnvelope_.setRangeDb(*parameters_.getRawParameterValue("range"));
 
@@ -437,9 +438,18 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         targetConfidenceSmoothed_ = targetConfidenceTarget_
             + targetConfidenceSmoothingCoefficient_
                 * (targetConfidenceSmoothed_ - targetConfidenceTarget_);
-        const float targetGain = aiEnabled
-            ? (1.0f - targetAmount) + targetAmount * targetConfidenceSmoothed_
-            : 1.0f;
+
+        // A spectral target profile is not a phoneme-complete speech model.
+        // A quiet /s/, /sh/ or /ch/ can legitimately differ from the learned
+        // vowel-heavy profile, so Target Influence must never attenuate audio.
+        // Use a positive-only match assist to extend adaptive phrase hold;
+        // Silero remains the independent speech-probability assist for opening.
+        const float targetHoldAssist = aiEnabled && targetProfile_.isReady()
+            ? targetAmount * juce::jlimit(0.0f, 1.0f, targetConfidenceSmoothed_)
+            : 0.0f;
+        const float effectiveAdaptiveHold = baseAdaptiveHold
+            + (1.0f - baseAdaptiveHold) * targetHoldAssist;
+        gateEnvelope_.setAdaptiveHoldAmount(effectiveAdaptiveHold);
         // Silero is an assist to the conventional level detector, not a hard
         // gate override. A confident speech result gently lifts the detector
         // above threshold; silence/no result leaves classic gate behavior intact.
@@ -465,7 +475,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float keyboardProcessedRight = right != nullptr
             ? keyboardSuppressorRight_.process(rightSample, keyboardReduction)
             : keyboardProcessedLeft;
-        const float outputGain = gateGain * targetGain;
+        const float outputGain = gateGain;
 
         // Mouth clicks use a separate conservative high-band transient stage.
         const float mouthProcessedLeft = mouthClickSuppressorLeft_.process(
