@@ -775,6 +775,74 @@ void testInvalidAndLegacyStatesClearProfile() {
             "legacy state must serialize an explicit empty profile");
 }
 
+void testStandaloneTargetProfileExportImport() {
+    SmartGateAudioProcessor source;
+    juce::MemoryBlock fixtureData;
+    auto fixture = saveXml(source, fixtureData);
+    addValidProfile(*fixture, 41);
+    auto* sourceProfile = profile(*fixture);
+    sourceProfile->setAttribute("mean0", -1.35);
+    sourceProfile->setAttribute("m2_0", 0.125);
+    juce::MemoryBlock encoded;
+    encode(source, *fixture, encoded);
+    source.setStateInformation(encoded.getData(), static_cast<int>(encoded.getSize()));
+
+    const auto file = juce::File::getSpecialLocation(juce::File::tempDirectory)
+        .getChildFile("SmartGate-profile-export-import-test.sgprofile");
+    file.deleteFile();
+    require(source.exportTargetProfile(file),
+            "a valid learned target profile must export to a standalone file");
+    require(file.existsAsFile() && file.getSize() > 0,
+            "profile export must create a non-empty backup file");
+
+    auto exportedXml = juce::XmlDocument::parse(file);
+    require(exportedXml != nullptr
+                && exportedXml->hasTagName("SMARTGATE_TARGET_PROFILE")
+                && exportedXml->getIntAttribute("version", -1) == 1,
+            "standalone profile must use the documented versioned root format");
+    require(exportedXml->getIntAttribute("count", -1) == 41,
+            "standalone profile must preserve the learned frame count");
+
+    SmartGateAudioProcessor restored;
+    require(restored.importTargetProfile(file),
+            "a valid standalone profile must import successfully");
+    juce::MemoryBlock restoredData;
+    auto restoredXml = saveXml(restored, restoredData);
+    auto* restoredProfile = profile(*restoredXml);
+    require(restoredProfile != nullptr
+                && restoredProfile->getIntAttribute("count", -1) == 41,
+            "imported profile must be available to the plugin state saver");
+    require(std::abs(restoredProfile->getDoubleAttribute("mean0") + 1.35) < 1.0e-12
+                && std::abs(restoredProfile->getDoubleAttribute("m2_0") - 0.125) < 1.0e-12,
+            "standalone profile import must preserve learned statistics exactly");
+
+    const auto invalidFile = file.getSiblingFile("SmartGate-invalid-profile-test.sgprofile");
+    require(invalidFile.replaceWithText(
+                "<SMARTGATE_TARGET_PROFILE version=\"99\" count=\"41\"/>"),
+            "invalid profile fixture must be writable");
+    require(!restored.importTargetProfile(invalidFile),
+            "unsupported standalone profile versions must be rejected");
+    juce::MemoryBlock afterInvalidData;
+    auto afterInvalidXml = saveXml(restored, afterInvalidData);
+    auto* afterInvalidProfile = profile(*afterInvalidXml);
+    require(afterInvalidProfile != nullptr
+                && afterInvalidProfile->getIntAttribute("count", -1) == 41,
+            "rejected profile import must not overwrite the existing learned profile");
+    file.deleteFile();
+    invalidFile.deleteFile();
+}
+
+void testStandaloneProfileExportRejectsEmptyProfile() {
+    SmartGateAudioProcessor processor;
+    const auto file = juce::File::getSpecialLocation(juce::File::tempDirectory)
+        .getChildFile("SmartGate-empty-profile-test.sgprofile");
+    file.deleteFile();
+    require(!processor.exportTargetProfile(file),
+            "an empty target profile must not be exported as a valid backup");
+    require(!file.existsAsFile(),
+            "failed empty-profile export must not create a misleading backup file");
+}
+
 void testProcessorGateOpensClosesAndReopens() {
     SmartGateAudioProcessor processor;
     juce::MidiBuffer midi;
@@ -993,6 +1061,8 @@ int main() {
     testPreparedRestoreCanBeSavedBeforeAudioCallback();
     testLatestRestoreWinsBeforeAudioCallback();
     testInvalidAndLegacyStatesClearProfile();
+    testStandaloneTargetProfileExportImport();
+    testStandaloneProfileExportRejectsEmptyProfile();
     testDuplicateParameterIdsAreRejected();
     testMalformedAndNonFiniteParameterValuesAreRejected();
     testMalformedAndForeignRootStatesAreIgnored();
