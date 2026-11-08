@@ -539,6 +539,29 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(minimumKeyboardSibilantGain > 0.95f,
                     "Keyboard suppression must preserve sustained sibilant speech");
 
+    // Mid-band attenuation must react to a classifier-aligned mechanical
+    // impulse, but remain effectively transparent for a sustained speech-like
+    // tone in the same band (a conservative guard for formants and consonants).
+    smartgate::KeyboardTransientSuppressor midBandClick;
+    midBandClick.prepare(48000.0);
+    (void) midBandClick.process(0.0f, 0.25f, 1.0f);
+    (void) midBandClick.process(0.20f, 0.25f, 1.0f);
+    requireKeyboard(midBandClick.getMidBandGain() < 0.90f,
+                    "Aligned mechanical impulses should attenuate the mid band");
+
+    smartgate::KeyboardTransientSuppressor midBandSpeech;
+    midBandSpeech.prepare(48000.0);
+    float minimumMidSpeechGain = 1.0f;
+    for (int i = 0; i < 12000; ++i) {
+        const float speechBand = 0.08f * std::sin(
+            2.0f * 3.14159265f * 1800.0f * static_cast<float>(i) / 48000.0f);
+        (void) midBandSpeech.process(speechBand, 0.25f, 1.0f);
+        minimumMidSpeechGain = std::min(minimumMidSpeechGain,
+            midBandSpeech.getMidBandGain());
+    }
+    requireKeyboard(minimumMidSpeechGain > 0.98f,
+                    "Sustained speech-like mid-band energy must not be attenuated");
+
     // Zero reduction is bit-transparent even though the analysis filter stays warm.
     smartgate::KeyboardTransientSuppressor keyboardBypass;
     keyboardBypass.prepare(48000.0);
