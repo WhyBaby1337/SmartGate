@@ -155,6 +155,10 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     learnedFramesForUi_.store(initialProfile.count, std::memory_order_relaxed);
 }
 
+void SmartGateAudioProcessor::requestTargetProfileReset() noexcept {
+    targetProfileResetRequested_.store(true, std::memory_order_release);
+}
+
 void SmartGateAudioProcessor::releaseResources() {
 #if defined(SMARTGATE_HAS_SILERO)
     // Host calls release after processing has stopped; joining here is safe.
@@ -265,6 +269,19 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         learnedFramesForUi_.store(restored.count, std::memory_order_relaxed);
         lastAppliedTargetProfileVersion_.store(restoredVersion, std::memory_order_release);
         targetConfidenceTarget_ = targetConfidenceSmoothed_ = 1.0f;
+    }
+
+    // An explicit UI reset is the only operation that discards the learned
+    // profile. Apply it on the audio thread to keep TargetProfile single-writer.
+    if (targetProfileResetRequested_.exchange(false, std::memory_order_acq_rel)) {
+        targetProfile_.clear();
+        const auto emptyProfile = targetProfile_.makeSnapshot();
+        publishedTargetProfile_.publish(emptyProfile);
+        learnedFramesForUi_.store(emptyProfile.count, std::memory_order_relaxed);
+        featureExtractor_.reset();
+        featureFramePosition_ = 0;
+        targetConfidenceTarget_ = 1.0f;
+        targetConfidenceSmoothed_ = 1.0f;
     }
 
     // A requested Learn Target transition is remembered while AI is disabled.
