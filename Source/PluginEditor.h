@@ -53,6 +53,10 @@ private:
         "TARGET INFLUENCE", "KEYBOARD REDUCTION", "ADAPTIVE HOLD", "MOUTH CLICK REDUCTION"
     };
 
+    juce::Slider voiceLevelingSlider_;
+    juce::Label voiceLevelingLabel_;
+    std::unique_ptr<SliderAttachment> voiceLevelingAttachment_;
+
     juce::ToggleButton aiButton_{"AI ENGINE"};
     juce::ToggleButton learnButton_{"START LEARNING"};
     juce::TextButton resetProfileButton_{"RESET PROFILE"};
