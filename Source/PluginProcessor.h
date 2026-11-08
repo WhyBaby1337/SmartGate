@@ -72,6 +72,7 @@ private:
     juce::AudioProcessorValueTreeState parameters_;
     static constexpr double lookaheadMilliseconds_ = 30.0;
     smartgate::LookaheadDelay lookaheadDelay_;
+    smartgate::ScalarLookaheadDelay keyboardConfidenceDelay_;
     smartgate::VoiceLeveler voiceLeveler_;
     smartgate::GateEnvelope gateEnvelope_;
     smartgate::FeatureExtractor featureExtractor_;
