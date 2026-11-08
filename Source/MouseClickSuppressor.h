@@ -55,7 +55,7 @@ public:
         // sample edges too, but its magnitude envelope quickly becomes
         // stationary. Use a slow envelope as a novelty reference so random
         // sibilant peaks do not continuously retrigger attenuation.
-        const float novelty = unit((magnitude - 4.5f * highBandEnvelope_) / 0.040f);
+        const float novelty = unit((magnitude - 3.0f * highBandEnvelope_) / 0.030f);
         highBandEnvelope_ = magnitude + envelopeCoefficient_
             * (highBandEnvelope_ - magnitude);
 
@@ -63,10 +63,10 @@ public:
         // suppression by itself. A local, sample-accurate edge is mandatory.
         // This catches quieter switch clicks over speech without treating a
         // sustained /s/, /sh/ or /ch/ as a mouse event.
-        const float levelFloor = 0.0030f - 0.0010f * context;
-        const float levelSpan = 0.027f - 0.006f * context;
-        const float edgeFloor = 0.055f - 0.012f * context;
-        const float edgeSpan = 0.15f - 0.020f * context;
+        const float levelFloor = 0.0020f - 0.0010f * context;
+        const float levelSpan = 0.022f - 0.006f * context;
+        const float edgeFloor = 0.043f - 0.012f * context;
+        const float edgeSpan = 0.13f - 0.020f * context;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
         const float confidence = level * impulsiveness * novelty;

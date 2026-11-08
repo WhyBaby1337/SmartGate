@@ -548,6 +548,52 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(quietMouseOutputEnergy < quietMouseInputEnergy * 0.97f,
                     "Mouse stage must detect and reduce a quieter switch click over speech");
 
+    // Exercise different switch-ring profiles rather than tuning only for one
+    // convenient resonance. These are synthetic stress cases, not claims about
+    // the exact acoustic signature of any particular mouse model.
+    struct MouseClickProfile {
+        float firstFrequency;
+        float secondFrequency;
+        float amplitude;
+        float decaySamples;
+        int durationSamples;
+    };
+    const MouseClickProfile mouseProfiles[] = {
+        {4100.0f, 6700.0f, 0.12f, 96.0f, 240},
+        {9000.0f, 11500.0f, 0.04f, 45.0f, 144},
+        {2500.0f, 4300.0f, 0.06f, 80.0f, 192}
+    };
+    for (const auto& profile : mouseProfiles) {
+        smartgate::MouseClickSuppressor profiledMouseClick;
+        profiledMouseClick.prepare(48000.0);
+        float inputEnergy = 0.0f;
+        float outputEnergy = 0.0f;
+        for (int i = 0; i < 2400; ++i) {
+            const float voice = 0.12f * std::sin(2.0f * 3.14159265f
+                * 180.0f * static_cast<float>(i) / 48000.0f);
+            float click = 0.0f;
+            if (i >= 600 && i < 600 + profile.durationSamples) {
+                const float age = static_cast<float>(i - 600);
+                const float time = age / 48000.0f;
+                const float envelope = std::exp(-age / profile.decaySamples);
+                click = profile.amplitude * envelope * (
+                    std::sin(2.0f * 3.14159265f * profile.firstFrequency
+                             * time + 1.5707963f)
+                    + 0.4f * std::sin(2.0f * 3.14159265f
+                             * profile.secondFrequency * time + 1.5707963f));
+            }
+            const float output = profiledMouseClick.process(
+                voice + click, 1.0f, 0.65f);
+            if (i >= 600 && i < 600 + profile.durationSamples) {
+                inputEnergy += click * click;
+                const float outputClick = output - voice;
+                outputEnergy += outputClick * outputClick;
+            }
+        }
+        requireKeyboard(outputEnergy < inputEnergy * 0.90f,
+                        "Mouse detector must reduce varied resonant click profiles over speech");
+    }
+
     smartgate::MouseClickSuppressor mouseSibilantGuard;
     mouseSibilantGuard.prepare(48000.0);
     float minimumMouseSibilantGain = 1.0f;
