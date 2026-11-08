@@ -688,8 +688,10 @@ bool SmartGateAudioProcessor::importTargetProfile(const juce::File& file) {
         || xml->getIntAttribute("version", -1) != 1)
         return false;
 
-    // Reject unexpected children and duplicate/ambiguous profile payloads.
-    if (xml->getNumChildElements() != 0)
+    // Version 1 has exactly two metadata attributes plus five mean/M2 pairs.
+    // Reject unknown fields and nested content rather than partially importing
+    // a file produced by an incompatible or malformed format.
+    if (xml->getNumAttributes() != 12 || xml->getNumChildElements() != 0)
         return false;
 
     const auto count = xml->getIntAttribute("count", -1);
