@@ -333,7 +333,7 @@ void testDuplicateTargetProfilesAreRejected() {
     juce::MemoryBlock saved;
     auto savedXml = saveXml(restored, saved);
     auto* savedProfile = profile(*savedXml);
-    require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 37,
+    require(savedProfile != nullptr && savedProfile->getIntAttribute("count", -1) == 0,
             "duplicate target profile metadata must be rejected and cleared");
     auto* restoredThreshold = parameter(*savedXml, "threshold");
     require(restoredThreshold != nullptr
