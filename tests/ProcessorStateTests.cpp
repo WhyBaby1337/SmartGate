@@ -965,14 +965,19 @@ void testProcessorGateOpensClosesAndReopens() {
 
     (void) processSilence(static_cast<int>(sampleRate * 1.0));
     std::cerr << "Gate after silence: gain=" << processor.getGateGainForDiagnostics()
-              << ", detector=" << processor.getGateDetectorLevelForDiagnostics() << '\\n';
+              << ", detector=" << processor.getGateDetectorLevelForDiagnostics()
+              << ", openingThreshold=" << processor.getGateOpeningThresholdForDiagnostics() << '\\n';
+    require(std::abs(processor.getGateOpeningThresholdForDiagnostics()
+                     - std::pow(10.0f, -36.0f / 20.0f)) < 1.0e-5f,
+            "default gate opening threshold must match the configured -36 dB value");
     // Probe with a non-zero signal below the opening threshold. Measuring
     // silence alone cannot prove that the gate closed because zero input
     // produces zero output even while the gate is fully open.
     const float closedPeak = processTone(0.01f, static_cast<int>(sampleRate * 0.05));
     std::cerr << "Gate close diagnostic: peak=" << closedPeak
               << ", gain=" << processor.getGateGainForDiagnostics()
-              << ", detector=" << processor.getGateDetectorLevelForDiagnostics() << '\\n';
+              << ", detector=" << processor.getGateDetectorLevelForDiagnostics()
+              << ", openingThreshold=" << processor.getGateOpeningThresholdForDiagnostics() << '\\n';
     require(closedPeak < 0.001f,
             "gate must attenuate a below-threshold probe after the hold/release interval expires");
 
