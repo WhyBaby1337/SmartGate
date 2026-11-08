@@ -39,18 +39,18 @@ private:
     float cpuPeakPercent_ = 0.0f;
     std::uint64_t learnedFrames_ = 0;
     bool vadReady_ = false;
-    std::array<juce::Slider, 9> sliders_;
-    std::array<juce::Label, 9> labels_;
-    std::array<std::unique_ptr<SliderAttachment>, 9> sliderAttachments_;
+    std::array<juce::Slider, 10> sliders_;
+    std::array<juce::Label, 10> labels_;
+    std::array<std::unique_ptr<SliderAttachment>, 10> sliderAttachments_;
     std::array<juce::String, 9> parameterNames_{
         "threshold", "attack", "release",
         "hold", "hysteresis", "range",
-        "targetAmount", "keyboardReduction", "adaptiveHold"
+        "targetAmount", "keyboardReduction", "adaptiveHold", "mouthNoiseReduction"
     };
     std::array<juce::String, 9> displayNames_{
         "THRESHOLD", "ATTACK", "RELEASE",
         "HOLD", "HYSTERESIS", "RANGE",
-        "TARGET INFLUENCE", "KEYBOARD REDUCTION", "ADAPTIVE HOLD"
+        "TARGET INFLUENCE", "KEYBOARD REDUCTION", "ADAPTIVE HOLD", "MOUTH CLICK REDUCTION"
     };
 
     juce::ToggleButton aiButton_{"AI ENGINE"};
