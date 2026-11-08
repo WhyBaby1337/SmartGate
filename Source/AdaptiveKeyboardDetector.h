@@ -87,7 +87,11 @@ public:
             case Mode::Universal: target = 0.5f * (mechanical + membrane); break;
         }
 
-        const float smoothing = target > confidence_ ? 0.45f : 0.08f;
+        // In near-silence there is no speech transient to protect, so clear stale
+        // click confidence faster. Keep the conservative release during audible
+        // input to avoid pumping or clipping the tail of speech.
+        const float releaseSmoothing = rms < 0.002f ? 0.18f : 0.08f;
+        const float smoothing = target > confidence_ ? 0.45f : releaseSmoothing;
         confidence_ += smoothing * (target - confidence_);
         if (hasReference_)
             referenceRms_ = 0.95f * referenceRms_ + 0.05f * rms;
