@@ -65,8 +65,12 @@ public:
         // sustained /s/, /sh/ or /ch/ as a mouse event.
         const float levelFloor = 0.0020f - 0.0010f * context;
         const float levelSpan = 0.022f - 0.006f * context;
-        const float edgeFloor = 0.043f - 0.012f * context;
-        const float edgeSpan = 0.13f - 0.020f * context;
+        // Quiet, short switch rings can have a clear high-band onset but
+        // a smaller sample-to-sample edge than full-scale clicks. Keep the
+        // threshold contextual and local so steady sibilants/noise still
+        // cannot retrigger without a fresh transient peak.
+        const float edgeFloor = 0.020f - 0.006f * context;
+        const float edgeSpan = 0.075f - 0.015f * context;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
         const float confidence = level * impulsiveness * novelty;
