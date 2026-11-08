@@ -98,7 +98,8 @@ jobs:
             param(
               [Parameter(Mandatory = $true)][string]$Uri,
               [Parameter(Mandatory = $true)][string]$Destination,
-              [int]$MaxAttempts = 5
+              [int]$MaxAttempts = 5,
+              [hashtable]$Headers = @{}
             )
 
             for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
@@ -107,7 +108,11 @@ jobs:
                   Remove-Item -LiteralPath $Destination -Force
                 }
                 Write-Host "Downloading $Uri (attempt $attempt/$MaxAttempts)"
-                Invoke-WebRequest -Uri $Uri -OutFile $Destination -TimeoutSec 180
+                if ($Headers.Count -gt 0) {
+                  Invoke-WebRequest -Uri $Uri -Headers $Headers -OutFile $Destination -TimeoutSec 180
+                } else {
+                  Invoke-WebRequest -Uri $Uri -OutFile $Destination -TimeoutSec 180
+                }
                 if (-not (Test-Path -LiteralPath $Destination -PathType Leaf) -or
                     (Get-Item -LiteralPath $Destination).Length -le 0) {
                   throw "Download produced a missing or empty file."
@@ -118,7 +123,7 @@ jobs:
                 if ($attempt -eq $MaxAttempts) {
                   throw "Download failed after $MaxAttempts attempts: $Uri. Last error: $($_.Exception.Message)"
                 }
-                $delay = [Math]::Min(60, 10 * [Math]::Pow(2, $attempt - 1))
+                $delay = [Math]::Min(30, 10 * [Math]::Pow(2, $attempt - 1))
                 Write-Warning "Download attempt $attempt failed: $($_.Exception.Message). Retrying in $delay seconds."
                 Start-Sleep -Seconds $delay
               }
@@ -127,7 +132,22 @@ jobs:
 
           $archive = Join-Path $env:RUNNER_TEMP "pluginval_Windows.zip"
           $tools = Join-Path $env:RUNNER_TEMP "pluginval"
-          Get-DownloadWithRetry -Uri "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip" -Destination $archive
+          $pluginvalSha256 = "c08e61ce3b96db41636f8ec7e76f4c7e2c13ebdac7fa1b5a1f52b4f32ec715ab"
+          try {
+            Get-DownloadWithRetry -Uri "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip" -Destination $archive -MaxAttempts 2
+          }
+          catch {
+            Write-Warning "Primary pluginval release URL failed; trying the GitHub release asset API endpoint."
+            Get-DownloadWithRetry -Uri "https://api.github.com/repos/Tracktion/pluginval/releases/assets/210999198" -Destination $archive -MaxAttempts 2 -Headers @{
+              Accept = "application/octet-stream"
+              "X-GitHub-Api-Version" = "2022-11-28"
+            }
+          }
+
+          $actualPluginvalSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualPluginvalSha256 -ne $pluginvalSha256) {
+            throw "pluginval v1.0.4 SHA256 mismatch: expected $pluginvalSha256, got $actualPluginvalSha256"
+          }
           Expand-Archive -LiteralPath $archive -DestinationPath $tools -Force
 
           $validator = Get-ChildItem -LiteralPath $tools -Filter "pluginval.exe" -File -Recurse | Select-Object -First 1
