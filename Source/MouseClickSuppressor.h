@@ -25,7 +25,6 @@ public:
     void reset() noexcept {
         lowPassState_ = 0.0;
         previousHighBand_ = 0.0f;
-        previousHighMagnitude_ = 0.0f;
         highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
         holdCounter_ = 0;
@@ -54,9 +53,7 @@ public:
 
         const float magnitude = std::abs(high);
         const float edge = std::abs(high - previousHighBand_);
-        const float magnitudeRise = std::max(0.0f, magnitude - previousHighMagnitude_);
         previousHighBand_ = high;
-        previousHighMagnitude_ = magnitude;
         lastEdge_ = edge;
 
         // A mouse switch produces a brief peak above the recent high-band
@@ -79,16 +76,7 @@ public:
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
 
-        // A mechanical switch often begins at a large resonant peak rather
-        // than ramping up from zero like a sustained speech waveform. Detect
-        // this one-sided magnitude onset separately from the signed edge.
-        // Novelty rejects stationary noise; the onset floor rejects gradual
-        // first-quarter-cycle growth in sustained sibilant tones.
-        const float onsetFloor = 0.012f - 0.002f * context;
-        const float onsetSpan = 0.025f;
-        const float onsetImpulsiveness = unit((magnitudeRise - onsetFloor) / onsetSpan);
-        const float transientEvidence = std::max(impulsiveness, onsetImpulsiveness);
-        const float confidence = level * transientEvidence * novelty;
+        const float confidence = level * impulsiveness * novelty;
         lastLevel_ = level;
         lastImpulsiveness_ = impulsiveness;
         lastNovelty_ = novelty;
@@ -125,7 +113,6 @@ private:
     float envelopeCoefficient_ = 0.0f;
     double lowPassState_ = 0.0;
     float previousHighBand_ = 0.0f;
-    float previousHighMagnitude_ = 0.0f;
     float highBandEnvelope_ = 0.0f;
     float highBandGain_ = 1.0f;
     float lastEdge_ = 0.0f;
