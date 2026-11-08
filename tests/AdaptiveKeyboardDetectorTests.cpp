@@ -565,12 +565,16 @@ void runAdaptiveKeyboardDetectorTests() {
     };
     for (const auto& profile : mouseProfiles) {
         smartgate::MouseClickSuppressor profiledMouseClick;
+        smartgate::MouseClickSuppressor voiceOnlyReference;
         profiledMouseClick.prepare(48000.0);
+        voiceOnlyReference.prepare(48000.0);
         float inputEnergy = 0.0f;
         float outputEnergy = 0.0f;
         for (int i = 0; i < 2400; ++i) {
             const float voice = 0.12f * std::sin(2.0f * 3.14159265f
                 * 180.0f * static_cast<float>(i) / 48000.0f);
+            const float voiceOnlyOutput = voiceOnlyReference.process(
+                voice, 1.0f, 0.65f);
             float click = 0.0f;
             if (i >= 600 && i < 600 + profile.durationSamples) {
                 const float age = static_cast<float>(i - 600);
@@ -586,7 +590,7 @@ void runAdaptiveKeyboardDetectorTests() {
                 voice + click, 1.0f, 0.65f);
             if (i >= 600 && i < 600 + profile.durationSamples) {
                 inputEnergy += click * click;
-                const float outputClick = output - voice;
+                const float outputClick = output - voiceOnlyOutput;
                 outputEnergy += outputClick * outputClick;
             }
         }
