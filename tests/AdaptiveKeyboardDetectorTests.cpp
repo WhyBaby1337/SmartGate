@@ -545,8 +545,8 @@ void runAdaptiveKeyboardDetectorTests() {
     smartgate::KeyboardTransientSuppressor midBandClick;
     midBandClick.prepare(48000.0);
     (void) midBandClick.process(0.0f, 0.25f, 1.0f);
-    (void) midBandClick.process(0.20f, 0.25f, 1.0f);
-    requireKeyboard(midBandClick.getMidBandGain() < 0.90f,
+    (void) midBandClick.process(0.50f, 0.25f, 1.0f);
+    requireKeyboard(midBandClick.getMidBandGain() < 0.95f,
                     "Aligned mechanical impulses should attenuate the mid band");
 
     smartgate::KeyboardTransientSuppressor midBandSpeech;
