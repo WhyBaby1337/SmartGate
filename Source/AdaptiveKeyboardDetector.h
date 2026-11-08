@@ -163,4 +163,76 @@ private:
     float gain_ = 1.0f;
 };
 
+ 
+// Sample-accurate keyboard/mouse transient attenuation. Unlike a broadband
+// output duck, it only reduces the high-frequency residual around sharp
+// impulses, so speech fundamentals and most formant energy remain untouched.
+class KeyboardTransientSuppressor {
+public:
+    void prepare(double sampleRate) noexcept {
+        const double rate = std::isfinite(sampleRate)
+            ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
+        lowPassCoefficient_ = static_cast<float>(
+            std::exp(-2.0 * 3.14159265358979323846 * 2400.0 / rate));
+        releaseCoefficient_ = static_cast<float>(
+            std::exp(-1.0 / (0.0025 * rate)));
+        reset();
+    }
+
+    void reset() noexcept {
+        lowPassState_ = 0.0;
+        previousHighBand_ = 0.0f;
+        highBandGain_ = 1.0f;
+    }
+
+    float process(float input, float reduction) noexcept {
+        const float x = std::isfinite(input) ? input : 0.0f;
+        const float amount = unit(reduction);
+        const double sample = static_cast<double>(x);
+        lowPassState_ = sample + static_cast<double>(lowPassCoefficient_)
+            * (lowPassState_ - sample);
+        const float low = static_cast<float>(lowPassState_);
+        const float high = x - low;
+
+        if (amount <= 0.0f) {
+            previousHighBand_ = high;
+            highBandGain_ = 1.0f;
+            return x;
+        }
+
+        const float magnitude = std::abs(high);
+        const float edge = std::abs(high - previousHighBand_);
+        previousHighBand_ = high;
+
+        // Require both a meaningful high-band event and a sharp edge.
+        // Sustained sibilants have high-band energy but do not resemble an
+        // isolated impulse; low-frequency speech is outside this path.
+        const float level = unit((magnitude - 0.012f) / 0.080f);
+        const float impulsiveness = unit((edge - 0.075f) / 0.24f);
+        const float confidence = level * impulsiveness;
+        if (confidence > 0.0f) {
+            const float targetGain = 1.0f - 0.82f * amount * confidence;
+            highBandGain_ = std::min(highBandGain_, targetGain);
+        } else {
+            highBandGain_ = 1.0f - releaseCoefficient_
+                * (1.0f - highBandGain_);
+        }
+
+        return low + high * unit(highBandGain_);
+    }
+
+    float getHighBandGain() const noexcept { return highBandGain_; }
+
+private:
+    static float unit(float value) noexcept {
+        return std::clamp(std::isfinite(value) ? value : 0.0f, 0.0f, 1.0f);
+    }
+
+    float lowPassCoefficient_ = 0.0f;
+    float releaseCoefficient_ = 0.0f;
+    double lowPassState_ = 0.0;
+    float previousHighBand_ = 0.0f;
+    float highBandGain_ = 1.0f;
+};
+
 } // namespace smartgate
