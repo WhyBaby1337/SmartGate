@@ -575,11 +575,12 @@ void runAdaptiveKeyboardDetectorTests() {
         const float noise = (static_cast<float>(sibilantNoiseState & 0xffffu)
                              / 32767.5f - 1.0f) * 0.06f;
         (void) noisySibilantGuard.process(noise, 1.0f, 0.65f);
-        minimumNoisySibilantGain = std::min(minimumNoisySibilantGain,
-            noisySibilantGuard.getHighBandGain());
+        if (i >= 2400)
+            minimumNoisySibilantGain = std::min(minimumNoisySibilantGain,
+                noisySibilantGuard.getHighBandGain());
     }
-    requireKeyboard(minimumNoisySibilantGain > 0.90f,
-                    "Noise-like sustained sibilants must not be repeatedly attenuated as mouse clicks");
+    requireKeyboard(minimumNoisySibilantGain > 0.95f,
+                    "Steady-state noise-like sibilants must not be repeatedly attenuated as mouse clicks");
 
     smartgate::MouseClickSuppressor mouseBypass;
     mouseBypass.prepare(48000.0);

@@ -17,6 +17,7 @@ public:
         lowPassCoefficient_ = static_cast<float>(
             std::exp(-2.0 * 3.14159265358979323846 * 3200.0 / rate));
         releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.0025 * rate)));
+        envelopeCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.010 * rate)));
         holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0030 * rate)));
         reset();
     }
@@ -24,6 +25,7 @@ public:
     void reset() noexcept {
         lowPassState_ = 0.0;
         previousHighBand_ = 0.0f;
+        highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
         holdCounter_ = 0;
     }
@@ -48,6 +50,15 @@ public:
         const float edge = std::abs(high - previousHighBand_);
         previousHighBand_ = high;
 
+        // A mouse switch produces a brief peak above the recent high-band
+        // bed, followed by a decaying ring. Noise-like speech has many sharp
+        // sample edges too, but its magnitude envelope quickly becomes
+        // stationary. Use a slow envelope as a novelty reference so random
+        // sibilant peaks do not continuously retrigger attenuation.
+        const float novelty = unit((magnitude - 3.0f * highBandEnvelope_) / 0.040f);
+        highBandEnvelope_ = magnitude + envelopeCoefficient_
+            * (highBandEnvelope_ - magnitude);
+
         // Context lowers the trigger threshold modestly, but cannot trigger
         // suppression by itself. A local, sample-accurate edge is mandatory.
         // This catches quieter switch clicks over speech without treating a
@@ -58,7 +69,7 @@ public:
         const float edgeSpan = 0.15f - 0.020f * context;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
-        const float confidence = level * impulsiveness;
+        const float confidence = level * impulsiveness * novelty;
         if (confidence > 0.0f) {
             const float perceptualAmount = std::sqrt(amount);
             const float targetGain = 1.0f - 0.92f * perceptualAmount * confidence;
@@ -83,8 +94,10 @@ private:
 
     float lowPassCoefficient_ = 0.0f;
     float releaseCoefficient_ = 0.0f;
+    float envelopeCoefficient_ = 0.0f;
     double lowPassState_ = 0.0;
     float previousHighBand_ = 0.0f;
+    float highBandEnvelope_ = 0.0f;
     float highBandGain_ = 1.0f;
     int holdSamples_ = 1;
     int holdCounter_ = 0;
