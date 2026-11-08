@@ -423,4 +423,54 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(std::abs(stereoFoldDown.process(0.1f, 0.3f) - 0.3f) < 1.0e-6f,
                     "Reprepare must clear stereo channel history and select the first stronger channel");
 
+    // Keyboard/mouse suppression must not attenuate the entire voice signal.
+    // A broadband impulse is reduced in the high band while a low voice tone
+    // remains effectively unchanged.
+    smartgate::KeyboardTransientSuppressor keyboardClick;
+    keyboardClick.prepare(48000.0);
+    float clickInput = 0.0f;
+    float clickOutput = 0.0f;
+    float lowVoiceError = 0.0f;
+    for (int i = 0; i < 2400; ++i) {
+        const float voice = 0.14f * std::sin(2.0f * 3.14159265f * 180.0f
+                                             * static_cast<float>(i) / 48000.0f);
+        const float impulse = i == 600 ? 0.8f : 0.0f;
+        const float input = voice + impulse;
+        const float output = keyboardClick.process(input, 1.0f);
+        if (i == 600) {
+            clickInput = input;
+            clickOutput = output;
+        }
+        if (i > 1200)
+            lowVoiceError = std::max(lowVoiceError, std::abs(output - voice));
+    }
+    requireKeyboard(std::abs(clickOutput) < std::abs(clickInput) * 0.55f,
+                    "Keyboard/mouse impulse must be attenuated immediately");
+    requireKeyboard(lowVoiceError < 0.002f,
+                    "Keyboard transient suppression must preserve low-frequency voice");
+
+    // Sustained /s/ and /sh/-like high-frequency energy is speech, not a click.
+    smartgate::KeyboardTransientSuppressor sibilantKeyboardGuard;
+    sibilantKeyboardGuard.prepare(48000.0);
+    float minimumKeyboardSibilantGain = 1.0f;
+    for (int i = 0; i < 12000; ++i) {
+        const float sibilant = 0.08f * std::sin(2.0f * 3.14159265f * 6200.0f
+                                                * static_cast<float>(i) / 48000.0f);
+        sibilantKeyboardGuard.process(sibilant, 1.0f);
+        minimumKeyboardSibilantGain = std::min(minimumKeyboardSibilantGain,
+            sibilantKeyboardGuard.getHighBandGain());
+    }
+    requireKeyboard(minimumKeyboardSibilantGain > 0.95f,
+                    "Keyboard suppression must preserve sustained sibilant speech");
+
+    // Zero reduction is bit-transparent even though the analysis filter stays warm.
+    smartgate::KeyboardTransientSuppressor keyboardBypass;
+    keyboardBypass.prepare(48000.0);
+    for (int i = 0; i < 256; ++i) {
+        const float sample = 0.2f * std::sin(2.0f * 3.14159265f * 4200.0f
+                                             * static_cast<float>(i) / 48000.0f);
+        requireKeyboard(keyboardBypass.process(sample, 0.0f) == sample,
+                        "Zero keyboard reduction must remain bit-transparent");
+    }
+
 }
