@@ -99,8 +99,10 @@ public:
         const float onsetConfidence = previousOnsetConfidence_ * onsetDrop;
         previousOnsetConfidence_ = onsetCandidate ? level * onsetNovelty : 0.0f;
 
-        const float confidence = std::max(level * impulsiveness * novelty,
-                                          onsetConfidence);
+        // The broad edge/novelty score is intentionally diagnostic only: steady
+        // noise-like sibilants can produce repeated random peaks. Trigger the
+        // mouse stage only from the qualified peak-then-drop signature above.
+        const float confidence = onsetConfidence;
         lastLevel_ = level;
         lastImpulsiveness_ = impulsiveness;
         lastNovelty_ = novelty;
