@@ -1,5 +1,6 @@
 #include "AdaptiveKeyboardDetector.h"
 #include "MouthClickSuppressor.h"
+#include "MouseClickSuppressor.h"
 #include "AudioFeatures.h"
 #include "TargetProfile.h"
 #include "LookaheadDelay.h"

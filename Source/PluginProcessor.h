@@ -5,6 +5,7 @@
 #include "AudioFeatures.h"
 #include "GateEnvelope.h"
 #include "MouthClickSuppressor.h"
+#include "MouseClickSuppressor.h"
 #include "LookaheadDelay.h"
 #include "TargetProfile.h"
 #include "VoiceLeveler.h"
@@ -94,8 +95,8 @@ private:
     float keyboardConfidence_ = 0.0f;
     smartgate::KeyboardTransientSuppressor keyboardSuppressorLeft_;
     smartgate::KeyboardTransientSuppressor keyboardSuppressorRight_;
-    smartgate::MouthClickSuppressor mouseClickSuppressorLeft_;
-    smartgate::MouthClickSuppressor mouseClickSuppressorRight_;
+    smartgate::MouseClickSuppressor mouseClickSuppressorLeft_;
+    smartgate::MouseClickSuppressor mouseClickSuppressorRight_;
     smartgate::MouthClickSuppressor mouthClickSuppressorLeft_;
     smartgate::MouthClickSuppressor mouthClickSuppressorRight_;
     bool wasLearningTarget_ = false;

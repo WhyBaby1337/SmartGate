@@ -527,9 +527,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
         // Mouth clicks use a separate conservative high-band transient stage.
         const float mouseProcessedLeft = mouseClickSuppressorLeft_.process(
-            keyboardProcessedLeft, effectiveMouseClickReduction);
+            keyboardProcessedLeft, effectiveMouseClickReduction, delayedKeyboardConfidence);
         const float mouseProcessedRight = right != nullptr
-            ? mouseClickSuppressorRight_.process(keyboardProcessedRight, effectiveMouseClickReduction)
+            ? mouseClickSuppressorRight_.process(keyboardProcessedRight, effectiveMouseClickReduction, delayedKeyboardConfidence)
             : mouseProcessedLeft;
         const float mouthProcessedLeft = mouthClickSuppressorLeft_.process(
             mouseProcessedLeft, effectiveMouthNoiseReduction);
