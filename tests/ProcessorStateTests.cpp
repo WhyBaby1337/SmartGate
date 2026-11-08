@@ -964,11 +964,15 @@ void testProcessorGateOpensClosesAndReopens() {
             "phrase hold must preserve a quiet word ending after the voiced portion");
 
     (void) processSilence(static_cast<int>(sampleRate * 1.0));
+    std::cerr << "Gate after silence: gain=" << processor.getGateGainForDiagnostics()
+              << ", detector=" << processor.getGateDetectorLevelForDiagnostics() << '\\n';
     // Probe with a non-zero signal below the opening threshold. Measuring
     // silence alone cannot prove that the gate closed because zero input
     // produces zero output even while the gate is fully open.
     const float closedPeak = processTone(0.01f, static_cast<int>(sampleRate * 0.05));
-    std::cerr << "Gate close diagnostic: peak=" << closedPeak << "\\n";
+    std::cerr << "Gate close diagnostic: peak=" << closedPeak
+              << ", gain=" << processor.getGateGainForDiagnostics()
+              << ", detector=" << processor.getGateDetectorLevelForDiagnostics() << '\\n';
     require(closedPeak < 0.001f,
             "gate must attenuate a below-threshold probe after the hold/release interval expires");
 
