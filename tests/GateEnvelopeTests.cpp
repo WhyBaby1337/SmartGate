@@ -50,6 +50,10 @@ void runGateEnvelopeTests() {
     envelope.setHysteresisDb(3.0f);
     envelope.setTimes(1.0f, 80.0f);
     envelope.setHoldTime(0.0f);
+    // reset() initializes gain at unity so the first transition is smooth.
+    // Settle into the closed state before measuring below-threshold rejection.
+    for (int i = 0; i < 30000; ++i)
+        envelope.process(0.0f);
     for (int i = 0; i < 1200; ++i)
         envelope.process(0.010f); // -40 dBFS: below the configured threshold
     require(envelope.getGain() < 0.01f,
