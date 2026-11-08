@@ -77,10 +77,10 @@ void SmartGateAudioProcessorEditor::configureSlider(
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 82, 20);
     slider.setTextValueSuffix(suffix);
     if (index >= 6) {
-        slider.setTextFromValueFunction([](double value) {
+        slider.textFromValueFunction = [](double value) {
             return juce::String(juce::roundToInt(value * 100.0)) + " %";
         });
-        slider.setValueFromTextFunction([](const juce::String& text) {
+        slider.valueFromTextFunction = [](const juce::String& text) {
             auto numeric = text;
             numeric.retainCharacters("0123456789.-");
             return numeric.getDoubleValue() / 100.0;
