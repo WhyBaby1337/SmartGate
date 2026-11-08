@@ -19,7 +19,6 @@ public:
         releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.0025 * rate)));
         envelopeCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.010 * rate)));
         holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0030 * rate)));
-        startupMuteSamples_ = std::max(1, static_cast<int>(std::lround(0.0020 * rate)));
         reset();
     }
 
@@ -29,7 +28,6 @@ public:
         highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
         holdCounter_ = 0;
-        startupSamplesRemaining_ = startupMuteSamples_;
         lastEdge_ = 0.0f;
         lastConfidence_ = 0.0f;
         lastLevel_ = 0.0f;
@@ -73,21 +71,11 @@ public:
         // sustained /s/, /sh/ or /ch/ as a mouse event.
         const float levelFloor = 0.0020f - 0.0010f * context;
         const float levelSpan = 0.022f - 0.006f * context;
-        const float edgeFloor = 0.035f - 0.009f * context;
-        const float edgeSpan = 0.10f - 0.015f * context;
+        const float edgeFloor = 0.043f - 0.012f * context;
+        const float edgeSpan = 0.13f - 0.020f * context;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
-        // The analysis filters need a brief settling period after reset.
-        // Without it, the first peak of a sustained /s/ can look like a click
-        // because the novelty reference has not yet learned the speech bed.
-        const bool warmedUp = startupSamplesRemaining_ <= 0;
-        if (startupSamplesRemaining_ > 0)
-            --startupSamplesRemaining_;
-        // Preserve unmistakable full-scale attacks even during startup; only
-        // defer low-level decisions until the novelty reference has settled.
-        const bool strongStartupTransient = magnitude >= 0.10f;
-        const float confidence = (warmedUp || strongStartupTransient)
-            ? level * impulsiveness * novelty : 0.0f;
+        const float confidence = level * impulsiveness * novelty;
         lastLevel_ = level;
         lastImpulsiveness_ = impulsiveness;
         lastNovelty_ = novelty;
@@ -133,8 +121,6 @@ private:
     float lastNovelty_ = 0.0f;
     int holdSamples_ = 1;
     int holdCounter_ = 0;
-    int startupMuteSamples_ = 1;
-    int startupSamplesRemaining_ = 1;
 };
 
 } // namespace smartgate
