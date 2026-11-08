@@ -497,10 +497,12 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float mouthProcessedRight = right != nullptr
             ? mouthClickSuppressorRight_.process(keyboardProcessedRight, mouthNoiseReduction)
             : mouthProcessedLeft;
-        const float leveledLeft = voiceLeveler_.process(mouthProcessedLeft * outputGain,
-                                                          voiceLeveling);
-        const float levelerGain = voiceLeveler_.gainForDiagnostics();
-        left[sample] = leveledLeft;
+        const float levelerGain = voiceLeveler_.processStereo(
+            mouthProcessedLeft * outputGain,
+            right != nullptr ? mouthProcessedRight * outputGain
+                             : mouthProcessedLeft * outputGain,
+            voiceLeveling);
+        left[sample] = mouthProcessedLeft * outputGain * levelerGain;
         if (right != nullptr)
             right[sample] = mouthProcessedRight * outputGain * levelerGain;
         outputPeak = juce::jmax(outputPeak,
