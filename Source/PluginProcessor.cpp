@@ -141,6 +141,7 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     }
 #endif
     lookaheadDelay_.prepare(safeSampleRate, lookaheadMilliseconds_);
+    keyboardConfidenceDelay_.prepare(safeSampleRate, lookaheadMilliseconds_);
     voiceLeveler_.prepare(safeSampleRate);
     setLatencySamples(static_cast<int>(lookaheadDelay_.latencySamples()));
     gateEnvelope_.prepare(safeSampleRate);
@@ -345,12 +346,16 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     const bool keyboardAnalysisEnabled = keyboardReductionEnabled
         || (aiEnabled && learningRequested);
     if (keyboardAnalysisEnabled) {
-        if (!wasKeyboardAnalysisEnabled_)
+        if (!wasKeyboardAnalysisEnabled_) {
             keyboardDetector_.reset();
+            keyboardConfidenceDelay_.reset();
+        }
         keyboardDetector_.setMode(static_cast<smartgate::AdaptiveKeyboardDetector::Mode>(keyboardMode));
     } else {
-        if (wasKeyboardAnalysisEnabled_)
+        if (wasKeyboardAnalysisEnabled_) {
             keyboardDetector_.reset();
+            keyboardConfidenceDelay_.reset();
+        }
         keyboardConfidence_ = 0.0f;
     }
     wasKeyboardAnalysisEnabled_ = keyboardAnalysisEnabled;
@@ -428,6 +433,10 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         const float rightSample = right != nullptr
             ? smartgate::finiteSampleOrZero(right[sample]) : leftSample;
         const float linkedPeak = juce::jmax(std::abs(leftSample), std::abs(rightSample));
+        // The classifier runs on live 256-sample frames, while audio is delayed
+        // by 30 ms. Delay its confidence by the identical sample count before
+        // using it as context for transient suppression.
+        const float delayedKeyboardConfidence = keyboardConfidenceDelay_.process(keyboardConfidence_);
         float delayedLeft = 0.0f;
         float delayedRight = 0.0f;
         lookaheadDelay_.process(leftSample, rightSample, delayedLeft, delayedRight);
@@ -497,9 +506,9 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         // Keyboard/mouse clicks are attenuated locally in the high band,
         // rather than ducking the entire voice signal for several milliseconds.
         const float keyboardProcessedLeft = keyboardSuppressorLeft_.process(
-            delayedLeft, effectiveKeyboardReduction);
+            delayedLeft, effectiveKeyboardReduction, delayedKeyboardConfidence);
         const float keyboardProcessedRight = right != nullptr
-            ? keyboardSuppressorRight_.process(delayedRight, effectiveKeyboardReduction)
+            ? keyboardSuppressorRight_.process(delayedRight, effectiveKeyboardReduction, delayedKeyboardConfidence)
             : keyboardProcessedLeft;
         const float outputGain = gateGain;
 
