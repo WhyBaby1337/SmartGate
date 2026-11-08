@@ -2,6 +2,7 @@
 #include "MouthClickSuppressor.h"
 #include "AudioFeatures.h"
 #include "TargetProfile.h"
+#include "LookaheadDelay.h"
 
 #include <cmath>
 #include <cstdint>
@@ -17,6 +18,22 @@ void requireKeyboard(bool condition, const char* message) {
 }
 
 void runAdaptiveKeyboardDetectorTests() {
+    // Frame-level classifier metadata must be delayed by exactly the same
+    // number of samples as the audio lookahead path.
+    smartgate::ScalarLookaheadDelay confidenceDelay;
+    confidenceDelay.prepare(48000.0, 30.0);
+    const auto confidenceDelaySamples = confidenceDelay.latencySamples();
+    requireKeyboard(confidenceDelaySamples == 1440,
+                    "Classifier metadata delay must match the 30 ms audio lookahead");
+    for (std::size_t i = 0; i < confidenceDelaySamples; ++i)
+        requireKeyboard(confidenceDelay.process(0.75f) == 0.0f,
+                        "Classifier confidence must not arrive before its delayed audio");
+    requireKeyboard(std::abs(confidenceDelay.process(0.25f) - 0.75f) < 1.0e-6f,
+                    "Classifier confidence must emerge at the exact audio lookahead position");
+    confidenceDelay.reset();
+    requireKeyboard(confidenceDelay.process(1.0f) == 0.0f,
+                    "Reset must clear stale delayed classifier confidence");
+
     // Output gain must move smoothly at sample rate instead of stepping when
     // the 256-sample classifier confidence changes at frame boundaries.
     smartgate::AdaptiveKeyboardGain smoothedGain;
@@ -484,6 +501,30 @@ void runAdaptiveKeyboardDetectorTests() {
     // The fast suppressor uses only sample-local transient evidence. Its
     // classifier remains a separate frame-level signal for learning decisions;
     // it is deliberately not fed into the 30 ms delayed audio path.
+    // A modest aligned classifier score should make a quieter impulse more
+    // actionable without allowing frame confidence to attenuate non-transients.
+    smartgate::KeyboardTransientSuppressor contextualClick;
+    contextualClick.prepare(48000.0);
+    smartgate::KeyboardTransientSuppressor localOnlyClick;
+    localOnlyClick.prepare(48000.0);
+    float contextualMinimumGain = 1.0f;
+    float localOnlyMinimumGain = 1.0f;
+    for (int i = 0; i < 1200; ++i) {
+        const float voice = 0.10f * std::sin(2.0f * 3.14159265f * 180.0f
+                                             * static_cast<float>(i) / 48000.0f);
+        const float impulse = i == 300 ? 0.24f : 0.0f;
+        contextualClick.process(voice + impulse, 0.35f, 0.75f);
+        localOnlyClick.process(voice + impulse, 0.35f, 0.0f);
+        contextualMinimumGain = std::min(contextualMinimumGain,
+            contextualClick.getHighBandGain());
+        localOnlyMinimumGain = std::min(localOnlyMinimumGain,
+            localOnlyClick.getHighBandGain());
+    }
+    requireKeyboard(contextualMinimumGain < localOnlyMinimumGain,
+                    "Time-aligned classifier context must improve detection of a quieter click");
+    requireKeyboard(contextualMinimumGain > 0.0f && std::isfinite(contextualMinimumGain),
+                    "Context-assisted click attenuation must remain finite and bounded");
+
     // Sustained /s/ and /sh/-like high-frequency energy is speech, not a click.
     smartgate::KeyboardTransientSuppressor sibilantKeyboardGuard;
     sibilantKeyboardGuard.prepare(48000.0);
