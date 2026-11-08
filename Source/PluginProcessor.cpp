@@ -58,9 +58,13 @@ SmartGateAudioProcessor::createParameterLayout() {
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"keyboardMode", 1}, "Keyboard Type",
         juce::StringArray{"Universal", "Mechanical", "Membrane"}, 0));
+    layout.add(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{"keyboardSuppressionEnabled", 1}, "Keyboard and Mouse Suppression", true));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"keyboardReduction", 1}, "Keyboard Reduction",
         juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{"mouthClickSuppressionEnabled", 1}, "Mouth Click Suppression", true));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"mouthNoiseReduction", 1}, "Mouth Click Reduction",
         juce::NormalisableRange<float>{0.0f, 1.0f, 0.01f}, 0.25f));
@@ -320,8 +324,16 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         0.0f, 1.0f, parameters_.getRawParameterValue("targetAmount")->load(std::memory_order_relaxed));
     const float keyboardReduction = juce::jlimit(
         0.0f, 1.0f, parameters_.getRawParameterValue("keyboardReduction")->load(std::memory_order_relaxed));
+    const bool keyboardSuppressionEnabled =
+        parameters_.getRawParameterValue("keyboardSuppressionEnabled")->load(std::memory_order_relaxed) >= 0.5f;
+    const float effectiveKeyboardReduction = keyboardSuppressionEnabled
+        ? keyboardReduction : 0.0f;
     const float mouthNoiseReduction = juce::jlimit(
         0.0f, 1.0f, parameters_.getRawParameterValue("mouthNoiseReduction")->load(std::memory_order_relaxed));
+    const bool mouthClickSuppressionEnabled =
+        parameters_.getRawParameterValue("mouthClickSuppressionEnabled")->load(std::memory_order_relaxed) >= 0.5f;
+    const float effectiveMouthNoiseReduction = mouthClickSuppressionEnabled
+        ? mouthNoiseReduction : 0.0f;
     const float voiceLeveling = juce::jlimit(
         0.0f, 1.0f, parameters_.getRawParameterValue("voiceLeveling")->load(std::memory_order_relaxed));
     const int keyboardMode = juce::jlimit(0, 2, static_cast<int>(std::lround(
@@ -329,7 +341,7 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // Run the keyboard transient detector either for audible reduction or
     // while learning a target. Learning-time analysis prevents keyboard clicks
     // from contaminating the profile even when the user leaves reduction at 0.
-    const bool keyboardReductionEnabled = keyboardReduction > 0.0f;
+    const bool keyboardReductionEnabled = keyboardSuppressionEnabled && keyboardReduction > 0.0f;
     const bool keyboardAnalysisEnabled = keyboardReductionEnabled
         || (aiEnabled && learningRequested);
     if (keyboardAnalysisEnabled) {
@@ -485,17 +497,17 @@ void SmartGateAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         // Keyboard/mouse clicks are attenuated locally in the high band,
         // rather than ducking the entire voice signal for several milliseconds.
         const float keyboardProcessedLeft = keyboardSuppressorLeft_.process(
-            delayedLeft, keyboardReduction);
+            delayedLeft, effectiveKeyboardReduction);
         const float keyboardProcessedRight = right != nullptr
-            ? keyboardSuppressorRight_.process(delayedRight, keyboardReduction)
+            ? keyboardSuppressorRight_.process(delayedRight, effectiveKeyboardReduction)
             : keyboardProcessedLeft;
         const float outputGain = gateGain;
 
         // Mouth clicks use a separate conservative high-band transient stage.
         const float mouthProcessedLeft = mouthClickSuppressorLeft_.process(
-            keyboardProcessedLeft, mouthNoiseReduction);
+            keyboardProcessedLeft, effectiveMouthNoiseReduction);
         const float mouthProcessedRight = right != nullptr
-            ? mouthClickSuppressorRight_.process(keyboardProcessedRight, mouthNoiseReduction)
+            ? mouthClickSuppressorRight_.process(keyboardProcessedRight, effectiveMouthNoiseReduction)
             : mouthProcessedLeft;
         const float levelerGain = voiceLeveler_.processStereo(
             mouthProcessedLeft * outputGain,
