@@ -42,6 +42,23 @@ void runGateEnvelopeTests() {
     require(envelope.getGain() > 0.95f,
             "Gate should remain open across waveform gaps");
 
+    // A quiet consonant onset may sit below the nominal threshold while
+    // still being clearly part of speech. The gate should begin opening 6 dB
+    // earlier, while retaining the same hysteresis gap beneath that point.
+    envelope.reset();
+    envelope.setThresholdDb(-36.0f);
+    envelope.setHysteresisDb(3.0f);
+    envelope.setTimes(1.0f, 80.0f);
+    envelope.setHoldTime(0.0f);
+    for (int i = 0; i < 1200; ++i)
+        envelope.process(0.010f); // -40 dBFS: below nominal, above early-open point
+    require(envelope.getGain() > 0.9f,
+            "Quiet consonant-level input below nominal threshold should open the gate");
+    for (int i = 0; i < 30000; ++i)
+        envelope.process(0.0f);
+    require(envelope.getGain() < 0.01f,
+            "Early opening must still allow the gate to close during silence");
+
     // Once opened above -40 dB, the gate should stay open in the -40 to
     // -46 dB hysteresis band instead of toggling around the opening point.
     envelope.reset();
