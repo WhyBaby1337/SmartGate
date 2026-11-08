@@ -8,6 +8,7 @@ void runVadFrameQueueTests();
 void runVadResamplerTests();
 void runVadFrameAssemblerTests();
 void runVadInferenceWorkerTests();
+void runLookaheadDelayTests();
 
 int main() {
     try {
@@ -18,6 +19,7 @@ int main() {
         runVadResamplerTests();
         runVadFrameAssemblerTests();
         runVadInferenceWorkerTests();
+        runLookaheadDelayTests();
         std::cout << "All SmartGate DSP tests passed.\n";
         return 0;
     } catch (const std::exception& e) {
