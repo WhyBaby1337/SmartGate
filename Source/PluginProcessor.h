@@ -37,9 +37,9 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    // The gate has no delay or generated output after its input stops; Hold and
-    // Release only control gain while input audio is present.
-    double getTailLengthSeconds() const override { return 0.0; }
+    // The fixed lookahead buffer can emit up to 30 ms of queued input after
+    // the host stops feeding samples.
+    double getTailLengthSeconds() const override { return lookaheadMilliseconds_ * 0.001; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
