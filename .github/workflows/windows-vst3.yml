@@ -9,8 +9,7 @@ permissions:
   contents: read
 concurrency:
   group: smartgate-${{ github.ref }}
-  cancel-in-progress: false
-  queue: max
+  cancel-in-progress: true
 jobs:
   linux-dsp-sanitizers:
     runs-on: ubuntu-24.04
