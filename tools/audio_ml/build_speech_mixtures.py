@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate paired noisy mixtures and clean-speech targets from isolated stems.
 
-Stems within one source bundle must share a recording clock. Short stems are zero-padded,
-never looped; transient events are placed at randomized offsets to avoid fixed alignment.
+Stems within one source bundle share a recording clock, with optional per-stem start offsets.
+Short stems are zero-padded, never looped. Timing jitter is opt-in augmentation.
 """
 import argparse
 import json
@@ -91,6 +91,8 @@ def read_manifest(path):
     root = path.parent
     result = []
     for item in data["sources"]:
+        if not isinstance(item, dict):
+            raise ValueError("Every source entry must be an object")
         if not item.get("id") or not item.get("speech"):
             raise ValueError("Every source needs a unique id and speech path")
         entry = {"id": str(item["id"])}
@@ -100,6 +102,8 @@ def read_manifest(path):
         entry["start_samples"] = {}
         for key in ("speech", "keyboard", "mouse", "background"):
             value = item.get(key)
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                raise ValueError(f"Source {entry['id']}: {key} path must be a non-empty string")
             entry[key] = (root / value).resolve() if value else None
             offset = offsets.get(key, 0.0)
             if isinstance(offset, bool) or not isinstance(offset, (int, float)) or not math.isfinite(offset) or offset < 0:
@@ -116,6 +120,10 @@ def read_manifest(path):
 
 
 def generate(manifest_path, output_dir, count, seconds, seed, randomize_event_offsets=False):
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+        raise ValueError("count must be a positive integer")
+    if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
+        raise ValueError("seconds must be a finite positive number")
     rng = random.Random(seed)
     np_rng = np.random.default_rng(seed)
     sources = read_manifest(manifest_path)
@@ -218,8 +226,8 @@ def main():
     parser.add_argument("--randomize-event-offsets", action="store_true",
                         help="Apply deliberate timing-jitter augmentation to event stems")
     args = parser.parse_args()
-    if args.count < 1 or args.seconds <= 0:
-        parser.error("--count and --seconds must be positive")
+    if args.count < 1 or not math.isfinite(args.seconds) or args.seconds <= 0:
+        parser.error("--count must be positive and --seconds must be finite and positive")
     generate(args.manifest, args.output_dir, args.count, args.seconds, args.seed,
              randomize_event_offsets=args.randomize_event_offsets)
 
