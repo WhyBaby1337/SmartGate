@@ -1,7 +1,14 @@
 """Regression tests for classifier labels and temporal window boundaries."""
+import tempfile
 import unittest
+from pathlib import Path
 
-from train_event_classifier import FRAMES, HOP, SR, WINDOW_SAMPLES, segment_window_range
+import numpy as np
+import soundfile as sf
+
+from train_event_classifier import (
+    FRAMES, HOP, SR, WINDOW_SAMPLES, features, positive_int, segment_window_range,
+)
 
 
 class EventClassifierWindowTests(unittest.TestCase):
@@ -31,6 +38,27 @@ class EventClassifierWindowTests(unittest.TestCase):
         first, last = segment_window_range(start, end, 100)
         self.assertGreaterEqual(first * HOP, start * SR)
         self.assertLessEqual((last - 1) * HOP + WINDOW_SAMPLES, end * SR)
+
+    def test_features_do_not_depend_on_future_audio(self):
+        rng = np.random.default_rng(7)
+        prefix = rng.standard_normal(SR).astype(np.float32) * 0.02
+        extended = np.concatenate((prefix, np.full(SR, 0.25, np.float32)))
+        with tempfile.TemporaryDirectory() as directory:
+            short_path = Path(directory) / "short.wav"
+            long_path = Path(directory) / "long.wav"
+            sf.write(short_path, prefix, SR)
+            sf.write(long_path, extended, SR)
+            short_features, _ = features(short_path)
+            long_features, _ = features(long_path)
+        np.testing.assert_allclose(short_features, long_features[:len(short_features)],
+                                   rtol=1e-5, atol=1e-5)
+
+    def test_epochs_must_be_positive_integers(self):
+        self.assertEqual(positive_int("1"), 1)
+        for value in ("0", "-2", "abc"):
+            with self.subTest(value=value):
+                with self.assertRaises(Exception):
+                    positive_int(value)
 
     def test_invalid_bounds_are_rejected(self):
         for start, end in ((float("nan"), 1.0), (0.0, float("inf")),
