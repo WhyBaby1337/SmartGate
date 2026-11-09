@@ -272,6 +272,7 @@ public:
         const float edgeSpan = 0.24f - 0.06f * frameContext;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
+        const float localTransient = level * impulsiveness;
 
         // Confirm an isolated attack by its immediate peak-then-drop shape.
         // A noise-like sibilant has many sharp sample edges, but its peaks sit
@@ -283,8 +284,14 @@ public:
         const bool onsetCandidate = magnitudeRise > 0.012f
             && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.95f;
         const float onsetDrop = unit((0.55f - magnitudeFallRatio) / 0.25f);
-        const float confidence = unit(previousOnsetConfidence_ * onsetDrop
-                                      * (1.0f + 0.15f * frameContext));
+        const float confirmedConfidence = unit(previousOnsetConfidence_ * onsetDrop
+                                               * (1.0f + 0.15f * frameContext));
+        // Keep the established immediate response for unmistakably large
+        // broadband impacts. Quiet events use peak-drop confirmation so
+        // noise-like speech peaks cannot retrigger the keyboard stage.
+        const float immediateConfidence = magnitude > 0.12f && magnitudeRise > 0.08f
+            ? unit(localTransient * (1.0f + 0.15f * frameContext)) : 0.0f;
+        const float confidence = std::max(confirmedConfidence, immediateConfidence);
         previousOnsetConfidence_ = onsetCandidate ? level * onsetNovelty : 0.0f;
         if (confidence > 0.0f) {
             // The UI amount is perceptual, not a linear amplitude multiplier.
