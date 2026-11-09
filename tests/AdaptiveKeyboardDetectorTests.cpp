@@ -699,14 +699,68 @@ void runAdaptiveKeyboardDetectorTests() {
                 onsetCandidateCount, maximumPendingSamples,
                 static_cast<double>(lastDecayRatio));
         }
-        // The quietest profile is an exploratory sensitivity probe. Report
-        // its response without making the baseline regression suite fail;
-        // established profiles remain mandatory suppression regressions.
-        if (profile.amplitude >= 0.025f) {
+        // All listed profiles, including the quiet 0.025-amplitude case,
+        // are mandatory suppression regressions.
+        {
             requireKeyboard(outputEnergy < inputEnergy * 0.90f,
                             "Mouse detector must reduce established resonant click profiles over speech");
         }
     }
+
+    // Diagnostic coverage for the independent-mouse setting: when keyboard
+    // analysis is disabled, the aligned keyboard context is zero. Record the
+    // exact response for every synthetic ring profile before changing detector
+    // thresholds or decoupling its context input.
+    for (const auto& profile : mouseProfiles) {
+        smartgate::MouseClickSuppressor contextFreeMouse;
+        smartgate::MouseClickSuppressor contextFreeVoice;
+        contextFreeMouse.prepare(48000.0);
+        contextFreeVoice.prepare(48000.0);
+        float inputEnergy = 0.0f;
+        float outputEnergy = 0.0f;
+        float minimumGain = 1.0f;
+        for (int i = 0; i < 2400; ++i) {
+            const float voice = 0.12f * std::sin(2.0f * 3.14159265f
+                * 180.0f * static_cast<float>(i) / 48000.0f);
+            float click = 0.0f;
+            if (i >= 600 && i < 600 + profile.durationSamples) {
+                const float age = static_cast<float>(i - 600);
+                const float time = age / 48000.0f;
+                const float envelope = std::exp(-age / profile.decaySamples);
+                click = profile.amplitude * envelope * (
+                    std::sin(2.0f * 3.14159265f * profile.firstFrequency
+                             * time + 1.5707963f)
+                    + 0.4f * std::sin(2.0f * 3.14159265f
+                             * profile.secondFrequency * time + 1.5707963f));
+            }
+            const float reference = contextFreeVoice.process(voice, 1.0f, 0.0f);
+            const float output = contextFreeMouse.process(voice + click, 1.0f, 0.0f);
+            minimumGain = std::min(minimumGain, contextFreeMouse.getHighBandGain());
+            if (i >= 600 && i < 600 + profile.durationSamples) {
+                inputEnergy += click * click;
+                const float residual = output - reference;
+                outputEnergy += residual * residual;
+            }
+        }
+        const float ratio = inputEnergy > 0.0f ? outputEnergy / inputEnergy : 0.0f;
+        std::fprintf(stderr,
+            "Mouse context=0 %.0f/%.0f Hz amplitude=%.3f: ratio=%.6f minGain=%.6f\\n",
+            profile.firstFrequency, profile.secondFrequency, profile.amplitude,
+            static_cast<double>(ratio), static_cast<double>(minimumGain));
+    }
+
+    smartgate::MouseClickSuppressor contextFreeSibilant;
+    contextFreeSibilant.prepare(48000.0);
+    float contextFreeSibilantMinimumGain = 1.0f;
+    for (int i = 0; i < 12000; ++i) {
+        const float sibilant = 0.08f * std::sin(2.0f * 3.14159265f * 6200.0f
+                                                * static_cast<float>(i) / 48000.0f);
+        (void) contextFreeSibilant.process(sibilant, 1.0f, 0.0f);
+        contextFreeSibilantMinimumGain = std::min(contextFreeSibilantMinimumGain,
+            contextFreeSibilant.getHighBandGain());
+    }
+    std::fprintf(stderr, "Mouse context=0 sustained sibilant minGain=%.6f\\n",
+        static_cast<double>(contextFreeSibilantMinimumGain));
 
     // The ring-confirmation window must represent the same elapsed time
     // at common host rates. Exercise a resonant click at 44.1 and 96 kHz,
