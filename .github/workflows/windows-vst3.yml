@@ -62,7 +62,7 @@ jobs:
         id: build_vst3
         run: cmake --build build --config Release --parallel 2
       - name: Run DSP tests
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build -C Release --output-on-failure --verbose
       - name: Run processor state integration tests
         run: .\\build\\Release\\SmartGateProcessorStateTests.exe
       - name: Measure Silero ONNX inference latency
