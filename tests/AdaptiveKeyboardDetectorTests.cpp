@@ -567,7 +567,10 @@ void runAdaptiveKeyboardDetectorTests() {
     const MouseClickProfile mouseProfiles[] = {
         {5200.0f, 7600.0f, 0.12f, 96.0f, 240},
         {9000.0f, 11500.0f, 0.04f, 45.0f, 144},
-        {6800.0f, 9800.0f, 0.06f, 80.0f, 192}
+        {6800.0f, 9800.0f, 0.06f, 80.0f, 192},
+        // Probe a substantially quieter resonant switch without adding an
+        // artificial broadband impulse to the first sample.
+        {5200.0f, 7600.0f, 0.025f, 96.0f, 240}
     };
     for (const auto& profile : mouseProfiles) {
         smartgate::MouseClickSuppressor profiledMouseClick;
