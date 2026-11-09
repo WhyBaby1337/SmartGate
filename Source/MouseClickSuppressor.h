@@ -23,8 +23,6 @@ public:
         // switch clicks while preserving its elapsed time across host rates.
         decayWindowSamples_ = std::max(1, static_cast<int>(
             std::lround(rate * (16.0 / 48000.0))));
-        onsetClusterGapSamples_ = std::max(1, static_cast<int>(
-            std::lround(rate * 0.002)));
         reset();
     }
 
@@ -37,8 +35,6 @@ public:
         pendingOnsetFirstPeak_ = 0.0f;
         pendingOnsetSecondPeak_ = 0.0f;
         pendingOnsetSamples_ = 0;
-        pendingOnsetCandidateCount_ = 0;
-        pendingOnsetCandidateGapSamples_ = 0;
         highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
         holdCounter_ = 0;
@@ -70,8 +66,6 @@ public:
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 0;
-            pendingOnsetCandidateCount_ = 0;
-            pendingOnsetCandidateGapSamples_ = 0;
             highBandEnvelope_ = std::abs(high);
             highBandGain_ = 1.0f;
             return x;
@@ -125,26 +119,15 @@ public:
         if (onsetCandidate)
             ++onsetCandidateCount_;
         if (onsetCandidate && pendingOnsetSamples_ == 0) {
-            pendingOnsetCandidateCount_ = 1;
-            pendingOnsetCandidateGapSamples_ = 0;
             pendingOnsetConfidence_ = level * novelty;
             pendingOnsetFirstPeak_ = magnitude * magnitude;
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
-            pendingOnsetCandidateGapSamples_ = std::min(
-                onsetClusterGapSamples_ + 1, pendingOnsetCandidateGapSamples_ + 1);
-            if (onsetCandidate) {
-                // Adjacent candidate samples belong to one sharp switch attack.
-                // A fresh cluster after a quiet gap is a repeated speech onset.
-                if (pendingOnsetCandidateGapSamples_ > onsetClusterGapSamples_)
-                    ++pendingOnsetCandidateCount_;
-                pendingOnsetCandidateGapSamples_ = 0;
-            }
             if (pendingOnsetSamples_ <= decayWindowSamples_) {
-                pendingOnsetFirstPeak_ += magnitude * magnitude;
+                pendingOnsetFirstPeak_ += magnitude;
             } else {
-                pendingOnsetSecondPeak_ += magnitude * magnitude;
+                pendingOnsetSecondPeak_ += magnitude;
             }
             ++pendingOnsetSamples_;
         }
@@ -158,27 +141,22 @@ public:
             onsetConfidence = pendingOnsetConfidence_
                 * unit((0.80f - magnitudeFallRatio) / 0.25f);
             pendingOnsetSamples_ = 0;
-            pendingOnsetCandidateCount_ = 0;
-            pendingOnsetCandidateGapSamples_ = 0;
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
         }
         if (pendingOnsetSamples_ > 2 * decayWindowSamples_) {
-            const float decay = std::sqrt(pendingOnsetSecondPeak_
-                / std::max(pendingOnsetFirstPeak_, 1.0e-12f));
+            const float decay = pendingOnsetSecondPeak_
+                / std::max(pendingOnsetFirstPeak_, 1.0e-12f);
             lastDecayRatio_ = decay;
             // Require a clear drop between adjacent windows. Small phase/envelope
             // fluctuations in sustained sibilants must not count as switch-ring decay.
-            // A real switch ring has one isolated onset followed by a quiet decay.
-            // Repeated fresh onsets inside the observation window indicate a
-            // sustained periodic/noise-like speech component, not a single click.
-            const float decayConfidence = pendingOnsetCandidateCount_ == 1
-                ? unit((0.932f - decay) / 0.018f) : 0.0f;
+            // Average absolute magnitude is less sensitive than short-window
+            // RMS to the phase of sustained tones at non-48 kHz sample rates.
+            // A decaying switch ring still loses mean magnitude between windows.
+            const float decayConfidence = unit((0.92f - decay) / 0.04f);
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
-            pendingOnsetCandidateCount_ = 0;
-            pendingOnsetCandidateGapSamples_ = 0;
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
@@ -234,9 +212,6 @@ private:
     float pendingOnsetFirstPeak_ = 0.0f;
     float pendingOnsetSecondPeak_ = 0.0f;
     int pendingOnsetSamples_ = 0;
-    unsigned pendingOnsetCandidateCount_ = 0;
-    int pendingOnsetCandidateGapSamples_ = 0;
-    int onsetClusterGapSamples_ = 96;
     float highBandEnvelope_ = 0.0f;
     float highBandGain_ = 1.0f;
     float lastEdge_ = 0.0f;
