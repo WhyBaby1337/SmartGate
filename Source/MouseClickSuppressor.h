@@ -108,7 +108,7 @@ public:
         // while a real decaying ring still falls measurably between windows.
         const bool onsetCandidate = magnitudeRise > 0.012f
             && edge > edgeFloor && level > 0.3f
-            && impulsiveness > 0.005f && onsetNovelty > 0.90f;
+            && impulsiveness > 0.005f && novelty > 0.90f;
         if (onsetCandidate && pendingOnsetSamples_ == 0) {
             pendingOnsetConfidence_ = level * novelty;
             pendingOnsetFirstPeak_ = magnitude * magnitude;
