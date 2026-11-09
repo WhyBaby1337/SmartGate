@@ -1089,6 +1089,28 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(minimumContextualSibilantGain > 0.95f,
         "Maximum aligned keyboard context must not attenuate sustained sibilant speech");
 
+    // Real sibilants are noise-like, not clean tones. Keep the keyboard
+    // transient stage transparent to a steady high-band noise bed even when
+    // the aligned classifier context is stale and at its maximum value.
+    smartgate::KeyboardTransientSuppressor noisyKeyboardSibilantGuard;
+    noisyKeyboardSibilantGuard.prepare(48000.0);
+    std::uint32_t keyboardSibilantNoiseState = 0x6d2b79f5u;
+    float minimumNoisyKeyboardSibilantGain = 1.0f;
+    for (int i = 0; i < 12000; ++i) {
+        keyboardSibilantNoiseState ^= keyboardSibilantNoiseState << 13;
+        keyboardSibilantNoiseState ^= keyboardSibilantNoiseState >> 17;
+        keyboardSibilantNoiseState ^= keyboardSibilantNoiseState << 5;
+        const float noise = (static_cast<float>(keyboardSibilantNoiseState & 0xffffu)
+                             / 32767.5f - 1.0f) * 0.06f;
+        (void) noisyKeyboardSibilantGuard.process(noise, 1.0f, 1.0f);
+        if (i >= 2400)
+            minimumNoisyKeyboardSibilantGain = std::min(
+                minimumNoisyKeyboardSibilantGain,
+                noisyKeyboardSibilantGuard.getHighBandGain());
+    }
+    requireKeyboard(minimumNoisyKeyboardSibilantGain > 0.95f,
+        "Steady-state noise-like sibilants must not be attenuated by keyboard suppression");
+
     // Mid-band attenuation must react to a classifier-aligned mechanical
     // impulse, but remain effectively transparent for a sustained speech-like
     // tone in the same band (a conservative guard for formants and consonants).
