@@ -994,6 +994,7 @@ void runAdaptiveKeyboardDetectorTests() {
 
         double integratedInputEnergy = 0.0;
         double integratedOutputEnergy = 0.0;
+        float minimumIntegratedHighGain = 1.0f;
         for (int i = 0; i < 2 * static_cast<int>(frameSize); ++i) {
             const int age = i - 100;
             const int sampleIndex = 3 * static_cast<int>(frameSize) + i;
@@ -1016,6 +1017,8 @@ void runAdaptiveKeyboardDetectorTests() {
             const float context = frameContexts[i / static_cast<int>(frameSize)];
             const float output = integratedSuppressor.process(
                 voice + click, 0.35f, context);
+            minimumIntegratedHighGain = std::min(minimumIntegratedHighGain,
+                integratedSuppressor.getHighBandGain());
             const float voiceOnly = integratedVoiceReference.process(
                 voice, 0.0f, 0.0f);
             if (age >= 0 && age < profile.durationSamples) {
@@ -1024,6 +1027,13 @@ void runAdaptiveKeyboardDetectorTests() {
                 integratedOutputEnergy += static_cast<double>(residual) * residual;
             }
         }
+        std::fprintf(stderr,
+            "Integrated keyboard %.0f/%.0f Hz: context=%.6f/%.6f ratio=%.6f minGain=%.6f\\n",
+            static_cast<double>(profile.frequencyA),
+            static_cast<double>(profile.frequencyB),
+            frameContexts[0], frameContexts[1],
+            integratedOutputEnergy / std::max(integratedInputEnergy, 1.0e-20),
+            minimumIntegratedHighGain);
         requireKeyboard(frameContexts[0] > 0.0f,
             "Integrated keyboard path must derive nonzero context from a mixed click frame");
         requireKeyboard(integratedInputEnergy > 1.0e-8,
