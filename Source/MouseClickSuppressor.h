@@ -168,7 +168,7 @@ public:
         if (pendingOnsetSamples_ > 36) {
             const float earlyDecay = pendingOnsetEarlySecond_
                 / std::max(pendingOnsetEarlyFirst_, 1.0e-12f);
-            if (earlyDecay < 0.84f && periodicity < 0.90f) {
+            if (earlyDecay < 0.84f && periodicity < 0.96f) {
                 // Very short, strongly decaying resonances need an earlier
                 // decision than the longer phase-stable ring confirmation.
                 onsetConfidence = pendingOnsetConfidence_
@@ -190,7 +190,7 @@ public:
             // Average absolute magnitude is less sensitive than short-window
             // RMS to the phase of sustained tones at non-48 kHz sample rates.
             // A decaying switch ring still loses mean magnitude between windows.
-            const float decayConfidence = periodicity < 0.90f
+            const float decayConfidence = periodicity < 0.96f
                 ? unit((0.92f - decay) / 0.04f) : 0.0f;
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
@@ -240,7 +240,7 @@ private:
         if (historyCount_ < 32)
             return 0.0f;
         float maximumCorrelation = 0.0f;
-        for (int lag = 4; lag <= 12; ++lag) {
+        for (int lag = 4; lag <= 20; ++lag) {
             float cross = 0.0f;
             float firstEnergy = 0.0f;
             float secondEnergy = 0.0f;
