@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Generate paired noisy mixtures and clean-speech targets for Smart Gate.
+"""Generate paired noisy mixtures and clean-speech targets from isolated stems.
 
-Input manifest describes independently recorded stems. Each output example contains
-an identical-time noisy mixture and its clean speech reference. Source recording IDs
-are retained so train/validation/test splits can be made without source leakage.
+Stems within one source bundle must share a recording clock. Short stems are zero-padded,
+never looped; transient events are placed at randomized offsets to avoid fixed alignment.
 """
 import argparse
 import json
@@ -34,13 +33,14 @@ def load_audio(path):
 
 
 def choose_crop(audio, length, rng):
+    """Random crop long stems; place short stems once with silence padding."""
     if len(audio) >= length:
         start = rng.randrange(0, len(audio) - length + 1)
         return audio[start:start + length].copy()
-    repeats = int(math.ceil(length / len(audio)))
-    tiled = np.tile(audio, (repeats, 1))
-    start = rng.randrange(0, len(tiled) - length + 1)
-    return tiled[start:start + length].copy()
+    result = np.zeros((length, audio.shape[1]), dtype=np.float32)
+    offset = rng.randrange(0, length - len(audio) + 1)
+    result[offset:offset + len(audio)] = audio
+    return result
 
 
 def rms(audio):
@@ -56,6 +56,20 @@ def scale_to_snr(noise, speech, snr_db, rng):
         return noise * (10.0 ** (rng.uniform(-8.0, 8.0) / 20.0))
     desired = speech_rms / (10.0 ** (snr_db / 20.0))
     return noise * (desired / noise_rms)
+
+
+def place_activity(stem, length, rng, label):
+    """Return a zero-padded stem with randomized duration and offset."""
+    if label == "background":
+        fraction = rng.uniform(0.65, 1.0)
+    else:
+        fraction = rng.uniform(0.08, 0.55)
+    active_length = max(1, min(length, round(length * fraction)))
+    crop = choose_crop(stem, active_length, rng)
+    result = np.zeros((length, stem.shape[1]), dtype=np.float32)
+    offset = rng.randrange(0, length - active_length + 1)
+    result[offset:offset + active_length] = crop
+    return result
 
 
 def read_manifest(path):
@@ -100,19 +114,13 @@ def generate(manifest_path, output_dir, count, seconds, seed):
 
     for number in range(count):
         source = rng.choice(sources)
-        speech_path = source["speech"]
-        speech_source = cache[speech_path]
-        speech = choose_crop(speech_source, length, rng)
-        # A fraction of examples are deliberately non-speech to teach zero-output cases.
+        speech = choose_crop(cache[source["speech"]], length, rng)
         has_speech = rng.random() >= 0.15
         if not has_speech:
             speech.fill(0.0)
 
         mixture = speech.copy()
-        active = []
-        if has_speech:
-            active.append("speech")
-
+        active = ["speech"] if has_speech else []
         for label in ("keyboard", "mouse", "background"):
             path = source[label]
             if path is None:
@@ -120,53 +128,46 @@ def generate(manifest_path, output_dir, count, seconds, seed):
             probability = {"keyboard": 0.58, "mouse": 0.58, "background": 0.35}[label]
             if rng.random() >= probability:
                 continue
-            stem = choose_crop(cache[path], length, rng)
+            stem = place_activity(cache[path], length, rng, label)
             snr_range = {
                 "keyboard": (-8.0, 18.0),
                 "mouse": (-8.0, 18.0),
                 "background": (0.0, 24.0),
             }[label]
-            snr = rng.uniform(*snr_range)
-            stem = scale_to_snr(stem, speech, snr, rng) if has_speech else stem * (10 ** (rng.uniform(-20, -4) / 20))
+            if has_speech:
+                stem = scale_to_snr(stem, speech, rng.uniform(*snr_range), rng)
+            else:
+                stem *= 10 ** (rng.uniform(-20, -4) / 20)
             mixture += stem
-            active.append(label)
+            if rms(stem) >= 1e-7:
+                active.append(label)
 
-        # Shared gain preserves the target-to-mixture relationship. Soft peak control
-        # avoids hard clipping while keeping the clean reference synchronized.
         peak = float(np.max(np.abs(mixture)))
         shared_gain = min(1.0, 0.98 / max(peak, 1e-8))
         mixture *= shared_gain
         target = speech * shared_gain
-
-        # Tiny independent sensor-like noise prevents the model learning digital silence.
         mixture += np_rng.normal(0.0, 1e-5, mixture.shape).astype(np.float32)
+
         stem_id = f"{number:07d}"
         mix_rel = Path("mixtures") / f"{stem_id}.wav"
         target_rel = Path("targets") / f"{stem_id}.wav"
         sf.write(output_dir / mix_rel, mixture, TARGET_SR, subtype="PCM_16")
         sf.write(output_dir / target_rel, target, TARGET_SR, subtype="PCM_16")
         records.append({
-            "id": stem_id,
-            "source_id": source["id"],
-            "mixture": mix_rel.as_posix(),
-            "target_speech": target_rel.as_posix(),
-            "active_sources": active,
-            "sample_rate": TARGET_SR,
-            "samples": length,
-            "duration_seconds": seconds,
+            "id": stem_id, "source_id": source["id"],
+            "mixture": mix_rel.as_posix(), "target_speech": target_rel.as_posix(),
+            "active_sources": active, "sample_rate": TARGET_SR,
+            "samples": length, "duration_seconds": seconds,
         })
 
     with index_path.open("w", encoding="utf-8") as handle:
         for record in records:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     print(json.dumps({
-        "examples": len(records),
-        "sources": len(sources),
+        "examples": len(records), "sources": len(sources),
         "unique_source_ids": sorted({r["source_id"] for r in records}),
-        "output_manifest": str(index_path),
-        "sample_rate": TARGET_SR,
-        "duration_seconds": seconds,
-        "seed": seed,
+        "output_manifest": str(index_path), "sample_rate": TARGET_SR,
+        "duration_seconds": seconds, "seed": seed,
         "note": "Split by source_id before training; never randomly split generated clips."
     }, indent=2))
 
