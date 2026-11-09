@@ -105,9 +105,9 @@ public:
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
 
         // Qualify a switch strike by its short decay envelope, not by a
-        // one-sample drop. Two 24-sample RMS windows give enough cycles for
-        // stable high-band energy estimates while confirming a short ring
-        // sooner than the previous 32+32-sample observation.
+        // one-sample drop. Two 16-sample RMS windows confirm short rings early. The stricter
+        // decay threshold below rejects phase/envelope fluctuations in
+        // sustained sibilants rather than relying on a long wait.
         const bool onsetCandidate = edge > edgeFloor && level > 0.3f
             && impulsiveness > 0.005f && novelty > 0.90f;
         lastOnsetCandidate_ = onsetCandidate;
@@ -119,7 +119,7 @@ public:
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
-            if (pendingOnsetSamples_ <= 24) {
+            if (pendingOnsetSamples_ <= 16) {
                 pendingOnsetFirstPeak_ += magnitude * magnitude;
             } else {
                 pendingOnsetSecondPeak_ += magnitude * magnitude;
@@ -140,13 +140,13 @@ public:
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
         }
-        if (pendingOnsetSamples_ > 48) {
+        if (pendingOnsetSamples_ > 32) {
             const float decay = std::sqrt(pendingOnsetSecondPeak_
                 / std::max(pendingOnsetFirstPeak_, 1.0e-12f));
             lastDecayRatio_ = decay;
             // Require a clear drop between adjacent windows. Small phase/envelope
             // fluctuations in sustained sibilants must not count as switch-ring decay.
-            const float decayConfidence = unit((0.96f - decay) / 0.08f);
+            const float decayConfidence = unit((0.88f - decay) / 0.16f);
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
             pendingOnsetConfidence_ = 0.0f;
