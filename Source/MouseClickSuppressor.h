@@ -48,6 +48,10 @@ public:
         lastOnsetCandidate_ = false;
         onsetCandidateCount_ = 0;
         lastDecayRatio_ = 0.0f;
+        historyWriteIndex_ = 0;
+        historyCount_ = 0;
+        for (float& sample : highBandHistory_)
+            sample = 0.0f;
     }
 
     float process(float input, float reduction, float alignedFrameContext = 0.0f) noexcept {
@@ -59,6 +63,9 @@ public:
             * (lowPassState_ - sample);
         const float low = static_cast<float>(lowPassState_);
         const float high = x - low;
+        highBandHistory_[historyWriteIndex_] = high;
+        historyWriteIndex_ = (historyWriteIndex_ + 1) % 32;
+        historyCount_ = std::min(32, historyCount_ + 1);
 
         if (amount <= 0.0f) {
             previousHighBand_ = high;
@@ -143,6 +150,7 @@ public:
         }
 
         float onsetConfidence = 0.0f;
+        const float periodicity = getRecentPeriodicity();
         // Preserve the immediate path for a genuinely broadband, isolated
         // switch impulse. Its high-pass residual collapses sharply on the
         // next sample, unlike the slower resonant ring handled by the window.
@@ -160,7 +168,7 @@ public:
         if (pendingOnsetSamples_ > 36) {
             const float earlyDecay = pendingOnsetEarlySecond_
                 / std::max(pendingOnsetEarlyFirst_, 1.0e-12f);
-            if (earlyDecay < 0.84f) {
+            if (earlyDecay < 0.84f && periodicity < 0.90f) {
                 // Very short, strongly decaying resonances need an earlier
                 // decision than the longer phase-stable ring confirmation.
                 onsetConfidence = pendingOnsetConfidence_
@@ -182,7 +190,8 @@ public:
             // Average absolute magnitude is less sensitive than short-window
             // RMS to the phase of sustained tones at non-48 kHz sample rates.
             // A decaying switch ring still loses mean magnitude between windows.
-            const float decayConfidence = unit((0.92f - decay) / 0.04f);
+            const float decayConfidence = periodicity < 0.90f
+                ? unit((0.92f - decay) / 0.04f) : 0.0f;
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
             pendingOnsetConfidence_ = 0.0f;
@@ -227,6 +236,29 @@ public:
     float getLastDecayRatio() const noexcept { return lastDecayRatio_; }
 
 private:
+    float getRecentPeriodicity() const noexcept {
+        if (historyCount_ < 32)
+            return 0.0f;
+        float maximumCorrelation = 0.0f;
+        for (int lag = 4; lag <= 12; ++lag) {
+            float cross = 0.0f;
+            float firstEnergy = 0.0f;
+            float secondEnergy = 0.0f;
+            for (int i = 0; i < 32 - lag; ++i) {
+                const float first = highBandHistory_[(historyWriteIndex_ + i) % 32];
+                const float second = highBandHistory_[(historyWriteIndex_ + i + lag) % 32];
+                cross += first * second;
+                firstEnergy += first * first;
+                secondEnergy += second * second;
+            }
+            const float denominator = std::sqrt(
+                std::max(firstEnergy * secondEnergy, 1.0e-20f));
+            maximumCorrelation = std::max(maximumCorrelation,
+                cross / denominator);
+        }
+        return unit(maximumCorrelation);
+    }
+
     static float unit(float value) noexcept {
         return std::clamp(std::isfinite(value) ? value : 0.0f, 0.0f, 1.0f);
     }
@@ -256,6 +288,9 @@ private:
     float lastDecayRatio_ = 0.0f;
     int holdSamples_ = 1;
     int decayWindowSamples_ = 16;
+    float highBandHistory_[32]{};
+    int historyWriteIndex_ = 0;
+    int historyCount_ = 0;
     int holdCounter_ = 0;
 };
 
