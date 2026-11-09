@@ -107,7 +107,7 @@ public:
         // 16-sample windows, spanning several cycles of high-frequency speech. RMS is less phase-sensitive than peak tracking,
         // while a real decaying ring still falls measurably between windows.
         const bool onsetCandidate = edge > edgeFloor && level > 0.3f
-            && impulsiveness > 0.005f && onsetNovelty > 0.90f;
+            && impulsiveness > 0.005f && novelty > 0.90f;
         if (onsetCandidate && pendingOnsetSamples_ == 0) {
             pendingOnsetConfidence_ = level * novelty;
             pendingOnsetFirstPeak_ = magnitude * magnitude;
