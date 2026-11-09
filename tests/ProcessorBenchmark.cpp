@@ -110,7 +110,7 @@ int main() {
               << "Includes lookahead, gate, feature analysis and all transient DSP; "
               << "Silero worker inference is measured separately.\n";
     for (const int blockSize : {64, 128, 256}) {
-        std::cout << "\\nHost block size: " << blockSize << " samples\\n";
+        std::cout << "\nHost block size: " << blockSize << " samples\n";
         runScenario("Factory defaults", blockSize, true, 0.0f, true, 0.20f, true, 0.25f);
         runScenario("All transient suppressors active", blockSize, true, 0.65f, true, 0.20f, true, 0.25f);
         runScenario("All transient suppressors active, AI off", blockSize, false, 0.65f, true, 0.20f, true, 0.25f);
