@@ -96,7 +96,7 @@ public:
         // Store a narrowly qualified onset for one sample. Confirm it only
         // when the following sample falls sharply; this avoids reacting to
         // the rising quarter-cycle of a sustained /s/ or /sh/ tone.
-        const bool onsetCandidate = magnitudeRise > 0.006f
+        const bool onsetCandidate = edge > edgeFloor
             && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.75f;
         // The first resonant cycle of a switch ring may decay by less than
         // 45% in one 48 kHz sample. Confirm a pronounced peak drop without
