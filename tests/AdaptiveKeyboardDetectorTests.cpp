@@ -724,6 +724,24 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(minimumMouseSibilantGain > 0.90f,
                     "Sustained /s/, /sh/ and /ch/ energy must not be treated as mouse clicks");
 
+    // The speech-protection guard must also hold at non-48 kHz rates.
+    // Keep the sibilant's physical frequency and duration constant in seconds.
+    for (const double rate : {44100.0, 96000.0}) {
+        smartgate::MouseClickSuppressor rateSibilantGuard;
+        rateSibilantGuard.prepare(rate);
+        float minimumRateSibilantGain = 1.0f;
+        const int sampleCount = static_cast<int>(std::lround(rate * 0.25));
+        for (int i = 0; i < sampleCount; ++i) {
+            const float sibilant = 0.08f * std::sin(
+                2.0f * 3.14159265f * 6200.0f * static_cast<float>(i / rate));
+            (void) rateSibilantGuard.process(sibilant, 1.0f, 0.65f);
+            minimumRateSibilantGain = std::min(minimumRateSibilantGain,
+                rateSibilantGuard.getHighBandGain());
+        }
+        requireKeyboard(minimumRateSibilantGain > 0.90f,
+            "Mouse suppression must preserve sustained sibilants at 44.1 and 96 kHz");
+    }
+
     // Real sibilants are noise-like rather than clean sine waves. A sustained
     // high-band noise bed must not repeatedly retrigger the mouse transient
     // detector simply because adjacent waveform samples differ sharply.
