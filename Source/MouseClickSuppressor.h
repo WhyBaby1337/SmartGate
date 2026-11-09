@@ -105,10 +105,9 @@ public:
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
 
         // Qualify a switch strike by its short decay envelope, not by a
-        // one-sample drop: the resonant carrier can remain near its peak for
-        // several samples at 48 kHz. Compare RMS energy in two adjacent
-        // 32-sample windows, spanning several cycles of high-frequency speech. RMS is less phase-sensitive than peak tracking,
-        // while a real decaying ring still falls measurably between windows.
+        // one-sample drop. Two 24-sample RMS windows give enough cycles for
+        // stable high-band energy estimates while confirming a short ring
+        // sooner than the previous 32+32-sample observation.
         const bool onsetCandidate = edge > edgeFloor && level > 0.3f
             && impulsiveness > 0.005f && novelty > 0.90f;
         lastOnsetCandidate_ = onsetCandidate;
@@ -120,7 +119,7 @@ public:
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
-            if (pendingOnsetSamples_ <= 32) {
+            if (pendingOnsetSamples_ <= 24) {
                 pendingOnsetFirstPeak_ += magnitude * magnitude;
             } else {
                 pendingOnsetSecondPeak_ += magnitude * magnitude;
@@ -141,7 +140,7 @@ public:
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
         }
-        if (pendingOnsetSamples_ > 64) {
+        if (pendingOnsetSamples_ > 48) {
             const float decay = std::sqrt(pendingOnsetSecondPeak_
                 / std::max(pendingOnsetFirstPeak_, 1.0e-12f));
             lastDecayRatio_ = decay;
@@ -156,7 +155,7 @@ public:
         }
 
         // The broad edge/novelty score remains diagnostic only. A candidate
-        // must show measurable decay across the complete short observation
+        // must show measurable decay across the short observation
         // window before it can attenuate the mouse high band.
         const float confidence = onsetConfidence;
         lastLevel_ = level;
