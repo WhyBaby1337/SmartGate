@@ -51,16 +51,20 @@ Install `requirements.txt`, then run:
 python train_event_classifier.py --manifest dataset/manifest.json --output build/event_classifier.onnx
 ```
 
-The prototype uses 16 kHz log-mel patches (64 bands, 320 ms context) and a compact CNN.
+The prototype uses 16 kHz log-mel patches (64 bands, 32 frames). With a 512-sample FFT and 160-sample hop, the actual receptive field is about 342 ms, not 320 ms.
 Validation is grouped by whole recording to prevent adjacent windows leaking between
 training and validation. It requires at least three independent recordings with positive
 examples per output label, reports per-label precision/recall/F1, and exports ONNX logits.
+
+## Correct product architecture
+
+The event CNN is only an auxiliary detector. The actual product goal requires a separate supervised speech-isolation model that estimates clean speech from mixtures, trained against synchronized clean-speech targets. See [SPEECH_ISOLATION_ARCHITECTURE.md](SPEECH_ISOLATION_ARCHITECTURE.md) for the signal path, dataset strategy, latency constraints and acceptance tests. Event classification alone cannot remove a click that overlaps speech.
 
 ## Not ready for live audio yet
 
 This is a research/training scaffold, not a production inference path. The current dataset
 preprocessing normalizes each complete recording, which is non-causal and cannot be copied
-directly into a live plugin. The 320 ms patch also exceeds Smart Gate's current 30 ms lookahead.
+directly into a live plugin. The approximately 342 ms patch also exceeds Smart Gate's current 30 ms lookahead.
 Before integration we must implement and test a causal streaming feature frontend, decide on
 a low-latency temporal model/state strategy, and measure its CPU cost. Do not ship this model
 or connect its scores to attenuation until those pieces and the speech-preservation tests pass.
