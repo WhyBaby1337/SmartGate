@@ -147,7 +147,7 @@ public:
             lastDecayRatio_ = decay;
             // Require a clear drop between adjacent windows. Small phase/envelope
             // fluctuations in sustained sibilants must not count as switch-ring decay.
-            const float decayConfidence = unit((0.90f - decay) / 0.10f);
+            const float decayConfidence = unit((0.96f - decay) / 0.08f);
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
             pendingOnsetConfidence_ = 0.0f;
