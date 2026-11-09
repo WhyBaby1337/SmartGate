@@ -19,13 +19,10 @@ public:
         releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.0025 * rate)));
         envelopeCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.010 * rate)));
         holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0030 * rate)));
-        // Use enough samples per window to average several cycles of
-        // speech-band high-frequency energy. Very short windows can make a
-        // sustained sibilant look like a decaying click when its phase lands
-        // differently at 44.1 kHz. Keep the observation time sample-rate
-        // invariant (48 samples per window at 48 kHz).
+        // Keep the short ring-confirmation window responsive to quiet
+        // switch clicks while preserving its elapsed time across host rates.
         decayWindowSamples_ = std::max(1, static_cast<int>(
-            std::lround(rate * (48.0 / 48000.0))));
+            std::lround(rate * (16.0 / 48000.0))));
         reset();
     }
 
@@ -154,7 +151,7 @@ public:
             lastDecayRatio_ = decay;
             // Require a clear drop between adjacent windows. Small phase/envelope
             // fluctuations in sustained sibilants must not count as switch-ring decay.
-            const float decayConfidence = unit((0.932f - decay) / 0.018f);
+            const float decayConfidence = unit((0.910f - decay) / 0.020f);
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
             pendingOnsetConfidence_ = 0.0f;
