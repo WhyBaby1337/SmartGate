@@ -7,7 +7,7 @@ import numpy as np
 import soundfile as sf
 
 from train_event_classifier import (
-    FRAMES, HOP, SR, WINDOW_SAMPLES, features, positive_int, segment_window_range,
+    CONTEXT_MS, FRAMES, HOP, SR, WINDOW_SAMPLES, features, positive_int, segment_window_range, split_by_recording,
 )
 
 
@@ -59,6 +59,22 @@ class EventClassifierWindowTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(Exception):
                     positive_int(value)
+
+    def test_context_duration_is_reported_as_342_ms(self):
+        self.assertAlmostEqual(CONTEXT_MS, 342.0, places=5)
+
+    def test_recording_split_is_disjoint_and_deterministic(self):
+        groups = np.repeat(np.asarray([f"rec_{i}" for i in range(8)]), 2)
+        targets = np.tile(np.eye(4, dtype=np.float32), (4, 1))
+        train_a, valid_a = split_by_recording(groups, targets, 123)
+        train_b, valid_b = split_by_recording(groups, targets, 123)
+        train_groups = set(groups[train_a])
+        valid_groups = set(groups[valid_a])
+        self.assertTrue(train_groups.isdisjoint(valid_groups))
+        np.testing.assert_array_equal(train_a, train_b)
+        np.testing.assert_array_equal(valid_a, valid_b)
+        self.assertEqual(set(np.flatnonzero(targets[train_a].sum(axis=0) > 0)), set(range(4)))
+        self.assertEqual(set(np.flatnonzero(targets[valid_a].sum(axis=0) > 0)), set(range(4)))
 
     def test_invalid_bounds_are_rejected(self):
         for start, end in ((float("nan"), 1.0), (0.0, float("inf")),
