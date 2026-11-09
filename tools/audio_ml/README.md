@@ -125,3 +125,24 @@ useful as isolated-class material, but cannot validate the most important overla
 
 Keep private recordings out of Git. Store them locally and share only reviewed labels and
 aggregate validation metrics.
+
+## First speech-separation model prototype
+
+`speech_separator.py` now contains a small unidirectional GRU mask estimator. It consumes
+20 ms STFT frames at 48 kHz with a 10 ms hop and estimates a per-bin magnitude mask. Its
+recurrent state is explicit, so the temporal network itself can be advanced frame by frame.
+The companion `train_speech_separator.py` trains against synchronized clean-speech targets
+using waveform L1 plus multi-resolution spectral loss. It splits by complete `source_id`
+groups and refuses fewer than three independent sessions.
+
+Example:
+```bash
+python train_speech_separator.py --manifest generated/manifest.jsonl --output build/speech_separator.pt
+```
+
+This is the first trainable separation prototype, not a production-ready streaming processor.
+The current wrapper is an offline waveform path; streaming overlap-add, block-boundary state,
+bounded worker scheduling, ONNX/runtime export, and measured latency/CPU are still missing.
+A 20 ms analysis window is only a latency design point, not proof that the full plugin path
+meets the 30 ms budget. The model is mono for this first experiment. It must pass speech
+preservation and real overlap listening tests before any plugin integration.
