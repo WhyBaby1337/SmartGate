@@ -41,6 +41,17 @@ def choose_crop(audio, length, rng):
     offset = rng.randrange(0, length - len(audio) + 1)
     result[offset:offset + len(audio)] = audio
     return result
+def aligned_crop(audio, start, length):
+    """Crop a stem on a shared recording clock, padding beyond its boundaries."""
+    result = np.zeros((length, audio.shape[1]), dtype=np.float32)
+    source_start = max(0, int(start))
+    source_end = min(len(audio), int(start) + length)
+    if source_end > source_start:
+        destination_start = source_start - int(start)
+        result[destination_start:destination_start + source_end - source_start] = audio[source_start:source_end]
+    return result
+
+
 
 
 def rms(audio):
@@ -92,7 +103,7 @@ def read_manifest(path):
     return result
 
 
-def generate(manifest_path, output_dir, count, seconds, seed):
+def generate(manifest_path, output_dir, count, seconds, seed, randomize_event_offsets=False):
     rng = random.Random(seed)
     np_rng = np.random.default_rng(seed)
     sources = read_manifest(manifest_path)
@@ -114,7 +125,13 @@ def generate(manifest_path, output_dir, count, seconds, seed):
 
     for number in range(count):
         source = rng.choice(sources)
-        speech = choose_crop(cache[source["speech"]], length, rng)
+        # All stems in a source bundle share one recording clock. Select one
+        # common crop position so speech/click/background alignment is retained.
+        source_length = max(len(cache[source[key]]) for key in
+                            ("speech", "keyboard", "mouse", "background") if source[key] is not None)
+        max_start = max(0, source_length - length)
+        shared_start = rng.randrange(max_start + 1) if max_start else 0
+        speech = aligned_crop(cache[source["speech"]], shared_start, length)
         has_speech = rng.random() >= 0.15
         if not has_speech:
             speech.fill(0.0)
@@ -128,7 +145,11 @@ def generate(manifest_path, output_dir, count, seconds, seed):
             probability = {"keyboard": 0.58, "mouse": 0.58, "background": 0.35}[label]
             if rng.random() >= probability:
                 continue
-            stem = place_activity(cache[path], length, rng, label)
+            stem = aligned_crop(cache[path], shared_start, length)
+            # Temporal jitter is explicit augmentation, never the default:
+            # independently shifting stems would destroy their real alignment.
+            if randomize_event_offsets:
+                stem = place_activity(stem, length, rng, label)
             snr_range = {
                 "keyboard": (-8.0, 18.0),
                 "mouse": (-8.0, 18.0),
@@ -168,7 +189,8 @@ def generate(manifest_path, output_dir, count, seconds, seed):
         "unique_source_ids": sorted({r["source_id"] for r in records}),
         "output_manifest": str(index_path), "sample_rate": TARGET_SR,
         "duration_seconds": seconds, "seed": seed,
-        "note": "Split by source_id before training; never randomly split generated clips."
+        "randomize_event_offsets": randomize_event_offsets,
+        "note": "Stems are cropped on a shared source clock by default. Split by source_id before training."
     }, indent=2))
 
 
@@ -179,10 +201,13 @@ def main():
     parser.add_argument("--count", type=int, default=1000)
     parser.add_argument("--seconds", type=float, default=DEFAULT_SECONDS)
     parser.add_argument("--seed", type=int, default=1337)
+    parser.add_argument("--randomize-event-offsets", action="store_true",
+                        help="Apply deliberate timing-jitter augmentation to event stems")
     args = parser.parse_args()
     if args.count < 1 or args.seconds <= 0:
         parser.error("--count and --seconds must be positive")
-    generate(args.manifest, args.output_dir, args.count, args.seconds, args.seed)
+    generate(args.manifest, args.output_dir, args.count, args.seconds, args.seed,
+             randomize_event_offsets=args.randomize_event_offsets)
 
 
 if __name__ == "__main__":
