@@ -100,7 +100,7 @@ Result runScenario(const std::string& name, int blockSize, bool aiEnabled,
     Result result{100.0 * elapsedSeconds / audioSeconds, peakBlockPercent};
     std::cout << name << ": average=" << result.averagePercent
               << "% of one logical core, max block=" << result.peakBlockPercent
-              << "% (48 kHz stereo, 128 samples, " << measuredSeconds << " s)\n";
+              << "% (48 kHz stereo, " << blockSize << " samples, " << measuredSeconds << " s)\n";
     return result;
 }
 }
