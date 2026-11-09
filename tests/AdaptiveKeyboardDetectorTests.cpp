@@ -933,6 +933,101 @@ void runAdaptiveKeyboardDetectorTests() {
                         "Keyboard transient suppression must reduce varied resonant switch profiles");
     }
 
+    // End-to-end path: derive frame context from the actual mixed voice+click
+    // signal, then feed that context into the sample-accurate suppressor. This
+    // avoids a hard-coded confidence that could hide a classifier/suppressor
+    // integration regression.
+    for (const auto& profile : keyboardProfiles) {
+        smartgate::AdaptiveKeyboardDetector integratedDetector;
+        smartgate::KeyboardTransientSuppressor integratedSuppressor;
+        smartgate::KeyboardTransientSuppressor integratedVoiceReference;
+        integratedDetector.prepare(48000.0);
+        integratedSuppressor.prepare(48000.0);
+        integratedVoiceReference.prepare(48000.0);
+
+        std::vector<float> analysisFrame(frameSize, 0.0f);
+        for (int warmup = 0; warmup < 3; ++warmup) {
+            for (std::size_t i = 0; i < frameSize; ++i) {
+                const int sampleIndex = warmup * static_cast<int>(frameSize)
+                    + static_cast<int>(i);
+                analysisFrame[i] = 0.10f * std::sin(
+                    2.0f * 3.14159265f * 180.0f
+                    * static_cast<float>(sampleIndex) / 48000.0f);
+            }
+            (void) integratedDetector.processFrame(
+                analysisFrame.data(), analysisFrame.size());
+        }
+
+        float frameContexts[2] = {};
+        for (int frameIndex = 0; frameIndex < 2; ++frameIndex) {
+            for (std::size_t i = 0; i < frameSize; ++i) {
+                const int streamIndex = frameIndex * static_cast<int>(frameSize)
+                    + static_cast<int>(i);
+                const int age = streamIndex - 100;
+                const int sampleIndex = 3 * static_cast<int>(frameSize)
+                    + streamIndex;
+                const float voice = 0.10f * std::sin(
+                    2.0f * 3.14159265f * 180.0f
+                    * static_cast<float>(sampleIndex) / 48000.0f);
+                float click = 0.0f;
+                if (age >= 0 && age < profile.durationSamples) {
+                    const float elapsed = static_cast<float>(age);
+                    const float envelope = std::exp(-elapsed / profile.decaySamples);
+                    const float time = elapsed / 48000.0f;
+                    click = profile.amplitude * envelope * (
+                        std::sin(2.0f * 3.14159265f
+                            * profile.frequencyA * time + 1.5707963f)
+                        + 0.40f * std::sin(2.0f * 3.14159265f
+                            * profile.frequencyB * time + 1.5707963f));
+                    if (age == 0)
+                        click += 3.0f * profile.amplitude;
+                }
+                analysisFrame[i] = voice + click;
+            }
+            frameContexts[frameIndex] = integratedDetector.processFrame(
+                analysisFrame.data(), analysisFrame.size());
+        }
+
+        double integratedInputEnergy = 0.0;
+        double integratedOutputEnergy = 0.0;
+        for (int i = 0; i < 2 * static_cast<int>(frameSize); ++i) {
+            const int age = i - 100;
+            const int sampleIndex = 3 * static_cast<int>(frameSize) + i;
+            const float voice = 0.10f * std::sin(
+                2.0f * 3.14159265f * 180.0f
+                * static_cast<float>(sampleIndex) / 48000.0f);
+            float click = 0.0f;
+            if (age >= 0 && age < profile.durationSamples) {
+                const float elapsed = static_cast<float>(age);
+                const float envelope = std::exp(-elapsed / profile.decaySamples);
+                const float time = elapsed / 48000.0f;
+                click = profile.amplitude * envelope * (
+                    std::sin(2.0f * 3.14159265f
+                        * profile.frequencyA * time + 1.5707963f)
+                    + 0.40f * std::sin(2.0f * 3.14159265f
+                        * profile.frequencyB * time + 1.5707963f));
+                if (age == 0)
+                    click += 3.0f * profile.amplitude;
+            }
+            const float context = frameContexts[i / static_cast<int>(frameSize)];
+            const float output = integratedSuppressor.process(
+                voice + click, 0.35f, context);
+            const float voiceOnly = integratedVoiceReference.process(
+                voice, 0.0f, 0.0f);
+            if (age >= 0 && age < profile.durationSamples) {
+                const float residual = output - voiceOnly;
+                integratedInputEnergy += static_cast<double>(click) * click;
+                integratedOutputEnergy += static_cast<double>(residual) * residual;
+            }
+        }
+        requireKeyboard(frameContexts[0] > 0.0f,
+            "Integrated keyboard path must derive nonzero context from a mixed click frame");
+        requireKeyboard(integratedInputEnergy > 1.0e-8,
+            "Integrated keyboard fixture must contain measurable click energy");
+        requireKeyboard(integratedOutputEnergy / integratedInputEnergy < 0.98,
+            "Classifier-driven keyboard suppression must reduce varied switch profiles");
+    }
+
     // Sustained /s/ and /sh/-like high-frequency energy is speech, not a click.
     smartgate::KeyboardTransientSuppressor sibilantKeyboardGuard;
     sibilantKeyboardGuard.prepare(48000.0);
