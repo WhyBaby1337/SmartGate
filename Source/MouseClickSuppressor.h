@@ -169,7 +169,7 @@ public:
             const float earlyDecay = pendingOnsetEarlySecond_
                 / std::max(pendingOnsetEarlyFirst_, 1.0e-12f);
             if (earlyDecay < 0.84f
-                && periodicity > 0.45f && periodicity < 0.96f) {
+                && periodicity > 0.75f && periodicity < 0.96f) {
                 // Very short, strongly decaying resonances need an earlier
                 // decision than the longer phase-stable ring confirmation.
                 // Also require some short-window periodic structure: a random
