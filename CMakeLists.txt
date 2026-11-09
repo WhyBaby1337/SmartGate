@@ -149,6 +149,24 @@ if(SMARTGATE_BUILD_PLUGIN)
     add_test(NAME SmartGateProcessorStateTests
         COMMAND SmartGateProcessorStateTests)
 
+    # Benchmark the actual JUCE AudioProcessor processBlock path, not isolated DSP classes.
+    add_executable(SmartGateProcessorBenchmark
+        tests/ProcessorBenchmark.cpp
+        Source/PluginProcessor.cpp
+        Source/PluginEditor.cpp
+        Source/PluginProcessor.h
+        Source/PluginEditor.h)
+    target_compile_definitions(SmartGateProcessorBenchmark PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_link_libraries(SmartGateProcessorBenchmark PRIVATE
+        smartgate_dsp
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+
     if(SMARTGATE_ENABLE_SILERO)
         target_include_directories(SmartGate PRIVATE "${SMARTGATE_ORT_ROOT}/include")
         target_compile_definitions(SmartGate PRIVATE SMARTGATE_HAS_SILERO=1)

@@ -69,6 +69,8 @@ jobs:
         run: .\\build\\Release\\SmartGateSileroTests.exe
       - name: Measure DSP CPU budget
         run: .\\build\\Release\\SmartGateDspBenchmark.exe
+      - name: Measure full processor CPU budget
+        run: .\\build\\Release\\SmartGateProcessorBenchmark.exe
       - name: Verify VST3 bundle dependencies
         id: verify_bundle
         shell: pwsh
