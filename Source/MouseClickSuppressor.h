@@ -198,7 +198,8 @@ public:
             // Average absolute magnitude is less sensitive than short-window
             // RMS to the phase of sustained tones at non-48 kHz sample rates.
             // A decaying switch ring still loses mean magnitude between windows.
-            const float decayConfidence = periodicity < 0.96f
+            const float decayConfidence = periodicity > 0.65f
+                && periodicity < 0.96f
                 ? unit((0.92f - decay) / 0.04f) : 0.0f;
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
