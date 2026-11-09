@@ -34,6 +34,8 @@ public:
         pendingOnsetConfidence_ = 0.0f;
         pendingOnsetFirstPeak_ = 0.0f;
         pendingOnsetSecondPeak_ = 0.0f;
+        pendingOnsetEarlyFirst_ = 0.0f;
+        pendingOnsetEarlySecond_ = 0.0f;
         pendingOnsetSamples_ = 0;
         highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
@@ -65,6 +67,8 @@ public:
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
+            pendingOnsetEarlyFirst_ = 0.0f;
+            pendingOnsetEarlySecond_ = 0.0f;
             pendingOnsetSamples_ = 0;
             highBandEnvelope_ = std::abs(high);
             highBandGain_ = 1.0f;
@@ -122,8 +126,14 @@ public:
             pendingOnsetConfidence_ = level * novelty;
             pendingOnsetFirstPeak_ = magnitude;
             pendingOnsetSecondPeak_ = 0.0f;
+            pendingOnsetEarlyFirst_ = magnitude;
+            pendingOnsetEarlySecond_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
+            if (pendingOnsetSamples_ <= 16)
+                pendingOnsetEarlyFirst_ += magnitude;
+            else if (pendingOnsetSamples_ <= 32)
+                pendingOnsetEarlySecond_ += magnitude;
             if (pendingOnsetSamples_ <= decayWindowSamples_) {
                 pendingOnsetFirstPeak_ += magnitude;
             } else {
@@ -144,6 +154,24 @@ public:
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
+            pendingOnsetEarlyFirst_ = 0.0f;
+            pendingOnsetEarlySecond_ = 0.0f;
+        }
+        if (pendingOnsetSamples_ > 32) {
+            const float earlyDecay = pendingOnsetEarlySecond_
+                / std::max(pendingOnsetEarlyFirst_, 1.0e-12f);
+            if (earlyDecay < 0.84f) {
+                // Very short, strongly decaying resonances need an earlier
+                // decision than the longer phase-stable ring confirmation.
+                onsetConfidence = pendingOnsetConfidence_
+                    * unit((0.84f - earlyDecay) / 0.08f);
+                pendingOnsetSamples_ = 0;
+                pendingOnsetConfidence_ = 0.0f;
+                pendingOnsetFirstPeak_ = 0.0f;
+                pendingOnsetSecondPeak_ = 0.0f;
+                pendingOnsetEarlyFirst_ = 0.0f;
+                pendingOnsetEarlySecond_ = 0.0f;
+            }
         }
         if (pendingOnsetSamples_ > 2 * decayWindowSamples_) {
             const float decay = pendingOnsetSecondPeak_
@@ -160,6 +188,8 @@ public:
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
+            pendingOnsetEarlyFirst_ = 0.0f;
+            pendingOnsetEarlySecond_ = 0.0f;
         }
 
         // The broad edge/novelty score remains diagnostic only. A candidate
@@ -211,6 +241,8 @@ private:
     float pendingOnsetConfidence_ = 0.0f;
     float pendingOnsetFirstPeak_ = 0.0f;
     float pendingOnsetSecondPeak_ = 0.0f;
+    float pendingOnsetEarlyFirst_ = 0.0f;
+    float pendingOnsetEarlySecond_ = 0.0f;
     int pendingOnsetSamples_ = 0;
     float highBandEnvelope_ = 0.0f;
     float highBandGain_ = 1.0f;
