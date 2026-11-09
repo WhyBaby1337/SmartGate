@@ -85,7 +85,10 @@ public:
         // sustained /s/, /sh/ or /ch/ as a mouse event.
         const float levelFloor = 0.0020f - 0.0010f * context;
         const float levelSpan = 0.022f - 0.006f * context;
-        const float edgeFloor = 0.043f - 0.012f * context;
+        // Quieter switch rings can have a smaller sample-to-sample edge
+        // than the established profiles. Keep the peak-then-drop confirmation
+        // as the primary speech guard while allowing this weaker edge through.
+        const float edgeFloor = 0.024f - 0.008f * context;
         const float edgeSpan = 0.13f - 0.020f * context;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
@@ -94,7 +97,7 @@ public:
         // when the following sample falls sharply; this avoids reacting to
         // the rising quarter-cycle of a sustained /s/ or /sh/ tone.
         const bool onsetCandidate = magnitudeRise > 0.012f
-            && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.95f;
+            && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.90f;
         const float onsetDrop = unit((0.55f - magnitudeFallRatio) / 0.25f);
         const float onsetConfidence = previousOnsetConfidence_ * onsetDrop;
         previousOnsetConfidence_ = onsetCandidate ? level * onsetNovelty : 0.0f;
