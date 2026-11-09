@@ -108,6 +108,42 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(std::abs(maximumRateConfidence - extremeRateConfidence) < 1.0e-6f,
                     "Extreme finite sample rates must clamp to the supported maximum");
 
+    // Classifier attack, release and RMS-reference adaptation are time-based.
+    // A 256-sample frame lasts different amounts of time at different host
+    // rates, so compare equal-duration frames rather than equal frame counts.
+    float referenceClickConfidence = -1.0f;
+    float referenceReleasedConfidence = -1.0f;
+    for (const double rate : {44100.0, 48000.0, 96000.0}) {
+        smartgate::AdaptiveKeyboardDetector rateDetector;
+        rateDetector.prepare(rate);
+        const auto rateFrameSize = static_cast<std::size_t>(
+            std::lround(rate * 256.0 / 48000.0));
+        std::vector<float> transientFrame(rateFrameSize, 0.0f);
+        transientFrame[rateFrameSize / 4] = 0.8f;
+        float rateClickConfidence = 0.0f;
+        const int attackFrames = static_cast<int>(std::lround(
+            0.050 * rate / static_cast<double>(rateFrameSize)));
+        for (int frame = 0; frame < attackFrames; ++frame)
+            rateClickConfidence = rateDetector.processFrame(
+                transientFrame.data(), transientFrame.size());
+        const int releaseFrames = static_cast<int>(std::lround(
+            0.100 * rate / static_cast<double>(rateFrameSize)));
+        std::fill(transientFrame.begin(), transientFrame.end(), 0.0f);
+        float rateReleasedConfidence = rateClickConfidence;
+        for (int frame = 0; frame < releaseFrames; ++frame)
+            rateReleasedConfidence = rateDetector.processFrame(
+                transientFrame.data(), transientFrame.size());
+        if (referenceClickConfidence < 0.0f) {
+            referenceClickConfidence = rateClickConfidence;
+            referenceReleasedConfidence = rateReleasedConfidence;
+        } else {
+            requireKeyboard(std::abs(rateClickConfidence - referenceClickConfidence) < 0.025f,
+                "Keyboard classifier attack must remain stable in elapsed time across sample rates");
+            requireKeyboard(std::abs(rateReleasedConfidence - referenceReleasedConfidence) < 0.025f,
+                "Keyboard classifier release must remain stable in elapsed time across sample rates");
+        }
+    }
+
     std::vector<float> clickFrame(frameSize, 0.0f);
     clickFrame[100] = 0.8f;
     float clickConfidence = 0.0f;

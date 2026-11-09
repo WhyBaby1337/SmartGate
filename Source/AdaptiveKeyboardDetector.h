@@ -15,6 +15,7 @@ public:
     void prepare(double sampleRate) noexcept {
         const double rate = std::isfinite(sampleRate)
             ? std::clamp(sampleRate, 8000.0, 768000.0) : 44100.0;
+        sampleRate_ = rate;
         lowPassCoefficient_ = static_cast<float>(
             std::exp(-2.0 * 3.14159265358979323846 * 1800.0 / rate));
         reset();
@@ -94,11 +95,28 @@ public:
         // In near-silence there is no speech transient to protect, so clear stale
         // click confidence faster. Keep the conservative release during audible
         // input to avoid pumping or clipping the tail of speech.
-        const float releaseSmoothing = rms < 0.002f ? 0.18f : 0.08f;
-        const float smoothing = target > confidence_ ? 0.45f : releaseSmoothing;
+        // Preserve the established 48 kHz / 256-sample response while making
+        // classifier dynamics depend on elapsed time rather than frame count.
+        // Fixed per-frame coefficients made confidence and its RMS reference
+        // run twice as fast at 96 kHz (and slower at 44.1 kHz).
+        constexpr double nominalFrameDuration = 256.0 / 48000.0;
+        const double frameDuration = static_cast<double>(count) / sampleRate_;
+        const double attackTime = -nominalFrameDuration / std::log(0.55);
+        const double releaseTime = -nominalFrameDuration / std::log(0.92);
+        const double silenceReleaseTime = -nominalFrameDuration / std::log(0.82);
+        const double referenceTime = -nominalFrameDuration / std::log(0.95);
+        const float attackSmoothing = static_cast<float>(
+            1.0 - std::exp(-frameDuration / attackTime));
+        const float releaseSmoothing = static_cast<float>(1.0 - std::exp(
+            -frameDuration / (rms < 0.002f ? silenceReleaseTime : releaseTime)));
+        const float smoothing = target > confidence_
+            ? attackSmoothing : releaseSmoothing;
         confidence_ += smoothing * (target - confidence_);
-        if (hasReference_)
-            referenceRms_ = 0.95f * referenceRms_ + 0.05f * rms;
+        if (hasReference_) {
+            const float referenceSmoothing = static_cast<float>(
+                1.0 - std::exp(-frameDuration / referenceTime));
+            referenceRms_ += referenceSmoothing * (rms - referenceRms_);
+        }
         else {
             referenceRms_ = rms;
             hasReference_ = true;
@@ -123,6 +141,7 @@ private:
     }
 
     Mode mode_ = Mode::Universal;
+    double sampleRate_ = 44100.0;
     float lowPassCoefficient_ = 0.0f;
     double lowPassState_ = 0.0;
     float referenceRms_ = 0.005f;
