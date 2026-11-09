@@ -48,6 +48,8 @@ public:
         lastOnsetCandidate_ = false;
         onsetCandidateCount_ = 0;
         lastDecayRatio_ = 0.0f;
+        lastPeriodicity_ = 0.0f;
+        lastEarlyDecayRatio_ = 0.0f;
         historyWriteIndex_ = 0;
         historyCount_ = 0;
         for (float& sample : highBandHistory_)
@@ -151,6 +153,7 @@ public:
 
         float onsetConfidence = 0.0f;
         const float periodicity = getRecentPeriodicity();
+        lastPeriodicity_ = periodicity;
         // Preserve the immediate path for a genuinely broadband, isolated
         // switch impulse. Its high-pass residual collapses sharply on the
         // next sample, unlike the slower resonant ring handled by the window.
@@ -168,6 +171,7 @@ public:
         if (pendingOnsetSamples_ > 36) {
             const float earlyDecay = pendingOnsetEarlySecond_
                 / std::max(pendingOnsetEarlyFirst_, 1.0e-12f);
+            lastEarlyDecayRatio_ = earlyDecay;
             if (earlyDecay < 0.84f
                 && periodicity > 0.90f && periodicity < 0.96f) {
                 // Very short, strongly decaying resonances need an earlier
@@ -238,6 +242,8 @@ public:
     unsigned getOnsetCandidateCount() const noexcept { return onsetCandidateCount_; }
     int getPendingOnsetSamples() const noexcept { return pendingOnsetSamples_; }
     float getLastDecayRatio() const noexcept { return lastDecayRatio_; }
+    float getLastPeriodicity() const noexcept { return lastPeriodicity_; }
+    float getLastEarlyDecayRatio() const noexcept { return lastEarlyDecayRatio_; }
 
 private:
     float getRecentPeriodicity() const noexcept {
@@ -290,6 +296,8 @@ private:
     bool lastOnsetCandidate_ = false;
     unsigned onsetCandidateCount_ = 0;
     float lastDecayRatio_ = 0.0f;
+    float lastPeriodicity_ = 0.0f;
+    float lastEarlyDecayRatio_ = 0.0f;
     int holdSamples_ = 1;
     int decayWindowSamples_ = 16;
     float highBandHistory_[32]{};
