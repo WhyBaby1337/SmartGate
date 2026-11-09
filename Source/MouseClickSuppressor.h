@@ -109,7 +109,8 @@ public:
         // decay threshold below rejects phase/envelope fluctuations in
         // sustained sibilants rather than relying on a long wait.
         const bool onsetCandidate = edge > edgeFloor && level > 0.3f
-            && impulsiveness > 0.005f && novelty > 0.90f;
+            && impulsiveness > 0.005f && novelty > 0.90f
+            && onsetNovelty > 0.25f;
         lastOnsetCandidate_ = onsetCandidate;
         if (onsetCandidate)
             ++onsetCandidateCount_;
