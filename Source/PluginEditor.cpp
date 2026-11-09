@@ -159,7 +159,7 @@ void SmartGateAudioProcessorEditor::configureSlider(
         "How strongly a learned target profile extends phrase hold. It only acts after a profile is ready and never attenuates the voice.",
         "Amount of keyboard-noise suppression. This works independently of the AI Engine toggle.",
         "Controls phrase-aware hold extension. Higher values keep the gate open longer between syllables; lower values follow the base Hold setting more closely.",
-        "Conservatively attenuates brief high-frequency mouth clicks. It does not remove sustained breaths or nasal noise."
+        "Conservatively attenuates brief high-frequency mouse switch clicks. It does not change keyboard or mouth-click suppression."
     };
     slider.setTooltip(tooltips[index]);
     slider.setColour(juce::Slider::rotarySliderFillColourId, accent);
