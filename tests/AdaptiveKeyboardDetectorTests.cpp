@@ -858,7 +858,12 @@ void runAdaptiveKeyboardDetectorTests() {
         }
         requireKeyboard(inputClickEnergy > 1.0e-8,
                         "Keyboard profile fixture must contain measurable click energy");
-        requireKeyboard(outputClickEnergy < inputClickEnergy * 0.98,
+        const double profileRatio = outputClickEnergy / inputClickEnergy;
+        std::fprintf(stderr,
+            "Keyboard profile %.0f/%.0f Hz: residual ratio=%.6f\\n",
+            static_cast<double>(profile.frequencyA),
+            static_cast<double>(profile.frequencyB), profileRatio);
+        requireKeyboard(profileRatio < 0.98,
                         "Keyboard transient suppression must reduce varied resonant switch profiles");
     }
 
