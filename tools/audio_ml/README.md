@@ -100,9 +100,25 @@ some examples contain speech alone, non-speech events, or background. By default
 is cropped at the same sample offset on the shared source clock, preserving real event/speech
 overlap. The optional `--randomize-event-offsets` flag deliberately adds timing jitter and
 should be used only as an explicit augmentation, not as the default data alignment. The
-generator uses one source-session bundle per example and writes its `source_id` into the index. Split by
-source/session IDs before training: never randomly split generated clips, or near-identical
-source material can leak across evaluation sets.
+generator uses one source-session bundle per example and writes its `source_id` into the index.
+All stems default to a shared time origin. For event-only excerpts that begin later in the
+session, provide explicit per-stem offsets in seconds, for example:
+
+```json
+{
+  "id": "session_c",
+  "speech": "stems/session_c_speech.wav",
+  "mouse": "stems/session_c_mouse_excerpt.wav",
+  "start_seconds": {"speech": 0.0, "mouse": 12.4}
+}
+```
+
+Offsets are measured on the common source-session clock after resampling; they must be finite
+and non-negative. The generator computes the session extent from each stem's offset plus
+duration, then crops every stem against the same absolute timeline. Do not use offsets to
+disguise stems from unrelated recordings. Split by source/session IDs before training: never
+randomly split generated clips, or near-identical source material can leak across evaluation
+sets.
 
 This generator is a first data-preparation component, not a trained separator. Its quality
 depends on genuinely isolated, correctly synchronized stems. Do not treat arbitrary
