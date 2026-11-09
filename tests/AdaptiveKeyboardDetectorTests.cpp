@@ -1257,6 +1257,33 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(minimumNoisyKeyboardSibilantGain > 0.95f,
         "Steady-state noise-like sibilants must not be attenuated by keyboard suppression");
 
+    // A real /s/-like sound grows into its noisy high-band bed rather than
+    // appearing as an instantaneous full-level noise burst. Check the onset,
+    // not only the steady state: otherwise a false trigger on the first
+    // fricative samples could shave the beginning of a spoken word.
+    for (const double rate : {44100.0, 48000.0, 96000.0}) {
+        smartgate::KeyboardTransientSuppressor fricativeOnsetGuard;
+        fricativeOnsetGuard.prepare(rate);
+        std::uint32_t fricativeNoiseState = 0x91e10da5u;
+        float minimumFricativeOnsetGain = 1.0f;
+        const int rampSamples = static_cast<int>(std::lround(0.012 * rate));
+        const int totalSamples = static_cast<int>(std::lround(0.080 * rate));
+        for (int i = 0; i < totalSamples; ++i) {
+            fricativeNoiseState ^= fricativeNoiseState << 13;
+            fricativeNoiseState ^= fricativeNoiseState >> 17;
+            fricativeNoiseState ^= fricativeNoiseState << 5;
+            const float noise = (static_cast<float>(fricativeNoiseState & 0xffffu)
+                                 / 32767.5f - 1.0f) * 0.06f;
+            const float ramp = std::min(1.0f,
+                static_cast<float>(i + 1) / static_cast<float>(rampSamples));
+            (void) fricativeOnsetGuard.process(noise * ramp, 1.0f, 1.0f);
+            minimumFricativeOnsetGain = std::min(minimumFricativeOnsetGain,
+                fricativeOnsetGuard.getHighBandGain());
+        }
+        requireKeyboard(minimumFricativeOnsetGain > 0.95f,
+            "A naturally rising noise-like fricative onset must remain transparent at every host rate");
+    }
+
     // Mid-band attenuation must react to a classifier-aligned mechanical
     // impulse, but remain effectively transparent for a sustained speech-like
     // tone in the same band (a conservative guard for formants and consonants).
