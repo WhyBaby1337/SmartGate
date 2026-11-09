@@ -62,27 +62,34 @@ class SpeechSeparatorRuntimeTests(unittest.TestCase):
 
     def test_stream_reset_discards_previous_recurrent_and_overlap_state(self):
         model = SpeechMaskSeparator(hidden=16, layers=1).eval()
-        stream = StreamingSpeechMaskSeparator(model)
+        reused_stream = StreamingSpeechMaskSeparator(model)
         first = torch.randn(4800)
-        stream.process_chunk(first[:1700])
-        stream.reset()
+        # Populate the input FIFO, recurrent state and overlap-add buffers.
+        reused_stream.process_chunk(first[:1700])
+        reused_stream.reset()
 
         second = torch.randn(7201)
-        with torch.no_grad():
-            offline, _, _ = model(second.unsqueeze(0))
-        pieces = []
-        position = 0
-        chunk_sizes = (64, 127, 256, 511, 1024)
-        index = 0
-        while position < second.numel():
-            chunk = second[position:position + chunk_sizes[index % len(chunk_sizes)]]
-            pieces.append(stream.process_chunk(chunk))
-            position += int(chunk.numel())
-            index += 1
-        pieces.append(stream.flush())
-        streamed = torch.cat(pieces)
-        self.assertEqual(streamed.numel(), second.numel())
-        self.assertTrue(torch.allclose(streamed, offline[0], atol=2e-5, rtol=2e-4))
+
+        def run_stream(stream, audio):
+            pieces = []
+            position = 0
+            chunk_sizes = (64, 127, 256, 511, 1024)
+            index = 0
+            while position < audio.numel():
+                chunk = audio[position:position + chunk_sizes[index % len(chunk_sizes)]]
+                pieces.append(stream.process_chunk(chunk))
+                position += int(chunk.numel())
+                index += 1
+            pieces.append(stream.flush())
+            return torch.cat(pieces)
+
+        reused_output = run_stream(reused_stream, second)
+        fresh_output = run_stream(StreamingSpeechMaskSeparator(model), second)
+
+        self.assertEqual(reused_output.numel(), second.numel())
+        self.assertTrue(torch.isfinite(reused_output).all().item())
+        # Reset must make a previously used instance behave exactly like a new one.
+        self.assertTrue(torch.equal(reused_output, fresh_output))
 
     def test_empty_stream_flush_and_reset_are_reusable(self):
         model = SpeechMaskSeparator(hidden=16, layers=1).eval()
