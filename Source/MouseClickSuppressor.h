@@ -106,8 +106,7 @@ public:
         // several samples at 48 kHz. Compare RMS energy in two adjacent
         // 16-sample windows, spanning several cycles of high-frequency speech. RMS is less phase-sensitive than peak tracking,
         // while a real decaying ring still falls measurably between windows.
-        const bool onsetCandidate = magnitudeRise > 0.012f
-            && edge > edgeFloor && level > 0.3f
+        const bool onsetCandidate = edge > edgeFloor && level > 0.3f
             && impulsiveness > 0.005f && onsetNovelty > 0.90f;
         if (onsetCandidate && pendingOnsetSamples_ == 0) {
             pendingOnsetConfidence_ = level * novelty;
