@@ -107,9 +107,9 @@ public:
         // windows. A real decaying ring falls between windows; sustained
         // sibilants and stationary noise retain a similar peak level.
         const bool onsetCandidate = edge > edgeFloor
-            && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.75f;
+            && level > 0.3f && impulsiveness > 0.005f && novelty > 0.75f;
         if (onsetCandidate && pendingOnsetSamples_ == 0) {
-            pendingOnsetConfidence_ = level * onsetNovelty;
+            pendingOnsetConfidence_ = level * novelty;
             pendingOnsetFirstPeak_ = magnitude;
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 1;
