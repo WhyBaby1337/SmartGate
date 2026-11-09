@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from build_speech_mixtures import TARGET_SR, choose_crop, generate, place_activity
+from build_speech_mixtures import TARGET_SR, aligned_crop, choose_crop, generate, place_activity
 
 
 class MixtureBuilderTests(unittest.TestCase):
@@ -16,6 +16,14 @@ class MixtureBuilderTests(unittest.TestCase):
         self.assertEqual(result.shape, (8, 2))
         self.assertEqual(np.count_nonzero(result), 4)
         self.assertTrue(np.all(np.isin(result[:, 0], [0.0, 0.25, 0.5])))
+
+    def test_aligned_crop_preserves_shared_source_timing(self):
+        source = np.arange(20, dtype=np.float32).reshape(10, 2)
+        crop = aligned_crop(source, 3, 5)
+        np.testing.assert_array_equal(crop, source[3:8])
+        padded = aligned_crop(source, 8, 5)
+        np.testing.assert_array_equal(padded[:2], source[8:10])
+        np.testing.assert_array_equal(padded[2:], np.zeros((3, 2), dtype=np.float32))
 
     def test_transient_activity_is_not_forced_to_clip_start(self):
         stem = np.ones((TARGET_SR, 2), dtype=np.float32)
