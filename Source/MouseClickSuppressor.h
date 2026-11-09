@@ -96,7 +96,7 @@ public:
         // Quieter switch rings can have a smaller sample-to-sample edge
         // than the established profiles. Keep the peak-then-drop confirmation
         // as the primary speech guard while allowing this weaker edge through.
-        const float edgeFloor = 0.024f - 0.008f * context;
+        const float edgeFloor = 0.020f - 0.006f * context;
         const float edgeSpan = 0.13f - 0.020f * context;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
