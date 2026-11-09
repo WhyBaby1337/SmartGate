@@ -5,15 +5,10 @@ on:
     paths:
       - "tools/audio_ml/**"
       - ".github/workflows/audio-ml-tools.yml"
-  pull_request:
-    branches: ["development/**"]
-    paths:
-      - "tools/audio_ml/**"
-      - ".github/workflows/audio-ml-tools.yml"
 permissions:
   contents: read
 jobs:
-  python-syntax-and-tests:
+  audio-ml-tests:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -30,19 +25,9 @@ jobs:
           python -m py_compile tools/audio_ml/train_speech_separator.py
       - name: Test paired mixture generation
         run: PYTHONPATH=tools/audio_ml python -m unittest tools.audio_ml.tests.test_build_speech_mixtures -v
-      - name: Check whitespace errors
-        run: git diff --check
-
-  speech-separator-runtime-tests:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install lightweight audio dependencies
-        run: python -m pip install numpy scipy soundfile
       - name: Install CPU PyTorch
         run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Run separator runtime and gradient tests
         run: PYTHONPATH=tools/audio_ml python -m unittest tools.audio_ml.tests.test_speech_separator tools.audio_ml.tests.test_train_speech_separator -v
+      - name: Check whitespace errors
+        run: git diff --check
