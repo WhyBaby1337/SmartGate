@@ -808,6 +808,60 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(quietKeyboardVoiceError < 0.003f,
                     "Quiet keyboard click suppression must preserve the low voice fundamental");
 
+    // Cover a range of resonant switch signatures rather than tuning the
+    // transient path to one synthetic keyboard frequency. The voice-only
+    // reference removes filter phase from the energy comparison.
+    struct KeyboardClickProfile {
+        float frequencyA;
+        float frequencyB;
+        float amplitude;
+        float decaySamples;
+        int durationSamples;
+    };
+    const KeyboardClickProfile keyboardProfiles[] = {
+        { 3100.0f,  4600.0f, 0.075f,  52.0f, 180},
+        { 4200.0f,  6900.0f, 0.060f,  84.0f, 240},
+        { 5600.0f,  8200.0f, 0.050f, 110.0f, 300},
+        { 7600.0f, 10400.0f, 0.045f,  42.0f, 150}
+    };
+    for (const auto& profile : keyboardProfiles) {
+        smartgate::KeyboardTransientSuppressor profileSuppressor;
+        smartgate::KeyboardTransientSuppressor voiceReference;
+        profileSuppressor.prepare(48000.0);
+        voiceReference.prepare(48000.0);
+        double inputClickEnergy = 0.0;
+        double outputClickEnergy = 0.0;
+        for (int i = 0; i < 1800; ++i) {
+            const float voice = 0.10f * std::sin(
+                2.0f * 3.14159265f * 180.0f * static_cast<float>(i) / 48000.0f);
+            float click = 0.0f;
+            const int age = i - 360;
+            if (age >= 0 && age < profile.durationSamples) {
+                const float elapsed = static_cast<float>(age);
+                const float envelope = std::exp(-elapsed / profile.decaySamples);
+                const float time = elapsed / 48000.0f;
+                click = profile.amplitude * envelope * (
+                    std::sin(2.0f * 3.14159265f * profile.frequencyA * time
+                             + 1.5707963f)
+                    + 0.40f * std::sin(
+                        2.0f * 3.14159265f * profile.frequencyB * time
+                        + 1.5707963f));
+            }
+            const float output = profileSuppressor.process(
+                voice + click, 0.35f, 0.75f);
+            const float voiceOnly = voiceReference.process(voice, 0.0f, 0.0f);
+            if (age >= 0 && age < profile.durationSamples) {
+                const float residual = output - voiceOnly;
+                inputClickEnergy += static_cast<double>(click) * click;
+                outputClickEnergy += static_cast<double>(residual) * residual;
+            }
+        }
+        requireKeyboard(inputClickEnergy > 1.0e-8,
+                        "Keyboard profile fixture must contain measurable click energy");
+        requireKeyboard(outputClickEnergy < inputClickEnergy * 0.98,
+                        "Keyboard transient suppression must reduce varied resonant switch profiles");
+    }
+
     // Sustained /s/ and /sh/-like high-frequency energy is speech, not a click.
     smartgate::KeyboardTransientSuppressor sibilantKeyboardGuard;
     sibilantKeyboardGuard.prepare(48000.0);
