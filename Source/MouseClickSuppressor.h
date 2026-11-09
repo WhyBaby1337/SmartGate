@@ -109,9 +109,9 @@ public:
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
 
         // Qualify a switch strike by its short decay envelope, not by a
-        // one-sample drop. Two 16-sample RMS windows confirm short rings early. The stricter
-        // decay threshold below rejects phase/envelope fluctuations in
-        // sustained sibilants rather than relying on a long wait.
+        // one-sample drop. Two short, sample-rate-scaled RMS windows confirm
+        // rings over a consistent elapsed time. The stricter decay threshold
+        // rejects phase/envelope fluctuations in sustained sibilants.
         const bool onsetCandidate = edge > edgeFloor && level > 0.3f
             && impulsiveness > 0.005f && novelty > 0.90f
             && onsetNovelty > 0.25f;

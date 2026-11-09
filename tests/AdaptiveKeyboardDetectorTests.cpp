@@ -657,6 +657,45 @@ void runAdaptiveKeyboardDetectorTests() {
         }
     }
 
+    // The ring-confirmation window must represent the same elapsed time
+    // at common host rates. Exercise a resonant click at 44.1 and 96 kHz,
+    // keeping frequencies and decay time constant in seconds.
+    for (const double rate : {44100.0, 96000.0}) {
+        smartgate::MouseClickSuppressor rateScaledMouse;
+        smartgate::MouseClickSuppressor rateScaledVoiceOnly;
+        rateScaledMouse.prepare(rate);
+        rateScaledVoiceOnly.prepare(rate);
+        const int totalSamples = static_cast<int>(std::lround(rate * 0.050));
+        const int clickStart = static_cast<int>(std::lround(rate * 0.0125));
+        const int clickDuration = static_cast<int>(std::lround(rate * 0.005));
+        const double decaySamples = 80.0 * rate / 48000.0;
+        float inputEnergy = 0.0f;
+        float outputEnergy = 0.0f;
+        for (int i = 0; i < totalSamples; ++i) {
+            const float voice = 0.12f * std::sin(
+                2.0f * 3.14159265f * 180.0f * static_cast<float>(i / rate));
+            float click = 0.0f;
+            if (i >= clickStart && i < clickStart + clickDuration) {
+                const float age = static_cast<float>(i - clickStart);
+                const float time = static_cast<float>(age / rate);
+                const float envelope = std::exp(static_cast<float>(-age / decaySamples));
+                click = 0.06f * envelope * (
+                    std::sin(2.0f * 3.14159265f * 6800.0f * time + 1.5707963f)
+                    + 0.4f * std::sin(2.0f * 3.14159265f * 9800.0f * time
+                                      + 1.5707963f));
+            }
+            const float reference = rateScaledVoiceOnly.process(voice, 1.0f, 0.65f);
+            const float output = rateScaledMouse.process(voice + click, 1.0f, 0.65f);
+            if (i >= clickStart && i < clickStart + clickDuration) {
+                inputEnergy += click * click;
+                const float residual = output - reference;
+                outputEnergy += residual * residual;
+            }
+        }
+        requireKeyboard(outputEnergy < inputEnergy * 0.97f,
+            "Mouse ring confirmation must remain effective at 44.1 and 96 kHz");
+    }
+
     smartgate::MouseClickSuppressor mouseSibilantGuard;
     mouseSibilantGuard.prepare(48000.0);
     float minimumMouseSibilantGain = 1.0f;
