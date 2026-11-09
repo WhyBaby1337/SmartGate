@@ -9,7 +9,6 @@
 
 namespace {
 constexpr double sampleRate = 48000.0;
-constexpr int blockSize = 128;
 constexpr std::uint64_t measuredSeconds = 8;
 constexpr std::uint64_t measuredSamples =
     static_cast<std::uint64_t>(sampleRate) * measuredSeconds;
@@ -31,7 +30,7 @@ struct Result {
     double peakBlockPercent = 0.0;
 };
 
-Result runScenario(const std::string& name, bool aiEnabled,
+Result runScenario(const std::string& name, int blockSize, bool aiEnabled,
                    float keyboardReduction, bool mouseEnabled,
                    float mouseReduction, bool mouthEnabled,
                    float mouthReduction) {
@@ -51,8 +50,9 @@ Result runScenario(const std::string& name, bool aiEnabled,
     double peakBlockPercent = 0.0;
     constexpr double pi = 3.14159265358979323846;
 
-    // Warm up filters, caches and branch predictors before collecting timings.
-    for (int block = 0; block < 750; ++block) {
+    // Warm up for two seconds independent of the selected host block size.
+    const int warmupBlocks = static_cast<int>(2.0 * sampleRate / blockSize);
+    for (int block = 0; block < warmupBlocks; ++block) {
         for (int channel = 0; channel < 2; ++channel) {
             auto* data = buffer.getWritePointer(channel);
             for (int i = 0; i < blockSize; ++i) {
@@ -109,8 +109,11 @@ int main() {
     std::cout << "SmartGate full AudioProcessor processBlock benchmark\n"
               << "Includes lookahead, gate, feature analysis and all transient DSP; "
               << "Silero worker inference is measured separately.\n";
-    runScenario("Factory defaults", true, 0.0f, true, 0.20f, true, 0.25f);
-    runScenario("All transient suppressors active", true, 0.65f, true, 0.20f, true, 0.25f);
-    runScenario("All transient suppressors active, AI off", false, 0.65f, true, 0.20f, true, 0.25f);
+    for (const int blockSize : {64, 128, 256}) {
+        std::cout << "\\nHost block size: " << blockSize << " samples\\n";
+        runScenario("Factory defaults", blockSize, true, 0.0f, true, 0.20f, true, 0.25f);
+        runScenario("All transient suppressors active", blockSize, true, 0.65f, true, 0.20f, true, 0.25f);
+        runScenario("All transient suppressors active, AI off", blockSize, false, 0.65f, true, 0.20f, true, 0.25f);
+    }
     return 0;
 }
