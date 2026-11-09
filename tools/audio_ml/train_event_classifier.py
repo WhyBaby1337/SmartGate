@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader, TensorDataset
 # Independent sigmoid outputs allow speech+keyboard and speech+mouse at once.
 LABELS = ("speech", "keyboard", "mouse", "other")
 SR, FFT, HOP, MELS, FRAMES = 16000, 512, 160, 64, 32
+CONTEXT_MS = (FFT + (FRAMES - 1) * HOP) * 1000.0 / SR
 
 
 def make_mel_bank():
@@ -125,7 +126,7 @@ def load_dataset(manifest_path):
         raise ValueError("Need >=3 independent recordings with positive examples per label; "
                          f"current counts: {missing}")
     if not xs:
-        raise ValueError("No complete 320 ms labelled windows")
+        raise ValueError(f"No complete {CONTEXT_MS:.1f} ms labelled windows")
     return np.asarray(xs, np.float32), np.asarray(ys, np.float32), np.asarray(groups)
 
 
@@ -234,7 +235,7 @@ def main():
                       dynamo=False)
     result = {
         "labels": list(LABELS), "output_activation": "sigmoid per label",
-        "sample_rate": SR, "mel_bins": MELS, "context_ms": (FFT + (FRAMES - 1) * HOP) * 1000 / SR,
+        "sample_rate": SR, "mel_bins": MELS, "context_ms": CONTEXT_MS,
         "train_recordings": sorted(set(groups[train].tolist())),
         "validation_recordings": sorted(set(groups[valid].tolist())),
         "validation_windows": int(len(valid)), "macro_f1": macro_f1,
