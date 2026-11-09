@@ -35,6 +35,7 @@ public:
         pendingOnsetFirstPeak_ = 0.0f;
         pendingOnsetSecondPeak_ = 0.0f;
         pendingOnsetSamples_ = 0;
+        pendingOnsetCandidateCount_ = 0;
         highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
         holdCounter_ = 0;
@@ -66,6 +67,7 @@ public:
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 0;
+            pendingOnsetCandidateCount_ = 0;
             highBandEnvelope_ = std::abs(high);
             highBandGain_ = 1.0f;
             return x;
@@ -119,11 +121,14 @@ public:
         if (onsetCandidate)
             ++onsetCandidateCount_;
         if (onsetCandidate && pendingOnsetSamples_ == 0) {
+            pendingOnsetCandidateCount_ = 1;
             pendingOnsetConfidence_ = level * novelty;
             pendingOnsetFirstPeak_ = magnitude * magnitude;
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
+            if (onsetCandidate)
+                ++pendingOnsetCandidateCount_;
             if (pendingOnsetSamples_ <= decayWindowSamples_) {
                 pendingOnsetFirstPeak_ += magnitude * magnitude;
             } else {
@@ -141,6 +146,7 @@ public:
             onsetConfidence = pendingOnsetConfidence_
                 * unit((0.80f - magnitudeFallRatio) / 0.25f);
             pendingOnsetSamples_ = 0;
+            pendingOnsetCandidateCount_ = 0;
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
@@ -151,9 +157,14 @@ public:
             lastDecayRatio_ = decay;
             // Require a clear drop between adjacent windows. Small phase/envelope
             // fluctuations in sustained sibilants must not count as switch-ring decay.
-            const float decayConfidence = unit((0.910f - decay) / 0.020f);
+            // A real switch ring has one isolated onset followed by a quiet decay.
+            // Repeated fresh onsets inside the observation window indicate a
+            // sustained periodic/noise-like speech component, not a single click.
+            const float decayConfidence = pendingOnsetCandidateCount_ == 1
+                ? unit((0.932f - decay) / 0.018f) : 0.0f;
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
+            pendingOnsetCandidateCount_ = 0;
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
@@ -209,6 +220,7 @@ private:
     float pendingOnsetFirstPeak_ = 0.0f;
     float pendingOnsetSecondPeak_ = 0.0f;
     int pendingOnsetSamples_ = 0;
+    unsigned pendingOnsetCandidateCount_ = 0;
     float highBandEnvelope_ = 0.0f;
     float highBandGain_ = 1.0f;
     float lastEdge_ = 0.0f;
