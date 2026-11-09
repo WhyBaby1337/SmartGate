@@ -74,7 +74,7 @@ class SeparatorTrainingTests(unittest.TestCase):
             rows = [json.loads(line) for line in manifest.read_text().splitlines()]
             bad_audio = np.zeros(4800, dtype=np.float32)
             bad_audio[10] = np.nan
-            sf.write(root / "bad_mix.wav", bad_audio, 48000)
+            sf.write(root / "bad_mix.wav", np.column_stack((bad_audio, bad_audio)), 48000)
             rows[0]["mixture"] = "bad_mix.wav"
             manifest.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
             loaded = load_rows(manifest)
