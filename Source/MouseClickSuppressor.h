@@ -138,7 +138,7 @@ public:
         if (pendingOnsetSamples_ > 32) {
             const float decay = std::sqrt(pendingOnsetSecondPeak_
                 / std::max(pendingOnsetFirstPeak_, 1.0e-12f));
-            const float decayConfidence = unit((0.96f - decay) / 0.16f);
+            const float decayConfidence = unit((0.98f - decay) / 0.18f);
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
             pendingOnsetConfidence_ = 0.0f;
