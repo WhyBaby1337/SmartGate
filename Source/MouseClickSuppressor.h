@@ -107,7 +107,7 @@ public:
         // Qualify a switch strike by its short decay envelope, not by a
         // one-sample drop: the resonant carrier can remain near its peak for
         // several samples at 48 kHz. Compare RMS energy in two adjacent
-        // 16-sample windows, spanning several cycles of high-frequency speech. RMS is less phase-sensitive than peak tracking,
+        // 32-sample windows, spanning several cycles of high-frequency speech. RMS is less phase-sensitive than peak tracking,
         // while a real decaying ring still falls measurably between windows.
         const bool onsetCandidate = edge > edgeFloor && level > 0.3f
             && impulsiveness > 0.005f && novelty > 0.90f;
@@ -120,7 +120,7 @@ public:
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
-            if (pendingOnsetSamples_ <= 16) {
+            if (pendingOnsetSamples_ <= 32) {
                 pendingOnsetFirstPeak_ += magnitude * magnitude;
             } else {
                 pendingOnsetSecondPeak_ += magnitude * magnitude;
@@ -141,7 +141,7 @@ public:
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
         }
-        if (pendingOnsetSamples_ > 32) {
+        if (pendingOnsetSamples_ > 64) {
             const float decay = std::sqrt(pendingOnsetSecondPeak_
                 / std::max(pendingOnsetFirstPeak_, 1.0e-12f));
             lastDecayRatio_ = decay;
