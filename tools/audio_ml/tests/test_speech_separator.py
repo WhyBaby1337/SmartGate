@@ -72,7 +72,7 @@ class SpeechSeparatorRuntimeTests(unittest.TestCase):
             offline, _, _ = model(second.unsqueeze(0))
         pieces = []
         position = 0
-        chunk_sizes = (73, 480, 1024, 191)
+        chunk_sizes = (64, 127, 256, 511, 1024)
         index = 0
         while position < second.numel():
             chunk = second[position:position + chunk_sizes[index % len(chunk_sizes)]]
