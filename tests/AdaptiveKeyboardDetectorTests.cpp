@@ -640,7 +640,7 @@ void runAdaptiveKeyboardDetectorTests() {
         // The quietest profile is an exploratory sensitivity probe. Report
         // its response without making the baseline regression suite fail;
         // established profiles remain mandatory suppression regressions.
-        if (profile.amplitude > 0.025f) {
+        if (profile.amplitude >= 0.025f) {
             requireKeyboard(outputEnergy < inputEnergy * 0.90f,
                             "Mouse detector must reduce established resonant click profiles over speech");
         }
