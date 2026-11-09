@@ -130,9 +130,9 @@ public:
             pendingOnsetEarlySecond_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
-            if (pendingOnsetSamples_ <= 20)
+            if (pendingOnsetSamples_ <= 18)
                 pendingOnsetEarlyFirst_ += magnitude;
-            else if (pendingOnsetSamples_ <= 40)
+            else if (pendingOnsetSamples_ <= 36)
                 pendingOnsetEarlySecond_ += magnitude;
             if (pendingOnsetSamples_ <= decayWindowSamples_) {
                 pendingOnsetFirstPeak_ += magnitude;
@@ -157,14 +157,14 @@ public:
             pendingOnsetEarlyFirst_ = 0.0f;
             pendingOnsetEarlySecond_ = 0.0f;
         }
-        if (pendingOnsetSamples_ > 40) {
+        if (pendingOnsetSamples_ > 36) {
             const float earlyDecay = pendingOnsetEarlySecond_
                 / std::max(pendingOnsetEarlyFirst_, 1.0e-12f);
-            if (earlyDecay < 0.88f) {
+            if (earlyDecay < 0.84f) {
                 // Very short, strongly decaying resonances need an earlier
                 // decision than the longer phase-stable ring confirmation.
                 onsetConfidence = pendingOnsetConfidence_
-                    * unit((0.88f - earlyDecay) / 0.10f);
+                    * unit((0.84f - earlyDecay) / 0.08f);
                 pendingOnsetSamples_ = 0;
                 pendingOnsetConfidence_ = 0.0f;
                 pendingOnsetFirstPeak_ = 0.0f;
