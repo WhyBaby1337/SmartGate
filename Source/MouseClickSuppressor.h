@@ -160,8 +160,6 @@ public:
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
-            pendingOnsetEarlyFirst_ = 0.0f;
-            pendingOnsetEarlySecond_ = 0.0f;
         }
 
         // The broad edge/novelty score remains diagnostic only. A candidate
