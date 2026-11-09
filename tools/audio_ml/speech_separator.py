@@ -42,7 +42,7 @@ class SpeechMaskSeparator(nn.Module):
             raise ValueError("Initial low-latency profile is fixed at 960/480 samples")
         self.n_fft = n_fft
         self.hop_length = hop_length
-        self.register_buffer("window", torch.hann_window(n_fft), persistent=False)
+        self.register_buffer("window", torch.hann_window(n_fft).clamp_min(1e-3), persistent=False)
         self.mask_net = CausalMaskNet(n_fft // 2 + 1, hidden, layers)
 
     def forward(self, mixture, state=None):
