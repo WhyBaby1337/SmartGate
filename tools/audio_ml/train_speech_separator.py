@@ -2,6 +2,7 @@
 """Offline trainer for the causal recurrent speech-mask prototype."""
 import argparse
 import json
+import math
 import random
 from pathlib import Path
 
@@ -30,6 +31,8 @@ class PairedMixtures(Dataset):
         target, target_sr = sf.read(self.root / row["target_speech"], dtype="float32", always_2d=True)
         if mix_sr != SR or target_sr != SR or mixture.shape != target.shape:
             raise ValueError(f"Unaligned pair: {row['id']}")
+        if mixture.shape[0] < 960 or not np.isfinite(mixture).all() or not np.isfinite(target).all():
+            raise ValueError(f"Invalid or too-short audio pair: {row['id']}")
         # The first prototype is mono; preserve timing by applying the same downmix to both.
         mixture = mixture.mean(axis=1)
         target = target.mean(axis=1)
@@ -40,9 +43,16 @@ def load_rows(path):
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     if not rows:
         raise ValueError("Paired manifest is empty")
+    seen_ids = set()
     for row in rows:
-        if not {"source_id", "mixture", "target_speech"}.issubset(row):
-            raise ValueError(f"Invalid manifest row: {row}")
+        if not isinstance(row, dict):
+            raise ValueError(f"Manifest rows must be objects: {row}")
+        required = ("id", "source_id", "mixture", "target_speech")
+        if any(not isinstance(row.get(key), str) or not row[key].strip() for key in required):
+            raise ValueError(f"Manifest row requires non-empty string fields {required}: {row}")
+        if row["id"] in seen_ids:
+            raise ValueError(f"Duplicate mixture id: {row['id']}")
+        seen_ids.add(row["id"])
     return rows
 
 
@@ -52,7 +62,7 @@ def grouped_split(rows, seed):
         raise ValueError("Need at least three independent source sessions for train/validation")
     rng = random.Random(seed)
     rng.shuffle(sources)
-    validation_sources = set(sources[:max(1, round(len(sources) * 0.2))])
+    validation_sources = set(sources[:max(1, math.ceil(len(sources) * 0.2))])
     train = [r for r in rows if r["source_id"] not in validation_sources]
     valid = [r for r in rows if r["source_id"] in validation_sources]
     if not train or not valid:
