@@ -66,8 +66,9 @@ def features(path):
     spec = np.fft.rfft(frames * WINDOW, axis=1)
     power = spec.real ** 2 + spec.imag ** 2
     logmel = np.log(np.maximum(power @ BANK.T, 1e-10)).astype(np.float32)
-    median = np.median(logmel, axis=0, keepdims=True)
-    scale = np.maximum(logmel.std(axis=0, keepdims=True), 0.5)
+    # Per-frame normalization is causal: future audio cannot alter earlier features.
+    median = np.median(logmel, axis=1, keepdims=True)
+    scale = np.maximum(logmel.std(axis=1, keepdims=True), 0.5)
     return np.clip((logmel - median) / scale, -5, 5), mono.size / SR
 
 
@@ -177,11 +178,21 @@ def evaluate(model, x, y, device):
     return per_label, float(np.mean(macro))
 
 
+def positive_int(value):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
-    ap.add_argument("--epochs", type=int, default=40)
+    ap.add_argument("--epochs", type=positive_int, default=40)
     ap.add_argument("--seed", type=int, default=1337)
     args = ap.parse_args()
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
