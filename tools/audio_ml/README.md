@@ -1,3 +1,5 @@
+<!-- CI-enabled development branch: validate the existing plugin and DSP baseline. -->
+
 # Smart Gate acoustic-event ML training
 
 Offline training pipeline for a future speech / keyboard / mouse / silence / overlap classifier.
