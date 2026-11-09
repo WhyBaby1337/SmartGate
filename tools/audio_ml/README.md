@@ -51,11 +51,19 @@ Install `requirements.txt`, then run:
 python train_event_classifier.py --manifest dataset/manifest.json --output build/event_classifier.onnx
 ```
 
-The script uses 16 kHz log-mel patches (64 bands, 320 ms context) and a compact CNN.
+The prototype uses 16 kHz log-mel patches (64 bands, 320 ms context) and a compact CNN.
 Validation is grouped by whole recording to prevent adjacent windows leaking between
 training and validation. It requires at least three independent recordings with positive
 examples per output label, reports per-label precision/recall/F1, and exports ONNX logits.
-The model is only exported after a leakage-safe recording-level split is possible.
+
+## Not ready for live audio yet
+
+This is a research/training scaffold, not a production inference path. The current dataset
+preprocessing normalizes each complete recording, which is non-causal and cannot be copied
+directly into a live plugin. The 320 ms patch also exceeds Smart Gate's current 30 ms lookahead.
+Before integration we must implement and test a causal streaming feature frontend, decide on
+a low-latency temporal model/state strategy, and measure its CPU cost. Do not ship this model
+or connect its scores to attenuation until those pieces and the speech-preservation tests pass.
 
 ## First user recording
 
