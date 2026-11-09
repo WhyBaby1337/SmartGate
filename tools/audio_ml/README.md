@@ -10,6 +10,22 @@ This branch deliberately does not connect an unvalidated model to the audio call
 Use `mixed` only for accurately bounded intervals where speech and a mechanical event
 actually overlap. Isolated clicks do not teach the model to remove clicks during speech.
 
+## Public bootstrap datasets
+
+- **DCASE 2013 Office Live**: real office recordings with speech, keyboard clicks and mouse
+  clicks; development set includes annotated event sequences. The DCASE dataset catalogue
+  lists CC BY 4.0 for the dataset. This is the most useful real-scene starting point.
+  Download: https://dcase.community/challenge2013/download
+- **DCASE 2013 Office Synthetic (OS)**: event sequences with overlapping events, including
+  keyboard, mouse and speech. The catalogue lists CC BY 4.0. Use only annotated windows
+  where speech overlaps keyboard or mouse for the `mixed` class; other overlap types are
+  not equivalent to our target task.
+  Download: https://dcase.community/challenge2013/download
+
+These datasets are useful for pretraining and regression tests, not a substitute for
+recordings from the target microphone, room, keyboard and mouse. Keep attribution and
+dataset README files with any derived training release.
+
 ## Dataset manifest
 ```json
 {
