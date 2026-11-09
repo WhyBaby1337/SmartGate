@@ -70,15 +70,19 @@ public:
         // a second, independent transient cue. Sustained high-frequency speech
         // (for example a long sibilant) has energy but a much lower crest than
         // a short mouse/key switch impulse.
-        const float highTransient = unit((highCrest - 3.5f) / 10.0f);
+        // A contact attack is often diluted by the voiced body of a 256-sample
+        // frame. Give the high-band peak-to-average cue slightly more weight
+        // and let it start contributing earlier; sustained sibilants still
+        // need a sample-local impulse before the suppressor can attenuate them.
+        const float highTransient = unit((highCrest - 3.0f) / 8.0f);
         const float mechanicalBase = 0.45f * unit((crest - 2.5f) / 7.0f)
                                    + 0.15f * unit((highRatio - 0.04f) / 0.45f)
                                    + 0.25f * unit((onset - 1.3f) / 4.0f);
         const float membraneBase = 0.40f * unit((crest - 1.8f) / 5.0f)
                                  + 0.10f * unit((highRatio - 0.015f) / 0.25f)
                                  + 0.30f * unit((onset - 1.2f) / 3.0f);
-        const float mechanical = 0.75f * mechanicalBase + 0.25f * highTransient;
-        const float membrane = 0.70f * membraneBase + 0.30f * highTransient;
+        const float mechanical = 0.65f * mechanicalBase + 0.35f * highTransient;
+        const float membrane = 0.60f * membraneBase + 0.40f * highTransient;
 
         float target = 0.0f;
         switch (mode_) {
