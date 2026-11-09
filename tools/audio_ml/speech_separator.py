@@ -100,6 +100,7 @@ class StreamingSpeechMaskSeparator:
         self._state = None
         self._received = 0
         self._emitted = 0
+        self._returned = 0
         self._closed = False
 
     def _process_frame(self, frame):
@@ -147,7 +148,9 @@ class StreamingSpeechMaskSeparator:
             outputs.append(self._process_frame(frame))
             self._input = self._input[hop:]
         if outputs:
-            return torch.cat(outputs)
+            result = torch.cat(outputs)
+            self._returned += int(result.numel())
+            return result
         return chunk.new_empty((0,))
 
     @torch.no_grad()
@@ -159,24 +162,26 @@ class StreamingSpeechMaskSeparator:
         if self._received == 0:
             return self._input if self._input is not None else torch.empty(0)
         n_fft, hop = self.model.n_fft, self.model.hop_length
+        if self._input is None:
+            raise RuntimeError("stream input state is missing")
+
+        # The offline path pads the complete waveform to an integer hop count.
         remainder = (self._received - n_fft) % hop if self._received >= n_fft else 0
         right_padding = (hop - remainder) % hop
         if self._received < n_fft:
             right_padding += n_fft - self._received
-        if self._input is None:
-            raise RuntimeError("stream input state is missing")
-        if right_padding or self._input.numel() >= n_fft:
-            needed = max(0, n_fft - self._input.numel())
-            frame = torch.nn.functional.pad(self._input, (0, needed))
-            self._process_frame(frame)
+
+        final_outputs = []
+        if right_padding:
+            frame = torch.nn.functional.pad(self._input, (0, right_padding))
+            final_outputs.append(self._process_frame(frame))
             self._input = self._input.new_empty((0,))
+
+        # The overlap-add accumulator now contains the final half-window.
         tail = self._ola / self._weight.clamp_min(1e-8)
-        remaining = tail
-        self._emitted += int(remaining.numel())
-        padding = self._input.new_zeros((0,))
-        del padding
-        total = torch.cat((remaining.new_empty((0,)), remaining))
-        # Only the true input duration is part of the requested waveform.
-        start = max(0, self._emitted - int(total.numel()))
-        del start
-        return total[:max(0, self._received - (self._emitted - int(total.numel())))]
+        final_outputs.append(tail)
+        result = torch.cat(final_outputs)
+        remaining = max(0, self._received - self._returned)
+        result = result[:remaining]
+        self._returned += int(result.numel())
+        return result
