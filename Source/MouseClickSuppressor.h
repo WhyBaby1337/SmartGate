@@ -103,21 +103,21 @@ public:
 
         // Qualify a switch strike by its short decay envelope, not by a
         // one-sample drop: the resonant carrier can remain near its peak for
-        // several samples at 48 kHz. Compare two adjacent 10-sample peak
-        // windows. A real decaying ring falls between windows; sustained
-        // sibilants and stationary noise retain a similar peak level.
+        // several samples at 48 kHz. Compare RMS energy in two adjacent
+        // 20-sample windows. RMS is less phase-sensitive than peak tracking,
+        // while a real decaying ring still falls measurably between windows.
         const bool onsetCandidate = edge > edgeFloor
             && level > 0.3f && impulsiveness > 0.005f && novelty > 0.75f;
         if (onsetCandidate && pendingOnsetSamples_ == 0) {
             pendingOnsetConfidence_ = level * novelty;
-            pendingOnsetFirstPeak_ = magnitude;
+            pendingOnsetFirstPeak_ = magnitude * magnitude;
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
-            if (pendingOnsetSamples_ <= 10) {
-                pendingOnsetFirstPeak_ = std::max(pendingOnsetFirstPeak_, magnitude);
+            if (pendingOnsetSamples_ <= 20) {
+                pendingOnsetFirstPeak_ += magnitude * magnitude;
             } else {
-                pendingOnsetSecondPeak_ = std::max(pendingOnsetSecondPeak_, magnitude);
+                pendingOnsetSecondPeak_ += magnitude * magnitude;
             }
             ++pendingOnsetSamples_;
         }
@@ -134,9 +134,9 @@ public:
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
         }
-        if (pendingOnsetSamples_ > 20) {
-            const float decay = pendingOnsetSecondPeak_
-                / std::max(pendingOnsetFirstPeak_, 1.0e-6f);
+        if (pendingOnsetSamples_ > 40) {
+            const float decay = std::sqrt(pendingOnsetSecondPeak_
+                / std::max(pendingOnsetFirstPeak_, 1.0e-12f));
             const float decayConfidence = unit((0.96f - decay) / 0.16f);
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
