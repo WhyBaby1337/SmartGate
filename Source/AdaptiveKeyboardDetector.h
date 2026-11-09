@@ -182,6 +182,8 @@ public:
             std::exp(-2.0 * 3.14159265358979323846 * 1200.0 / rate));
         releaseCoefficient_ = static_cast<float>(
             std::exp(-1.0 / (0.0025 * rate)));
+        envelopeCoefficient_ = static_cast<float>(
+            std::exp(-1.0 / (0.010 * rate)));
         holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0025 * rate)));
         reset();
     }
@@ -191,6 +193,9 @@ public:
         midLowPassState_ = 0.0;
         previousMidBand_ = 0.0f;
         previousHighBand_ = 0.0f;
+        previousHighMagnitude_ = 0.0f;
+        previousOnsetConfidence_ = 0.0f;
+        highBandEnvelope_ = 0.0f;
         midBandGain_ = 1.0f;
         highBandGain_ = 1.0f;
         midHoldCounter_ = 0;
@@ -214,6 +219,9 @@ public:
         if (amount <= 0.0f) {
             previousMidBand_ = mid;
             previousHighBand_ = high;
+            previousHighMagnitude_ = std::abs(high);
+            previousOnsetConfidence_ = 0.0f;
+            highBandEnvelope_ = std::abs(high);
             midBandGain_ = 1.0f;
             highBandGain_ = 1.0f;
             return x;
@@ -224,7 +232,11 @@ public:
         previousMidBand_ = mid;
         const float magnitude = std::abs(high);
         const float edge = std::abs(high - previousHighBand_);
+        const float magnitudeRise = std::max(0.0f, magnitude - previousHighMagnitude_);
+        const float magnitudeFallRatio = magnitude
+            / std::max(previousHighMagnitude_, 1.0e-6f);
         previousHighBand_ = high;
+        previousHighMagnitude_ = magnitude;
 
         // Only attenuate the 1.2-2.4 kHz band when aligned classifier context
         // and a sample-local impulsive event agree. This band can carry the
@@ -260,10 +272,20 @@ public:
         const float edgeSpan = 0.24f - 0.06f * frameContext;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
-        const float localTransient = level * impulsiveness;
-        // Frame context only strengthens a transient already localized to
-        // this exact delayed sample; it can never duck an entire speech frame.
-        const float confidence = unit(localTransient * (1.0f + 0.15f * frameContext));
+
+        // Confirm an isolated attack by its immediate peak-then-drop shape.
+        // A noise-like sibilant has many sharp sample edges, but its peaks sit
+        // on a sustained high-band bed; they should not repeatedly retrigger.
+        const float onsetNovelty = unit(
+            (magnitude - 5.0f * highBandEnvelope_) / 0.015f);
+        highBandEnvelope_ = magnitude + envelopeCoefficient_
+            * (highBandEnvelope_ - magnitude);
+        const bool onsetCandidate = magnitudeRise > 0.012f
+            && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.95f;
+        const float onsetDrop = unit((0.55f - magnitudeFallRatio) / 0.25f);
+        const float confidence = unit(previousOnsetConfidence_ * onsetDrop
+                                      * (1.0f + 0.15f * frameContext));
+        previousOnsetConfidence_ = onsetCandidate ? level * onsetNovelty : 0.0f;
         if (confidence > 0.0f) {
             // The UI amount is perceptual, not a linear amplitude multiplier.
             // A linear mapping made everyday values (0.15-0.30) barely audible
@@ -298,6 +320,10 @@ private:
     double midLowPassState_ = 0.0;
     float previousMidBand_ = 0.0f;
     float previousHighBand_ = 0.0f;
+    float previousHighMagnitude_ = 0.0f;
+    float previousOnsetConfidence_ = 0.0f;
+    float highBandEnvelope_ = 0.0f;
+    float envelopeCoefficient_ = 0.999f;
     float midBandGain_ = 1.0f;
     float highBandGain_ = 1.0f;
     int holdSamples_ = 1;
