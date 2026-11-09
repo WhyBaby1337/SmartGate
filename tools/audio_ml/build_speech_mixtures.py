@@ -41,13 +41,14 @@ def choose_crop(audio, length, rng):
     offset = rng.randrange(0, length - len(audio) + 1)
     result[offset:offset + len(audio)] = audio
     return result
-def aligned_crop(audio, start, length):
-    """Crop a stem on a shared recording clock, padding beyond its boundaries."""
+def aligned_crop(audio, start, length, stem_start=0):
+    """Crop a stem on the shared clock; stem_start is its offset in target-rate samples."""
     result = np.zeros((length, audio.shape[1]), dtype=np.float32)
-    source_start = max(0, int(start))
-    source_end = min(len(audio), int(start) + length)
+    relative_start = int(start) - int(stem_start)
+    source_start = max(0, relative_start)
+    source_end = min(len(audio), relative_start + int(length))
     if source_end > source_start:
-        destination_start = source_start - int(start)
+        destination_start = source_start - relative_start
         result[destination_start:destination_start + source_end - source_start] = audio[source_start:source_end]
     return result
 
@@ -93,9 +94,20 @@ def read_manifest(path):
         if not item.get("id") or not item.get("speech"):
             raise ValueError("Every source needs a unique id and speech path")
         entry = {"id": str(item["id"])}
+        offsets = item.get("start_seconds", {})
+        if not isinstance(offsets, dict):
+            raise ValueError(f"Source {entry['id']}: 'start_seconds' must be an object")
+        entry["start_samples"] = {}
         for key in ("speech", "keyboard", "mouse", "background"):
             value = item.get(key)
             entry[key] = (root / value).resolve() if value else None
+            offset = offsets.get(key, 0.0)
+            if isinstance(offset, bool) or not isinstance(offset, (int, float)) or not math.isfinite(offset) or offset < 0:
+                raise ValueError(f"Source {entry['id']}: start_seconds.{key} must be a finite non-negative number")
+            entry["start_samples"][key] = round(offset * TARGET_SR)
+        unknown_offsets = set(offsets) - {"speech", "keyboard", "mouse", "background"}
+        if unknown_offsets:
+            raise ValueError(f"Source {entry['id']}: unknown start_seconds keys: {sorted(unknown_offsets)}")
         result.append(entry)
     ids = [item["id"] for item in result]
     if len(ids) != len(set(ids)):
@@ -127,11 +139,12 @@ def generate(manifest_path, output_dir, count, seconds, seed, randomize_event_of
         source = rng.choice(sources)
         # All stems in a source bundle share one recording clock. Select one
         # common crop position so speech/click/background alignment is retained.
-        source_length = max(len(cache[source[key]]) for key in
-                            ("speech", "keyboard", "mouse", "background") if source[key] is not None)
-        max_start = max(0, source_length - length)
+        source_end = max(source["start_samples"][key] + len(cache[source[key]]) for key in
+                         ("speech", "keyboard", "mouse", "background") if source[key] is not None)
+        max_start = max(0, source_end - length)
         shared_start = rng.randrange(max_start + 1) if max_start else 0
-        speech = aligned_crop(cache[source["speech"]], shared_start, length)
+        speech = aligned_crop(cache[source["speech"]], shared_start, length,
+                              source["start_samples"]["speech"])
         has_speech = rng.random() >= 0.15
         if not has_speech:
             speech.fill(0.0)
@@ -145,7 +158,8 @@ def generate(manifest_path, output_dir, count, seconds, seed, randomize_event_of
             probability = {"keyboard": 0.58, "mouse": 0.58, "background": 0.35}[label]
             if rng.random() >= probability:
                 continue
-            stem = aligned_crop(cache[path], shared_start, length)
+            stem = aligned_crop(cache[path], shared_start, length,
+                                source["start_samples"][label])
             # Temporal jitter is explicit augmentation, never the default:
             # independently shifting stems would destroy their real alignment.
             if randomize_event_offsets:
