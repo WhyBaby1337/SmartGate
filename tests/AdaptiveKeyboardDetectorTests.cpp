@@ -804,6 +804,33 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(minimumNoisySibilantGain > 0.95f,
                     "Steady-state noise-like sibilants must not be repeatedly attenuated as mouse clicks");
 
+    // Protect the beginning of a noise-like /s/: unlike a steady-state guard,
+    // this catches a false mouse-click decision while the fricative bed is
+    // naturally building. Keep the physical ramp and duration constant across
+    // host rates, and use the aligned context present during normal speech.
+    for (const double rate : {44100.0, 48000.0, 96000.0}) {
+        smartgate::MouseClickSuppressor risingSibilantGuard;
+        risingSibilantGuard.prepare(rate);
+        std::uint32_t risingNoiseState = 0x91e10da5u;
+        float minimumRisingSibilantGain = 1.0f;
+        const int rampSamples = static_cast<int>(std::lround(0.012 * rate));
+        const int totalSamples = static_cast<int>(std::lround(0.080 * rate));
+        for (int i = 0; i < totalSamples; ++i) {
+            risingNoiseState ^= risingNoiseState << 13;
+            risingNoiseState ^= risingNoiseState >> 17;
+            risingNoiseState ^= risingNoiseState << 5;
+            const float noise = (static_cast<float>(risingNoiseState & 0xffffu)
+                                 / 32767.5f - 1.0f) * 0.06f;
+            const float ramp = std::min(1.0f,
+                static_cast<float>(i + 1) / static_cast<float>(rampSamples));
+            (void) risingSibilantGuard.process(noise * ramp, 1.0f, 0.65f);
+            minimumRisingSibilantGain = std::min(minimumRisingSibilantGain,
+                risingSibilantGuard.getHighBandGain());
+        }
+        requireKeyboard(minimumRisingSibilantGain > 0.95f,
+            "A naturally rising noise-like fricative onset must remain transparent to mouse suppression at every host rate");
+    }
+
     smartgate::MouseClickSuppressor mouseBypass;
     mouseBypass.prepare(48000.0);
     const float bypassSample = 0.1234567f;
