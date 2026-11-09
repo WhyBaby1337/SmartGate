@@ -621,6 +621,8 @@ void runAdaptiveKeyboardDetectorTests() {
         float maximumProfileLevel = 0.0f;
         float maximumProfileImpulsiveness = 0.0f;
         float maximumProfileNovelty = 0.0f;
+        float maximumProfilePeriodicity = 0.0f;
+        float lastEarlyDecayRatio = 0.0f;
         unsigned onsetCandidateCount = 0;
         float lastDecayRatio = 0.0f;
         int maximumPendingSamples = 0;
@@ -655,6 +657,9 @@ void runAdaptiveKeyboardDetectorTests() {
                     profiledMouseClick.getLastImpulsiveness());
                 maximumProfileNovelty = std::max(maximumProfileNovelty,
                     profiledMouseClick.getLastNovelty());
+                maximumProfilePeriodicity = std::max(maximumProfilePeriodicity,
+                    profiledMouseClick.getLastPeriodicity());
+                lastEarlyDecayRatio = profiledMouseClick.getLastEarlyDecayRatio();
                 onsetCandidateCount = profiledMouseClick.getOnsetCandidateCount();
                 lastDecayRatio = profiledMouseClick.getLastDecayRatio();
                 maximumPendingSamples = std::max(maximumPendingSamples,
@@ -666,6 +671,16 @@ void runAdaptiveKeyboardDetectorTests() {
                 outputEnergy += outputClick * outputClick;
             }
         }
+        const double profileRatio = inputEnergy > 0.0f
+            ? static_cast<double>(outputEnergy / inputEnergy) : 0.0;
+        std::fprintf(stderr,
+            "Mouse profile metrics %.0f/%.0f Hz: ratio=%.6f minGain=%.6f periodicityMax=%.6f earlyDecay=%.6f decay=%.6f candidates=%u pending=%d\\n",
+            profile.firstFrequency, profile.secondFrequency, profileRatio,
+            static_cast<double>(minimumProfileGain),
+            static_cast<double>(maximumProfilePeriodicity),
+            static_cast<double>(lastEarlyDecayRatio),
+            static_cast<double>(lastDecayRatio), onsetCandidateCount,
+            maximumPendingSamples);
         if (!(outputEnergy < inputEnergy * 0.90f)) {
             const double ratio = inputEnergy > 0.0f
                 ? static_cast<double>(outputEnergy / inputEnergy) : 0.0;
