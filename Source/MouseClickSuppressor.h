@@ -138,7 +138,9 @@ public:
         if (pendingOnsetSamples_ > 32) {
             const float decay = std::sqrt(pendingOnsetSecondPeak_
                 / std::max(pendingOnsetFirstPeak_, 1.0e-12f));
-            const float decayConfidence = unit((0.98f - decay) / 0.18f);
+            // Require a clear drop between adjacent windows. Small phase/envelope
+            // fluctuations in sustained sibilants must not count as switch-ring decay.
+            const float decayConfidence = unit((0.90f - decay) / 0.10f);
             onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
             pendingOnsetSamples_ = 0;
             pendingOnsetConfidence_ = 0.0f;
