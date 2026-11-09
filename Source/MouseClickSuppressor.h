@@ -27,6 +27,10 @@ public:
         previousHighBand_ = 0.0f;
         previousHighMagnitude_ = 0.0f;
         previousOnsetConfidence_ = 0.0f;
+        pendingOnsetConfidence_ = 0.0f;
+        pendingOnsetFirstPeak_ = 0.0f;
+        pendingOnsetSecondPeak_ = 0.0f;
+        pendingOnsetSamples_ = 0;
         highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
         holdCounter_ = 0;
@@ -51,6 +55,10 @@ public:
             previousHighBand_ = high;
             previousHighMagnitude_ = std::abs(high);
             previousOnsetConfidence_ = 0.0f;
+            pendingOnsetConfidence_ = 0.0f;
+            pendingOnsetFirstPeak_ = 0.0f;
+            pendingOnsetSecondPeak_ = 0.0f;
+            pendingOnsetSamples_ = 0;
             highBandEnvelope_ = std::abs(high);
             highBandGain_ = 1.0f;
             return x;
@@ -93,21 +101,42 @@ public:
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
 
-        // Store a narrowly qualified onset for one sample. Confirm it only
-        // when the following sample falls sharply; this avoids reacting to
-        // the rising quarter-cycle of a sustained /s/ or /sh/ tone.
+        // Qualify a switch strike by its short decay envelope, not by a
+        // one-sample drop: the resonant carrier can remain near its peak for
+        // several samples at 48 kHz. Compare two adjacent 10-sample peak
+        // windows. A real decaying ring falls between windows; sustained
+        // sibilants and stationary noise retain a similar peak level.
         const bool onsetCandidate = edge > edgeFloor
             && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.75f;
-        // The first resonant cycle of a switch ring may decay by less than
-        // 45% in one 48 kHz sample. Confirm a pronounced peak drop without
-        // requiring an unrealistically deep single-sample collapse.
-        const float onsetDrop = unit((0.90f - magnitudeFallRatio) / 0.25f);
-        const float onsetConfidence = previousOnsetConfidence_ * onsetDrop;
-        previousOnsetConfidence_ = onsetCandidate ? level * onsetNovelty : 0.0f;
+        if (onsetCandidate && pendingOnsetSamples_ == 0) {
+            pendingOnsetConfidence_ = level * onsetNovelty;
+            pendingOnsetFirstPeak_ = magnitude;
+            pendingOnsetSecondPeak_ = 0.0f;
+            pendingOnsetSamples_ = 1;
+        } else if (pendingOnsetSamples_ > 0) {
+            if (pendingOnsetSamples_ <= 10) {
+                pendingOnsetFirstPeak_ = std::max(pendingOnsetFirstPeak_, magnitude);
+            } else {
+                pendingOnsetSecondPeak_ = std::max(pendingOnsetSecondPeak_, magnitude);
+            }
+            ++pendingOnsetSamples_;
+        }
 
-        // The broad edge/novelty score is intentionally diagnostic only: steady
-        // noise-like sibilants can produce repeated random peaks. Trigger the
-        // mouse stage only from the qualified peak-then-drop signature above.
+        float onsetConfidence = 0.0f;
+        if (pendingOnsetSamples_ > 20) {
+            const float decay = pendingOnsetSecondPeak_
+                / std::max(pendingOnsetFirstPeak_, 1.0e-6f);
+            const float decayConfidence = unit((0.96f - decay) / 0.16f);
+            onsetConfidence = pendingOnsetConfidence_ * decayConfidence;
+            pendingOnsetSamples_ = 0;
+            pendingOnsetConfidence_ = 0.0f;
+            pendingOnsetFirstPeak_ = 0.0f;
+            pendingOnsetSecondPeak_ = 0.0f;
+        }
+
+        // The broad edge/novelty score remains diagnostic only. A candidate
+        // must show measurable decay across the complete short observation
+        // window before it can attenuate the mouse high band.
         const float confidence = onsetConfidence;
         lastLevel_ = level;
         lastImpulsiveness_ = impulsiveness;
@@ -147,6 +176,10 @@ private:
     float previousHighBand_ = 0.0f;
     float previousHighMagnitude_ = 0.0f;
     float previousOnsetConfidence_ = 0.0f;
+    float pendingOnsetConfidence_ = 0.0f;
+    float pendingOnsetFirstPeak_ = 0.0f;
+    float pendingOnsetSecondPeak_ = 0.0f;
+    int pendingOnsetSamples_ = 0;
     float highBandEnvelope_ = 0.0f;
     float highBandGain_ = 1.0f;
     float lastEdge_ = 0.0f;
