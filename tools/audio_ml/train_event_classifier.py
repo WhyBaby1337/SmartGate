@@ -37,6 +37,21 @@ def make_mel_bank():
 
 BANK = make_mel_bank()
 WINDOW = np.hanning(FFT).astype(np.float32)
+WINDOW_SAMPLES = FFT + (FRAMES - 1) * HOP
+
+
+def segment_window_range(start, end, feature_count):
+    """Return feature-frame indices whose complete receptive fields fit inside [start, end)."""
+    if not (math.isfinite(start) and math.isfinite(end) and 0 <= start < end):
+        raise ValueError("segment bounds must be finite and satisfy 0 <= start < end")
+    start_sample = math.ceil(start * SR)
+    end_sample = math.floor(end * SR)
+    first = max(0, (start_sample + HOP - 1) // HOP)
+    last_exclusive = min(
+        feature_count - FRAMES + 1,
+        (end_sample - WINDOW_SAMPLES) // HOP + 1,
+    )
+    return first, max(first, last_exclusive)
 
 
 def features(path):
@@ -61,26 +76,44 @@ def load_dataset(manifest_path):
     xs, ys, groups = [], [], []
     sources = defaultdict(set)
     root = manifest_path.parent
+    recording_ids = set()
     for rec in manifest["recordings"]:
+        if not isinstance(rec, dict) or not rec.get("id") or not rec.get("path"):
+            raise ValueError("Every recording needs a non-empty id and path")
         rid = str(rec["id"])
+        if rid in recording_ids:
+            raise ValueError(f"Duplicate recording id: {rid}")
+        recording_ids.add(rid)
+        if not isinstance(rec.get("segments"), list):
+            raise ValueError(f"{rid}: segments must be a list")
         feat, duration = features((root / rec["path"]).resolve())
         previous_end = 0.0
-        for seg in sorted(rec["segments"], key=lambda s: float(s["start"])):
-            start, end = float(seg["start"]), float(seg["end"])
+        try:
+            ordered_segments = sorted(rec["segments"], key=lambda s: float(s["start"]))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"{rid}: each segment needs numeric start/end bounds") from exc
+        for seg in ordered_segments:
+            if not isinstance(seg, dict):
+                raise ValueError(f"{rid}: each segment must be an object")
+            try:
+                start, end = float(seg["start"]), float(seg["end"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f"{rid}: segment needs numeric start/end bounds") from exc
             active = seg.get("labels", [])
-            if not isinstance(active, list) or len(active) != len(set(active)):
-                raise ValueError(f"{rid}: labels must be a unique list")
+            if (not isinstance(active, list) or
+                    any(not isinstance(label, str) for label in active) or
+                    len(active) != len(set(active))):
+                raise ValueError(f"{rid}: labels must be a unique list of strings")
             if any(label not in LABELS for label in active):
                 raise ValueError(f"{rid}: unsupported labels {active}")
-            if not (0 <= start < end <= duration):
+            if not (math.isfinite(start) and math.isfinite(end) and 0 <= start < end <= duration):
                 raise ValueError(f"{rid}: invalid segment {seg}")
             if start < previous_end:
                 raise ValueError(f"{rid}: overlapping segments; combine active labels in one segment")
             previous_end = end
             target = np.asarray([float(label in active) for label in LABELS], np.float32)
-            first = max(0, round(start * SR / HOP))
-            last = min(len(feat), round(end * SR / HOP))
-            for pos in range(first, last - FRAMES + 1, 16):
+            first, last = segment_window_range(start, end, len(feat))
+            for pos in range(first, last, 16):
                 xs.append(feat[pos:pos + FRAMES].T[None])
                 ys.append(target)
                 groups.append(rid)
