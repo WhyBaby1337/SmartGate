@@ -256,7 +256,7 @@ public:
         // local trigger thresholds so quieter clicks over speech are actionable.
         const float levelFloor = 0.012f - 0.004f * frameContext;
         const float levelSpan = 0.080f - 0.020f * frameContext;
-        const float edgeFloor = 0.075f - 0.035f * frameContext;
+        const float edgeFloor = 0.048f - 0.005f * frameContext;
         const float edgeSpan = 0.24f - 0.06f * frameContext;
         const float level = unit((magnitude - levelFloor) / levelSpan);
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
