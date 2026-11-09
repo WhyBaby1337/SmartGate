@@ -22,7 +22,7 @@ public:
         // Keep the short ring-confirmation window responsive to quiet
         // switch clicks while preserving its elapsed time across host rates.
         decayWindowSamples_ = std::max(1, static_cast<int>(
-            std::lround(rate * (32.0 / 48000.0))));
+            std::lround(rate * (24.0 / 48000.0))));
         reset();
     }
 
@@ -34,8 +34,6 @@ public:
         pendingOnsetConfidence_ = 0.0f;
         pendingOnsetFirstPeak_ = 0.0f;
         pendingOnsetSecondPeak_ = 0.0f;
-        pendingOnsetEarlyFirst_ = 0.0f;
-        pendingOnsetEarlySecond_ = 0.0f;
         pendingOnsetSamples_ = 0;
         highBandEnvelope_ = 0.0f;
         highBandGain_ = 1.0f;
@@ -67,8 +65,6 @@ public:
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
-            pendingOnsetEarlyFirst_ = 0.0f;
-            pendingOnsetEarlySecond_ = 0.0f;
             pendingOnsetSamples_ = 0;
             highBandEnvelope_ = std::abs(high);
             highBandGain_ = 1.0f;
@@ -126,15 +122,8 @@ public:
             pendingOnsetConfidence_ = level * novelty;
             pendingOnsetFirstPeak_ = magnitude;
             pendingOnsetSecondPeak_ = 0.0f;
-            pendingOnsetEarlyFirst_ = magnitude;
-            pendingOnsetEarlySecond_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
-            if (pendingOnsetSamples_ <= 16) {
-                pendingOnsetEarlyFirst_ += magnitude;
-            } else if (pendingOnsetSamples_ <= 32) {
-                pendingOnsetEarlySecond_ += magnitude;
-            }
             if (pendingOnsetSamples_ <= decayWindowSamples_) {
                 pendingOnsetFirstPeak_ += magnitude;
             } else {
@@ -155,24 +144,6 @@ public:
             pendingOnsetConfidence_ = 0.0f;
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
-            pendingOnsetEarlyFirst_ = 0.0f;
-            pendingOnsetEarlySecond_ = 0.0f;
-        }
-        if (pendingOnsetSamples_ > 32) {
-            const float earlyDecay = pendingOnsetEarlySecond_
-                / std::max(pendingOnsetEarlyFirst_, 1.0e-12f);
-            if (earlyDecay < 0.85f) {
-                // Fast, clearly decaying switch rings can be caught after two
-                // short windows; slower rings use the longer phase-stable test.
-                onsetConfidence = pendingOnsetConfidence_
-                    * unit((0.90f - earlyDecay) / 0.10f);
-                pendingOnsetSamples_ = 0;
-                pendingOnsetConfidence_ = 0.0f;
-                pendingOnsetFirstPeak_ = 0.0f;
-                pendingOnsetSecondPeak_ = 0.0f;
-                pendingOnsetEarlyFirst_ = 0.0f;
-                pendingOnsetEarlySecond_ = 0.0f;
-            }
         }
         if (pendingOnsetSamples_ > 2 * decayWindowSamples_) {
             const float decay = pendingOnsetSecondPeak_
@@ -242,8 +213,6 @@ private:
     float pendingOnsetConfidence_ = 0.0f;
     float pendingOnsetFirstPeak_ = 0.0f;
     float pendingOnsetSecondPeak_ = 0.0f;
-    float pendingOnsetEarlyFirst_ = 0.0f;
-    float pendingOnsetEarlySecond_ = 0.0f;
     int pendingOnsetSamples_ = 0;
     float highBandEnvelope_ = 0.0f;
     float highBandGain_ = 1.0f;
