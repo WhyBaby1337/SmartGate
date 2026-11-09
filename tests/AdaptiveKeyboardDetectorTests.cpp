@@ -995,6 +995,12 @@ void runAdaptiveKeyboardDetectorTests() {
         double integratedInputEnergy = 0.0;
         double integratedOutputEnergy = 0.0;
         float minimumIntegratedHighGain = 1.0f;
+        float maximumIntegratedHighMagnitude = 0.0f;
+        float maximumIntegratedHighEdge = 0.0f;
+        float previousIntegratedHigh = 0.0f;
+        float integratedLowPass = 0.0f;
+        const float integratedLowPassCoefficient = static_cast<float>(
+            std::exp(-2.0 * 3.14159265358979323846 * 2400.0 / 48000.0));
         for (int i = 0; i < 2 * static_cast<int>(frameSize); ++i) {
             const int age = i - 100;
             const int sampleIndex = 3 * static_cast<int>(frameSize) + i;
@@ -1019,6 +1025,14 @@ void runAdaptiveKeyboardDetectorTests() {
                 voice + click, 0.35f, context);
             minimumIntegratedHighGain = std::min(minimumIntegratedHighGain,
                 integratedSuppressor.getHighBandGain());
+            integratedLowPass = (voice + click)
+                + integratedLowPassCoefficient * (integratedLowPass - (voice + click));
+            const float integratedHigh = (voice + click) - integratedLowPass;
+            maximumIntegratedHighMagnitude = std::max(maximumIntegratedHighMagnitude,
+                std::abs(integratedHigh));
+            maximumIntegratedHighEdge = std::max(maximumIntegratedHighEdge,
+                std::abs(integratedHigh - previousIntegratedHigh));
+            previousIntegratedHigh = integratedHigh;
             const float voiceOnly = integratedVoiceReference.process(
                 voice, 0.0f, 0.0f);
             if (age >= 0 && age < profile.durationSamples) {
@@ -1034,6 +1048,9 @@ void runAdaptiveKeyboardDetectorTests() {
             frameContexts[0], frameContexts[1],
             integratedOutputEnergy / std::max(integratedInputEnergy, 1.0e-20),
             minimumIntegratedHighGain);
+        std::fprintf(stderr,
+            "Integrated local cues: maxHigh=%.6f maxEdge=%.6f\\n",
+            maximumIntegratedHighMagnitude, maximumIntegratedHighEdge);
         requireKeyboard(frameContexts[0] > 0.0f,
             "Integrated keyboard path must derive nonzero context from a mixed click frame");
         requireKeyboard(integratedInputEnergy > 1.0e-8,
