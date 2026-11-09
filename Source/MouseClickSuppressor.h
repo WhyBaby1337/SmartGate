@@ -152,8 +152,13 @@ public:
         }
 
         float onsetConfidence = 0.0f;
-        const float periodicity = getRecentPeriodicity();
-        lastPeriodicity_ = periodicity;
+        float periodicity = 0.0f;
+        bool periodicityMeasured = false;
+        // The 17-lag autocorrelation is comparatively expensive. It is only
+        // useful after a candidate has survived long enough to reach a decay
+        // decision; calculating it on every audio sample wasted CPU during
+        // ordinary speech and silence. Keep the immediate broadband path
+        // independent of this confirmation analysis.
         // Preserve the immediate path for a genuinely broadband, isolated
         // switch impulse. Its high-pass residual collapses sharply on the
         // next sample, unlike the slower resonant ring handled by the window.
@@ -169,6 +174,9 @@ public:
             pendingOnsetEarlySecond_ = 0.0f;
         }
         if (pendingOnsetSamples_ > 36) {
+            periodicity = getRecentPeriodicity();
+            lastPeriodicity_ = periodicity;
+            periodicityMeasured = true;
             const float earlyDecay = pendingOnsetEarlySecond_
                 / std::max(pendingOnsetEarlyFirst_, 1.0e-12f);
             lastEarlyDecayRatio_ = earlyDecay;
@@ -190,6 +198,10 @@ public:
             }
         }
         if (pendingOnsetSamples_ > 2 * decayWindowSamples_) {
+            if (!periodicityMeasured) {
+                periodicity = getRecentPeriodicity();
+                lastPeriodicity_ = periodicity;
+            }
             const float decay = pendingOnsetSecondPeak_
                 / std::max(pendingOnsetFirstPeak_, 1.0e-12f);
             lastDecayRatio_ = decay;
