@@ -126,7 +126,8 @@ public:
         // Preserve the immediate path for a genuinely broadband, isolated
         // switch impulse. Its high-pass residual collapses sharply on the
         // next sample, unlike the slower resonant ring handled by the window.
-        if (pendingOnsetSamples_ > 1 && magnitudeFallRatio < 0.60f) {
+        if (pendingOnsetSamples_ > 1 && edge > 0.080f
+            && magnitudeFallRatio < 0.60f) {
             onsetConfidence = pendingOnsetConfidence_
                 * unit((0.80f - magnitudeFallRatio) / 0.25f);
             pendingOnsetSamples_ = 0;
