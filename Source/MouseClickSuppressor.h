@@ -123,6 +123,17 @@ public:
         }
 
         float onsetConfidence = 0.0f;
+        // Preserve the immediate path for a genuinely broadband, isolated
+        // switch impulse. Its high-pass residual collapses sharply on the
+        // next sample, unlike the slower resonant ring handled by the window.
+        if (pendingOnsetSamples_ > 1 && magnitudeFallRatio < 0.60f) {
+            onsetConfidence = pendingOnsetConfidence_
+                * unit((0.80f - magnitudeFallRatio) / 0.25f);
+            pendingOnsetSamples_ = 0;
+            pendingOnsetConfidence_ = 0.0f;
+            pendingOnsetFirstPeak_ = 0.0f;
+            pendingOnsetSecondPeak_ = 0.0f;
+        }
         if (pendingOnsetSamples_ > 20) {
             const float decay = pendingOnsetSecondPeak_
                 / std::max(pendingOnsetFirstPeak_, 1.0e-6f);
