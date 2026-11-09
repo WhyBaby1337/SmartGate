@@ -738,6 +738,8 @@ void runAdaptiveKeyboardDetectorTests() {
             minimumRateSibilantGain = std::min(minimumRateSibilantGain,
                 rateSibilantGuard.getHighBandGain());
         }
+        std::fprintf(stderr, "Mouse sibilant %.0f Hz sample rate: minGain=%.6f\\n",
+            rate, static_cast<double>(minimumRateSibilantGain));
         requireKeyboard(minimumRateSibilantGain > 0.90f,
             "Mouse suppression must preserve sustained sibilants at 44.1 and 96 kHz");
     }
