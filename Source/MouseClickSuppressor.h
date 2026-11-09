@@ -22,7 +22,7 @@ public:
         // Keep the short ring-confirmation window responsive to quiet
         // switch clicks while preserving its elapsed time across host rates.
         decayWindowSamples_ = std::max(1, static_cast<int>(
-            std::lround(rate * (16.0 / 48000.0))));
+            std::lround(rate * (32.0 / 48000.0))));
         reset();
     }
 
