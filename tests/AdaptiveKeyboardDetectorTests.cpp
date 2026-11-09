@@ -869,11 +869,18 @@ void runAdaptiveKeyboardDetectorTests() {
             frame[i] = voice + click;
         }
 
+        std::vector<float> speechFrame(frameSize, 0.0f);
+        for (std::size_t i = 0; i < frameSize; ++i) {
+            const int sampleIndex = 3 * static_cast<int>(frameSize)
+                + static_cast<int>(i);
+            speechFrame[i] = 0.10f * std::sin(2.0f * 3.14159265f * 180.0f
+                * static_cast<float>(sampleIndex) / 48000.0f);
+        }
         const float clickContext = clickDetector.processFrame(frame.data(), frame.size());
         const float speechContext = speechDetector.processFrame(
-            frame.data(), frame.size());
+            speechFrame.data(), speechFrame.size());
         std::fprintf(stderr,
-            "Keyboard classifier %.0f/%.0f Hz: click=%.6f voiced=%.6f\\n",
+            "Keyboard classifier %.0f/%.0f Hz: click=%.6f voiced=%.6f\n",
             static_cast<double>(profile.frequencyA),
             static_cast<double>(profile.frequencyB), clickContext, speechContext);
         requireKeyboard(clickContext > speechContext + 0.10f,
