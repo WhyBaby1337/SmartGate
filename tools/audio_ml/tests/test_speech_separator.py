@@ -3,7 +3,7 @@ import unittest
 
 import torch
 
-from speech_separator import CausalMaskNet, SpeechMaskSeparator
+from speech_separator import CausalMaskNet, SpeechMaskSeparator, StreamingSpeechMaskSeparator
 
 
 class SpeechSeparatorRuntimeTests(unittest.TestCase):
@@ -35,6 +35,39 @@ class SpeechSeparatorRuntimeTests(unittest.TestCase):
         for parameter in model.parameters():
             if parameter.grad is not None:
                 self.assertTrue(torch.isfinite(parameter.grad).all().item())
+
+
+    def test_streaming_matches_offline_across_arbitrary_chunk_sizes(self):
+        model = SpeechMaskSeparator(hidden=16, layers=1).eval()
+        for length in (960, 961, 1000, 1439, 1440, 1441, 48000):
+            with self.subTest(length=length):
+                mixture = torch.randn(length)
+                with torch.no_grad():
+                    offline, _, _ = model(mixture.unsqueeze(0))
+                stream = StreamingSpeechMaskSeparator(model)
+                pieces = []
+                position = 0
+                chunk_sizes = (64, 127, 256, 511, 1024)
+                index = 0
+                while position < length:
+                    size = chunk_sizes[index % len(chunk_sizes)]
+                    chunk = mixture[position:position + size]
+                    pieces.append(stream.process_chunk(chunk))
+                    position += int(chunk.numel())
+                    index += 1
+                pieces.append(stream.flush())
+                streamed = torch.cat(pieces)
+                self.assertEqual(streamed.numel(), length)
+                self.assertTrue(torch.isfinite(streamed).all().item())
+                self.assertTrue(torch.allclose(streamed, offline[0], atol=2e-5, rtol=2e-4))
+
+    def test_stream_rejects_processing_after_flush(self):
+        model = SpeechMaskSeparator(hidden=16, layers=1).eval()
+        stream = StreamingSpeechMaskSeparator(model)
+        stream.process_chunk(torch.randn(960))
+        stream.flush()
+        with self.assertRaises(RuntimeError):
+            stream.process_chunk(torch.randn(128))
 
     def test_recurrent_state_matches_single_pass(self):
         model = CausalMaskNet(bins=33, hidden=16, layers=2).eval()
