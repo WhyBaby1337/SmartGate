@@ -4,6 +4,7 @@
 void runGateEnvelopeTests();
 void runTargetProfileTests();
 void runAdaptiveKeyboardDetectorTests();
+void runShadowEventClassifierTests();
 void runVadFrameQueueTests();
 void runVadResamplerTests();
 void runVadFrameAssemblerTests();
@@ -16,6 +17,7 @@ int main() {
         runGateEnvelopeTests();
         runTargetProfileTests();
         runAdaptiveKeyboardDetectorTests();
+        runShadowEventClassifierTests();
         runVadFrameQueueTests();
         runVadResamplerTests();
         runVadFrameAssemblerTests();

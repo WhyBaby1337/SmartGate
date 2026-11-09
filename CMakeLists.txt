@@ -16,6 +16,7 @@ add_executable(SmartGateDspTests
     tests/GateEnvelopeTests.cpp
     tests/TargetProfileTests.cpp
     tests/AdaptiveKeyboardDetectorTests.cpp
+    tests/ShadowEventClassifierTests.cpp
     tests/VadFrameQueueTests.cpp
     tests/VadResamplerTests.cpp
     tests/VadFrameAssemblerTests.cpp

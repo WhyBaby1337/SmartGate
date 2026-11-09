@@ -151,6 +151,10 @@ void SmartGateAudioProcessor::prepareToPlay(double sampleRate, int) {
     setLatencySamples(static_cast<int>(lookaheadDelay_.latencySamples()));
     gateEnvelope_.prepare(safeSampleRate);
     featureExtractor_.prepare(safeSampleRate);
+    shadowEventClassifier_.reset();
+    shadowSpeechForUi_.store(0.0f, std::memory_order_relaxed);
+    shadowKeyboardForUi_.store(0.0f, std::memory_order_relaxed);
+    shadowMouseForUi_.store(0.0f, std::memory_order_relaxed);
     stereoAnalysisFoldDown_.prepare(safeSampleRate);
     keyboardDetector_.prepare(safeSampleRate);
     mouseClickSuppressorLeft_.prepare(safeSampleRate);
@@ -209,6 +213,18 @@ void SmartGateAudioProcessor::finishFeatureFrame() noexcept {
     const auto features = featureExtractor_.process(featureFrame_.data(), featureFrame_.size());
     if (!features.isFinite())
         return;
+
+    // Shadow AI observes every completed feature frame. The existing DSP
+    // decisions remain authoritative; these scores are telemetry only.
+    float speechConfidenceForShadow = 0.0f;
+#if defined(SMARTGATE_HAS_SILERO)
+    speechConfidenceForShadow = vadAvailable_ ? vadProbabilitySmoothed_ : 0.0f;
+#endif
+    const auto shadowScores = shadowEventClassifier_.process(
+        features, speechConfidenceForShadow, keyboardConfidence_);
+    shadowSpeechForUi_.store(shadowScores.speech, std::memory_order_relaxed);
+    shadowKeyboardForUi_.store(shadowScores.keyboard, std::memory_order_relaxed);
+    shadowMouseForUi_.store(shadowScores.mouse, std::memory_order_relaxed);
 
     const bool learning = *parameters_.getRawParameterValue("learnTarget") >= 0.5f;
     bool vadAllowsLearning = true;

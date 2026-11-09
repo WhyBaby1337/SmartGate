@@ -302,9 +302,10 @@ void SmartGateAudioProcessorEditor::paint(juce::Graphics& g) {
                      "Shape how the gate opens, holds and closes");
     auto intelligenceHeading = intelligencePanel.reduced(14, 8).removeFromTop(22);
     drawSectionTitle(g, intelligenceHeading, "SMART PROCESSING",
-                     aiButton_.getToggleState()
-                         ? "Target voice matching and keyboard suppression"
-                         : "AI OFF  ·  conventional gate mode");
+                     "SHADOW AI  ·  V " + juce::String(shadowSpeech_, 2)
+                         + "  K " + juce::String(shadowKeyboard_, 2)
+                         + "  M " + juce::String(shadowMouse_, 2)
+                         + "  ·  OBSERVE ONLY");
     g.setColour(panel);
     g.fillRoundedRectangle(voicePanel.toFloat(), 10.0f);
     auto voiceHeading = voicePanel.reduced(14, 8).removeFromTop(22);
@@ -470,6 +471,12 @@ void SmartGateAudioProcessorEditor::timerCallback() {
         ? "PAUSE LEARNING"
         : (learnedFrames_ > 0 ? "RESUME LEARNING" : "START LEARNING"));
     vadReady_ = processor_.vadReadyForUi_.load(std::memory_order_relaxed);
+    shadowSpeech_ = juce::jlimit(0.0f, 1.0f,
+        processor_.shadowSpeechForUi_.load(std::memory_order_relaxed));
+    shadowKeyboard_ = juce::jlimit(0.0f, 1.0f,
+        processor_.shadowKeyboardForUi_.load(std::memory_order_relaxed));
+    shadowMouse_ = juce::jlimit(0.0f, 1.0f,
+        processor_.shadowMouseForUi_.load(std::memory_order_relaxed));
     cpuLoadPercent_ = juce::jlimit(0.0f, 1000.0f,
         processor_.cpuLoadPercentForUi_.load(std::memory_order_relaxed));
     cpuPeakPercent_ = juce::jlimit(0.0f, 1000.0f,

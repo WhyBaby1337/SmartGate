@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "AdaptiveKeyboardDetector.h"
 #include "AudioFeatures.h"
+#include "ShadowEventClassifier.h"
 #include "GateEnvelope.h"
 #include "MouthClickSuppressor.h"
 #include "MouseClickSuppressor.h"
@@ -79,6 +80,7 @@ private:
     smartgate::FeatureExtractor featureExtractor_;
     smartgate::StereoAnalysisFoldDown stereoAnalysisFoldDown_;
     smartgate::AdaptiveKeyboardDetector keyboardDetector_;
+    smartgate::ShadowEventClassifier shadowEventClassifier_;
     smartgate::TargetProfile targetProfile_;
     smartgate::AtomicTargetProfileSnapshot publishedTargetProfile_;
     smartgate::AtomicTargetProfileSnapshot pendingTargetProfile_;
@@ -119,6 +121,9 @@ private:
     float cpuPeakHoldSeconds_ = 0.0f;
     std::atomic<std::uint64_t> learnedFramesForUi_{0};
     std::atomic<bool> vadReadyForUi_{false};
+    std::atomic<float> shadowSpeechForUi_{0.0f};
+    std::atomic<float> shadowKeyboardForUi_{0.0f};
+    std::atomic<float> shadowMouseForUi_{0.0f};
     bool wasAiEnabled_ = true;
     bool wasKeyboardAnalysisEnabled_ = false;
 #if defined(SMARTGATE_HAS_SILERO)

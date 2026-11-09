@@ -39,6 +39,9 @@ private:
     float cpuPeakPercent_ = 0.0f;
     std::uint64_t learnedFrames_ = 0;
     bool vadReady_ = false;
+    float shadowSpeech_ = 0.0f;
+    float shadowKeyboard_ = 0.0f;
+    float shadowMouse_ = 0.0f;
     std::array<juce::Slider, 10> sliders_;
     std::array<juce::Label, 10> labels_;
     std::array<std::unique_ptr<SliderAttachment>, 10> sliderAttachments_;
