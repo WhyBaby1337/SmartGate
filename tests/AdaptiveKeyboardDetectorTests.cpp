@@ -1042,6 +1042,22 @@ void runAdaptiveKeyboardDetectorTests() {
     requireKeyboard(minimumKeyboardSibilantGain > 0.95f,
                     "Keyboard suppression must preserve sustained sibilant speech");
 
+    // A stale/high aligned frame context can follow a real click into
+    // nearby speech. Even at maximum context, a sustained high-frequency
+    // sibilant must not be mistaken for a sequence of isolated switch attacks.
+    smartgate::KeyboardTransientSuppressor contextualSibilantGuard;
+    contextualSibilantGuard.prepare(48000.0);
+    float minimumContextualSibilantGain = 1.0f;
+    for (int i = 0; i < 12000; ++i) {
+        const float sibilant = 0.08f * std::sin(
+            2.0f * 3.14159265f * 6200.0f * static_cast<float>(i) / 48000.0f);
+        (void) contextualSibilantGuard.process(sibilant, 1.0f, 1.0f);
+        minimumContextualSibilantGain = std::min(minimumContextualSibilantGain,
+            contextualSibilantGuard.getHighBandGain());
+    }
+    requireKeyboard(minimumContextualSibilantGain > 0.95f,
+        "Maximum aligned keyboard context must not attenuate sustained sibilant speech");
+
     // Mid-band attenuation must react to a classifier-aligned mechanical
     // impulse, but remain effectively transparent for a sustained speech-like
     // tone in the same band (a conservative guard for formants and consonants).
