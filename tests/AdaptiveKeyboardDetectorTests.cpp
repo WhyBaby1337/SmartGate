@@ -824,6 +824,61 @@ void runAdaptiveKeyboardDetectorTests() {
         { 5600.0f,  8200.0f, 0.050f, 110.0f, 300},
         { 7600.0f, 10400.0f, 0.045f,  42.0f, 150}
     };
+
+    // Verify that the real frame classifier recognizes these switch attacks
+    // over voiced audio. The suppressor-only profiles below intentionally use
+    // a fixed context value; this separate check prevents that fixture from
+    // hiding a classifier that never supplies useful context in the processor.
+    for (const auto& profile : keyboardProfiles) {
+        smartgate::AdaptiveKeyboardDetector clickDetector;
+        smartgate::AdaptiveKeyboardDetector speechDetector;
+        clickDetector.prepare(48000.0);
+        speechDetector.prepare(48000.0);
+        std::vector<float> frame(frameSize, 0.0f);
+
+        for (int frameIndex = 0; frameIndex < 3; ++frameIndex) {
+            for (std::size_t i = 0; i < frameSize; ++i) {
+                const int sampleIndex = frameIndex * static_cast<int>(frameSize)
+                    + static_cast<int>(i);
+                frame[i] = 0.10f * std::sin(2.0f * 3.14159265f * 180.0f
+                    * static_cast<float>(sampleIndex) / 48000.0f);
+            }
+            (void) clickDetector.processFrame(frame.data(), frame.size());
+            (void) speechDetector.processFrame(frame.data(), frame.size());
+        }
+
+        for (std::size_t i = 0; i < frameSize; ++i) {
+            const int sampleIndex = 3 * static_cast<int>(frameSize)
+                + static_cast<int>(i);
+            const float voice = 0.10f * std::sin(2.0f * 3.14159265f * 180.0f
+                * static_cast<float>(sampleIndex) / 48000.0f);
+            const int age = static_cast<int>(i) - 100;
+            float click = 0.0f;
+            if (age >= 0 && age < profile.durationSamples) {
+                const float elapsed = static_cast<float>(age);
+                const float envelope = std::exp(-elapsed / profile.decaySamples);
+                const float time = elapsed / 48000.0f;
+                click = profile.amplitude * envelope * (
+                    std::sin(2.0f * 3.14159265f * profile.frequencyA * time
+                             + 1.5707963f)
+                    + 0.40f * std::sin(2.0f * 3.14159265f
+                        * profile.frequencyB * time + 1.5707963f));
+                if (age == 0)
+                    click += 3.0f * profile.amplitude;
+            }
+            frame[i] = voice + click;
+        }
+
+        const float clickContext = clickDetector.processFrame(frame.data(), frame.size());
+        const float speechContext = speechDetector.processFrame(
+            frame.data(), frame.size());
+        std::fprintf(stderr,
+            "Keyboard classifier %.0f/%.0f Hz: click=%.6f voiced=%.6f\\n",
+            static_cast<double>(profile.frequencyA),
+            static_cast<double>(profile.frequencyB), clickContext, speechContext);
+        requireKeyboard(clickContext > speechContext + 0.10f,
+            "Keyboard classifier must distinguish switch attacks from voiced speech");
+    }
     for (const auto& profile : keyboardProfiles) {
         smartgate::KeyboardTransientSuppressor profileSuppressor;
         smartgate::KeyboardTransientSuppressor voiceReference;
