@@ -1117,6 +1117,35 @@ void runAdaptiveKeyboardDetectorTests() {
             "Classifier-driven keyboard suppression must reduce varied switch profiles");
     }
 
+    // The sample-accurate transient suppressor uses millisecond-based hold
+    // and release constants. A matched impulse followed by silence should
+    // therefore have a comparable gain trajectory at common host rates.
+    float referenceKeyboardImpulseMinimumGain = -1.0f;
+    float referenceKeyboardImpulseGainAfter20ms = -1.0f;
+    for (const double rate : {44100.0, 48000.0, 96000.0}) {
+        smartgate::KeyboardTransientSuppressor rateSuppressor;
+        rateSuppressor.prepare(rate);
+        float minimumGain = 1.0f;
+        const int totalSamples = static_cast<int>(std::lround(0.020 * rate));
+        for (int i = 0; i < totalSamples; ++i) {
+            const float sample = i == 0 ? 0.50f : 0.0f;
+            (void) rateSuppressor.process(sample, 0.35f, 1.0f);
+            minimumGain = std::min(minimumGain, rateSuppressor.getHighBandGain());
+        }
+        const float gainAfter20ms = rateSuppressor.getHighBandGain();
+        requireKeyboard(minimumGain < 0.95f,
+            "Keyboard transient suppressor must detect a sharp impulse at every host rate");
+        if (referenceKeyboardImpulseMinimumGain < 0.0f) {
+            referenceKeyboardImpulseMinimumGain = minimumGain;
+            referenceKeyboardImpulseGainAfter20ms = gainAfter20ms;
+        } else {
+            requireKeyboard(std::abs(minimumGain - referenceKeyboardImpulseMinimumGain) < 0.03f,
+                "Keyboard transient attack must remain stable across sample rates");
+            requireKeyboard(std::abs(gainAfter20ms - referenceKeyboardImpulseGainAfter20ms) < 0.03f,
+                "Keyboard transient hold and release must remain time-consistent across sample rates");
+        }
+    }
+
     // Sustained /s/ and /sh/-like high-frequency energy is speech, not a click.
     smartgate::KeyboardTransientSuppressor sibilantKeyboardGuard;
     sibilantKeyboardGuard.prepare(48000.0);
