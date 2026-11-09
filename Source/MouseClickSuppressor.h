@@ -19,6 +19,10 @@ public:
         releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.0025 * rate)));
         envelopeCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.010 * rate)));
         holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0030 * rate)));
+        // Keep the two-window decay confirmation at the same wall-clock
+        // duration across host sample rates (16 samples per window at 48 kHz).
+        decayWindowSamples_ = std::max(1, static_cast<int>(
+            std::lround(rate * (16.0 / 48000.0))));
         reset();
     }
 
@@ -120,7 +124,7 @@ public:
             pendingOnsetSecondPeak_ = 0.0f;
             pendingOnsetSamples_ = 1;
         } else if (pendingOnsetSamples_ > 0) {
-            if (pendingOnsetSamples_ <= 16) {
+            if (pendingOnsetSamples_ <= decayWindowSamples_) {
                 pendingOnsetFirstPeak_ += magnitude * magnitude;
             } else {
                 pendingOnsetSecondPeak_ += magnitude * magnitude;
@@ -141,7 +145,7 @@ public:
             pendingOnsetFirstPeak_ = 0.0f;
             pendingOnsetSecondPeak_ = 0.0f;
         }
-        if (pendingOnsetSamples_ > 32) {
+        if (pendingOnsetSamples_ > 2 * decayWindowSamples_) {
             const float decay = std::sqrt(pendingOnsetSecondPeak_
                 / std::max(pendingOnsetFirstPeak_, 1.0e-12f));
             lastDecayRatio_ = decay;
@@ -216,6 +220,7 @@ private:
     unsigned onsetCandidateCount_ = 0;
     float lastDecayRatio_ = 0.0f;
     int holdSamples_ = 1;
+    int decayWindowSamples_ = 16;
     int holdCounter_ = 0;
 };
 
