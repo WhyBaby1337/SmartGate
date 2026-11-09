@@ -95,9 +95,12 @@ python build_speech_mixtures.py --manifest stems.json --output-dir generated --c
 ```
 
 Each JSONL row points to a stereo 48 kHz mixture and its synchronized clean-speech target.
-Keyboard and mouse are independently sampled into mixtures, with randomized relative levels;
-some examples contain speech alone, non-speech events, or background. The generator uses
-one source-session bundle per example and writes its `source_id` into the index. Split by
+Keyboard and mouse stems are independently included with randomized relative levels;
+some examples contain speech alone, non-speech events, or background. By default, every stem
+is cropped at the same sample offset on the shared source clock, preserving real event/speech
+overlap. The optional `--randomize-event-offsets` flag deliberately adds timing jitter and
+should be used only as an explicit augmentation, not as the default data alignment. The
+generator uses one source-session bundle per example and writes its `source_id` into the index. Split by
 source/session IDs before training: never randomly split generated clips, or near-identical
 source material can leak across evaluation sets.
 
