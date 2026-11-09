@@ -10,6 +10,23 @@ from build_speech_mixtures import TARGET_SR, aligned_crop, choose_crop, generate
 
 
 class MixtureBuilderTests(unittest.TestCase):
+    def test_generator_rejects_invalid_count_and_nonfinite_duration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "missing.json"
+            with self.assertRaisesRegex(ValueError, "count"):
+                generate(manifest, root / "out", 0, 1.0, 1)
+            with self.assertRaisesRegex(ValueError, "finite positive"):
+                generate(manifest, root / "out", 1, float("inf"), 1)
+
+    def test_manifest_rejects_non_object_source_entry(self):
+        from build_speech_mixtures import read_manifest
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sources.json"
+            path.write_text(json.dumps({"sources": ["not-an-object"]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "must be an object"):
+                read_manifest(path)
+
     def test_short_stem_is_padded_not_looped(self):
         source = np.array([[0.25, -0.25], [0.5, -0.5]], dtype=np.float32)
         result = choose_crop(source, 8, __import__("random").Random(4))
