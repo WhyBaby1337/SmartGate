@@ -585,6 +585,9 @@ void runAdaptiveKeyboardDetectorTests() {
         float maximumProfileLevel = 0.0f;
         float maximumProfileImpulsiveness = 0.0f;
         float maximumProfileNovelty = 0.0f;
+        unsigned onsetCandidateCount = 0;
+        float lastDecayRatio = 0.0f;
+        int maximumPendingSamples = 0;
         for (int i = 0; i < 2400; ++i) {
             const float voice = 0.12f * std::sin(2.0f * 3.14159265f
                 * 180.0f * static_cast<float>(i) / 48000.0f);
@@ -616,6 +619,10 @@ void runAdaptiveKeyboardDetectorTests() {
                     profiledMouseClick.getLastImpulsiveness());
                 maximumProfileNovelty = std::max(maximumProfileNovelty,
                     profiledMouseClick.getLastNovelty());
+                onsetCandidateCount = profiledMouseClick.getOnsetCandidateCount();
+                lastDecayRatio = profiledMouseClick.getLastDecayRatio();
+                maximumPendingSamples = std::max(maximumPendingSamples,
+                    profiledMouseClick.getPendingOnsetSamples());
             }
             if (i >= 600 && i < 600 + profile.durationSamples) {
                 inputEnergy += click * click;
@@ -636,6 +643,10 @@ void runAdaptiveKeyboardDetectorTests() {
                 static_cast<double>(maximumProfileLevel),
                 static_cast<double>(maximumProfileImpulsiveness),
                 static_cast<double>(maximumProfileNovelty));
+            std::fprintf(stderr,
+                "Mouse onset diagnostics: candidates=%u maxPending=%d decayRatio=%.6f\\n",
+                onsetCandidateCount, maximumPendingSamples,
+                static_cast<double>(lastDecayRatio));
         }
         // The quietest profile is an exploratory sensitivity probe. Report
         // its response without making the baseline regression suite fail;

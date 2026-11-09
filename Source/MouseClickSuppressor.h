@@ -39,6 +39,9 @@ public:
         lastLevel_ = 0.0f;
         lastImpulsiveness_ = 0.0f;
         lastNovelty_ = 0.0f;
+        lastOnsetCandidate_ = false;
+        onsetCandidateCount_ = 0;
+        lastDecayRatio_ = 0.0f;
     }
 
     float process(float input, float reduction, float alignedFrameContext = 0.0f) noexcept {
@@ -108,6 +111,9 @@ public:
         // while a real decaying ring still falls measurably between windows.
         const bool onsetCandidate = edge > edgeFloor && level > 0.3f
             && impulsiveness > 0.005f && novelty > 0.90f;
+        lastOnsetCandidate_ = onsetCandidate;
+        if (onsetCandidate)
+            ++onsetCandidateCount_;
         if (onsetCandidate && pendingOnsetSamples_ == 0) {
             pendingOnsetConfidence_ = level * novelty;
             pendingOnsetFirstPeak_ = magnitude * magnitude;
@@ -138,6 +144,7 @@ public:
         if (pendingOnsetSamples_ > 32) {
             const float decay = std::sqrt(pendingOnsetSecondPeak_
                 / std::max(pendingOnsetFirstPeak_, 1.0e-12f));
+            lastDecayRatio_ = decay;
             // Require a clear drop between adjacent windows. Small phase/envelope
             // fluctuations in sustained sibilants must not count as switch-ring decay.
             const float decayConfidence = unit((0.90f - decay) / 0.10f);
@@ -177,6 +184,10 @@ public:
     float getLastLevel() const noexcept { return lastLevel_; }
     float getLastImpulsiveness() const noexcept { return lastImpulsiveness_; }
     float getLastNovelty() const noexcept { return lastNovelty_; }
+    bool getLastOnsetCandidate() const noexcept { return lastOnsetCandidate_; }
+    unsigned getOnsetCandidateCount() const noexcept { return onsetCandidateCount_; }
+    int getPendingOnsetSamples() const noexcept { return pendingOnsetSamples_; }
+    float getLastDecayRatio() const noexcept { return lastDecayRatio_; }
 
 private:
     static float unit(float value) noexcept {
@@ -201,6 +212,9 @@ private:
     float lastLevel_ = 0.0f;
     float lastImpulsiveness_ = 0.0f;
     float lastNovelty_ = 0.0f;
+    bool lastOnsetCandidate_ = false;
+    unsigned onsetCandidateCount_ = 0;
+    float lastDecayRatio_ = 0.0f;
     int holdSamples_ = 1;
     int holdCounter_ = 0;
 };
