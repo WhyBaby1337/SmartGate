@@ -24,6 +24,8 @@ class MixtureBuilderTests(unittest.TestCase):
         padded = aligned_crop(source, 8, 5)
         np.testing.assert_array_equal(padded[:2], source[8:10])
         np.testing.assert_array_equal(padded[2:], np.zeros((3, 2), dtype=np.float32))
+        offset_crop = aligned_crop(source, 5, 5, stem_start=3)
+        np.testing.assert_array_equal(offset_crop, source[2:7])
 
     def test_transient_activity_is_not_forced_to_clip_start(self):
         stem = np.ones((TARGET_SR, 2), dtype=np.float32)
@@ -35,6 +37,30 @@ class MixtureBuilderTests(unittest.TestCase):
             starts.add(int(nonzero[0]))
             self.assertLess(len(nonzero), TARGET_SR)
         self.assertGreater(len(starts), 1)
+
+    def test_generator_respects_event_stem_start_offset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            speech = np.full((TARGET_SR // 2, 1), 0.05, dtype=np.float32)
+            mouse = np.zeros((TARGET_SR // 4, 1), dtype=np.float32)
+            mouse[0] = 0.9
+            sf.write(root / "speech.wav", speech, TARGET_SR)
+            sf.write(root / "mouse.wav", mouse, TARGET_SR)
+            manifest = {"sources": [{
+                "id": "offset-session", "speech": "speech.wav", "mouse": "mouse.wav",
+                "start_seconds": {"mouse": 0.125}
+            }]}
+            (root / "sources.json").write_text(json.dumps(manifest), encoding="utf-8")
+            output = root / "out"
+            generate(root / "sources.json", output, 40, 0.5, 17)
+            rows = [json.loads(line) for line in (output / "manifest.jsonl").read_text().splitlines()]
+            event_rows = [row for row in rows if "mouse" in row["active_sources"]]
+            self.assertTrue(event_rows, "seed should produce at least one mouse-positive example")
+            row = event_rows[0]
+            mix = sf.read(output / row["mixture"], always_2d=True, dtype="float32")[0]
+            target = sf.read(output / row["target_speech"], always_2d=True, dtype="float32")[0]
+            difference = np.max(np.abs(mix - target), axis=1)
+            self.assertEqual(int(np.argmax(difference)), round(0.125 * TARGET_SR))
 
     def test_generator_writes_aligned_stereo_pairs_and_source_ids(self):
         with tempfile.TemporaryDirectory() as tmp:
