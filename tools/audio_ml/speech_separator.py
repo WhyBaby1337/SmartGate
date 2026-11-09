@@ -4,6 +4,7 @@ This is an offline research component, not production plugin code. The recurrent
 processes frames strictly left-to-right and exposes hidden state for streaming prototypes.
 """
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 
@@ -51,8 +52,15 @@ class SpeechMaskSeparator(nn.Module):
             raise ValueError("Expected mono [batch, samples] waveform")
         if mixture.shape[-1] < self.n_fft:
             raise ValueError("Waveform must contain at least one analysis window")
+        # With center=False, ISTFT can silently zero-pad the tail when the final
+        # analysis frame does not cover the complete input. Right-pad to the next
+        # hop boundary, reconstruct the padded signal, then crop to the true length.
+        original_length = mixture.shape[-1]
+        remainder = (original_length - self.n_fft) % self.hop_length
+        right_padding = (self.hop_length - remainder) % self.hop_length
+        padded = F.pad(mixture, (0, right_padding)) if right_padding else mixture
         spectrum = torch.stft(
-            mixture, n_fft=self.n_fft, hop_length=self.hop_length,
+            padded, n_fft=self.n_fft, hop_length=self.hop_length,
             win_length=self.n_fft, window=self.window.to(mixture),
             center=False, return_complex=True,
         )
@@ -63,6 +71,7 @@ class SpeechMaskSeparator(nn.Module):
         speech = torch.istft(
             estimated, n_fft=self.n_fft, hop_length=self.hop_length,
             win_length=self.n_fft, window=self.window.to(mixture),
-            center=False, length=mixture.shape[-1],
+            center=False, length=padded.shape[-1],
         )
+        speech = speech[..., :original_length]
         return speech, mask, state
