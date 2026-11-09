@@ -190,7 +190,7 @@ def main():
                       dynamo=False)
     result = {
         "labels": list(LABELS), "output_activation": "sigmoid per label",
-        "sample_rate": SR, "mel_bins": MELS, "context_ms": FRAMES * HOP * 1000 / SR,
+        "sample_rate": SR, "mel_bins": MELS, "context_ms": (FFT + (FRAMES - 1) * HOP) * 1000 / SR,
         "train_recordings": sorted(set(groups[train].tolist())),
         "validation_recordings": sorted(set(groups[valid].tolist())),
         "validation_windows": int(len(valid)), "macro_f1": macro_f1,
