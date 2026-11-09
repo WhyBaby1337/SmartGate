@@ -1,0 +1,26 @@
+name: Audio ML tooling checks
+on:
+  push:
+    branches: ["development/**"]
+    paths:
+      - "tools/audio_ml/**"
+      - ".github/workflows/audio-ml-tools.yml"
+  pull_request:
+    branches: ["development/**"]
+    paths:
+      - "tools/audio_ml/**"
+      - ".github/workflows/audio-ml-tools.yml"
+permissions:
+  contents: read
+jobs:
+  python-syntax:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Compile training script
+        run: python -m py_compile tools/audio_ml/train_event_classifier.py
+      - name: Check whitespace errors
+        run: git diff --check
