@@ -51,10 +51,16 @@ Install `requirements.txt`, then run:
 python train_event_classifier.py --manifest dataset/manifest.json --output build/event_classifier.onnx
 ```
 
-The prototype uses 16 kHz log-mel patches (64 bands, 32 frames). With a 512-sample FFT and 160-sample hop, the actual receptive field is about 342 ms, not 320 ms.
+The prototype uses 16 kHz log-mel patches (64 bands, 32 frames). With a 512-sample FFT
+and 160-sample hop, each patch spans 342 ms. Features are normalized independently per
+frame, so a frame does not depend on future frames or whole-recording statistics. This does
+not make the 342 ms classifier itself a 30 ms-lookahead model: it still needs a 342 ms
+history before a full patch prediction is available.
 Validation is grouped by whole recording to prevent adjacent windows leaking between
 training and validation. It requires at least three independent recordings with positive
-examples per output label, reports per-label precision/recall/F1, and exports ONNX logits.
+examples per output label, reports per-label window-level precision/recall/F1, and exports
+ONNX logits. Window-level metrics can overweight long recordings and adjacent windows are
+correlated; treat them as diagnostics, not independent-sample generalization estimates.
 
 ## Correct product architecture
 
@@ -127,9 +133,9 @@ speakers, rooms and devices, and include real simultaneous speech+keyboard/mouse
 
 ## Not ready for live audio yet
 
-This is a research/training scaffold, not a production inference path. The current dataset
-preprocessing normalizes each complete recording, which is non-causal and cannot be copied
-directly into a live plugin. The approximately 342 ms patch also exceeds Smart Gate's current 30 ms lookahead.
+This is a research/training scaffold, not a production inference path. The classifier frontend now normalizes each frame independently, avoiding whole-recording
+future-statistic leakage. However, its approximately 342 ms patch still exceeds Smart Gate's
+current 30 ms lookahead, so it is not a deployable low-latency classifier.
 Before integration we must implement and test a causal streaming feature frontend, decide on
 a low-latency temporal model/state strategy, and measure its CPU cost. Do not ship this model
 or connect its scores to attenuation until those pieces and the speech-preservation tests pass.
