@@ -813,6 +813,8 @@ void runAdaptiveKeyboardDetectorTests() {
         risingSibilantGuard.prepare(rate);
         std::uint32_t risingNoiseState = 0x91e10da5u;
         float minimumRisingSibilantGain = 1.0f;
+        float periodicityAtMinimumGain = 0.0f;
+        float earlyDecayAtMinimumGain = 0.0f;
         const int rampSamples = static_cast<int>(std::lround(0.012 * rate));
         const int totalSamples = static_cast<int>(std::lround(0.080 * rate));
         for (int i = 0; i < totalSamples; ++i) {
@@ -824,12 +826,17 @@ void runAdaptiveKeyboardDetectorTests() {
             const float ramp = std::min(1.0f,
                 static_cast<float>(i + 1) / static_cast<float>(rampSamples));
             (void) risingSibilantGuard.process(noise * ramp, 1.0f, 0.65f);
-            minimumRisingSibilantGain = std::min(minimumRisingSibilantGain,
-                risingSibilantGuard.getHighBandGain());
+            if (risingSibilantGuard.getHighBandGain() < minimumRisingSibilantGain) {
+                minimumRisingSibilantGain = risingSibilantGuard.getHighBandGain();
+                periodicityAtMinimumGain = risingSibilantGuard.getLastPeriodicity();
+                earlyDecayAtMinimumGain = risingSibilantGuard.getLastEarlyDecayRatio();
+            }
         }
         std::fprintf(stderr,
-            "Rising mouse sibilant %.0f Hz: minGain=%.6f candidates=%u pending=%d decay=%.6f confidence=%.6f\\n",
+            "Rising mouse sibilant %.0f Hz: minGain=%.6f periodicity=%.6f earlyDecay=%.6f candidates=%u pending=%d decay=%.6f confidence=%.6f\\n",
             rate, static_cast<double>(minimumRisingSibilantGain),
+            static_cast<double>(periodicityAtMinimumGain),
+            static_cast<double>(earlyDecayAtMinimumGain),
             risingSibilantGuard.getOnsetCandidateCount(),
             risingSibilantGuard.getPendingOnsetSamples(),
             static_cast<double>(risingSibilantGuard.getLastDecayRatio()),
