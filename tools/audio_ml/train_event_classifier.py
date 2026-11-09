@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Leakage-safe trainer for Smart Gate's compact acoustic event CNN."""
+"""Leakage-safe multi-label trainer for Smart Gate acoustic event detection."""
 import argparse
 import json
 import math
@@ -14,7 +14,8 @@ from scipy.signal import resample_poly
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-LABELS = ("silence", "speech", "keyboard", "mouse", "mixed")
+# Independent sigmoid outputs allow speech+keyboard and speech+mouse at once.
+LABELS = ("speech", "keyboard", "mouse", "other")
 SR, FFT, HOP, MELS, FRAMES = 16000, 512, 160, 64, 32
 
 
@@ -50,9 +51,9 @@ def features(path):
     spec = np.fft.rfft(frames * WINDOW, axis=1)
     power = spec.real ** 2 + spec.imag ** 2
     logmel = np.log(np.maximum(power @ BANK.T, 1e-10)).astype(np.float32)
-    med = np.median(logmel, axis=0, keepdims=True)
+    median = np.median(logmel, axis=0, keepdims=True)
     scale = np.maximum(logmel.std(axis=0, keepdims=True), 0.5)
-    return np.clip((logmel - med) / scale, -5, 5), mono.size / SR
+    return np.clip((logmel - median) / scale, -5, 5), mono.size / SR
 
 
 def load_dataset(manifest_path):
@@ -65,40 +66,48 @@ def load_dataset(manifest_path):
         feat, duration = features((root / rec["path"]).resolve())
         previous_end = 0.0
         for seg in sorted(rec["segments"], key=lambda s: float(s["start"])):
-            start, end, label = float(seg["start"]), float(seg["end"]), seg["label"]
-            if label not in LABELS or not (0 <= start < end <= duration):
+            start, end = float(seg["start"]), float(seg["end"])
+            active = seg.get("labels", [])
+            if not isinstance(active, list) or len(active) != len(set(active)):
+                raise ValueError(f"{rid}: labels must be a unique list")
+            if any(label not in LABELS for label in active):
+                raise ValueError(f"{rid}: unsupported labels {active}")
+            if not (0 <= start < end <= duration):
                 raise ValueError(f"{rid}: invalid segment {seg}")
             if start < previous_end:
-                raise ValueError(f"{rid}: overlapping labels; label the overlap as mixed")
+                raise ValueError(f"{rid}: overlapping segments; combine active labels in one segment")
             previous_end = end
+            target = np.asarray([float(label in active) for label in LABELS], np.float32)
             first = max(0, round(start * SR / HOP))
             last = min(len(feat), round(end * SR / HOP))
             for pos in range(first, last - FRAMES + 1, 16):
                 xs.append(feat[pos:pos + FRAMES].T[None])
-                ys.append(LABELS.index(label))
+                ys.append(target)
                 groups.append(rid)
-                sources[label].add(rid)
+                for label in active:
+                    sources[label].add(rid)
     missing = {k: len(sources[k]) for k in LABELS if len(sources[k]) < 3}
     if missing:
-        raise ValueError("Need >=3 independent recordings per class for honest holdout; "
+        raise ValueError("Need >=3 independent recordings with positive examples per label; "
                          f"current counts: {missing}")
     if not xs:
         raise ValueError("No complete 320 ms labelled windows")
-    return np.asarray(xs, np.float32), np.asarray(ys, np.int64), np.asarray(groups)
+    return np.asarray(xs, np.float32), np.asarray(ys, np.float32), np.asarray(groups)
 
 
-def split_by_recording(groups, labels, seed):
+def split_by_recording(groups, targets, seed):
     names = sorted(set(groups.tolist()))
     rng = random.Random(seed)
-    for _ in range(200):
+    required = set(range(len(LABELS)))
+    for _ in range(300):
         rng.shuffle(names)
-        nval = max(1, len(names) // 4)
-        val_groups = set(names[:nval])
+        val_groups = set(names[:max(1, len(names) // 4)])
         mask = np.asarray([g in val_groups for g in groups])
-        required = set(range(len(LABELS)))
-        if set(labels[mask]) == required and set(labels[~mask]) == required:
+        train_positive = set(np.flatnonzero(targets[~mask].sum(axis=0) > 0))
+        valid_positive = set(np.flatnonzero(targets[mask].sum(axis=0) > 0))
+        if train_positive == required and valid_positive == required:
             return np.flatnonzero(~mask), np.flatnonzero(mask)
-    raise ValueError("Cannot make a recording-level split containing every class in both sets")
+    raise ValueError("Cannot create a recording-level split with every label in train and validation")
 
 
 class EventCNN(nn.Module):
@@ -118,18 +127,21 @@ class EventCNN(nn.Module):
 def evaluate(model, x, y, device):
     model.eval()
     with torch.no_grad():
-        pred = model(torch.from_numpy(x).to(device)).argmax(1).cpu().numpy()
-    matrix = np.zeros((len(LABELS), len(LABELS)), dtype=int)
-    for a, b in zip(y, pred):
-        matrix[a, b] += 1
-    per_class = {}
+        probabilities = torch.sigmoid(model(torch.from_numpy(x).to(device))).cpu().numpy()
+    predicted = probabilities >= 0.5
+    per_label, macro = {}, []
     for i, name in enumerate(LABELS):
-        tp = int(matrix[i, i])
-        precision = tp / max(1, int(matrix[:, i].sum()))
-        recall = tp / max(1, int(matrix[i, :].sum()))
-        per_class[name] = {"precision": precision, "recall": recall,
-                           "f1": 2 * precision * recall / max(1e-12, precision + recall)}
-    return matrix, per_class, float(np.mean([v["f1"] for v in per_class.values()]))
+        truth, guess = y[:, i] >= 0.5, predicted[:, i]
+        tp = int(np.logical_and(truth, guess).sum())
+        fp = int(np.logical_and(~truth, guess).sum())
+        fn = int(np.logical_and(truth, ~guess).sum())
+        precision = tp / max(1, tp + fp)
+        recall = tp / max(1, tp + fn)
+        f1 = 2 * precision * recall / max(1e-12, precision + recall)
+        per_label[name] = {"precision": precision, "recall": recall, "f1": f1,
+                           "tp": tp, "fp": fp, "fn": fn}
+        macro.append(f1)
+    return per_label, float(np.mean(macro))
 
 
 def main():
@@ -144,8 +156,12 @@ def main():
     train, valid = split_by_recording(groups, y, args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = EventCNN().to(device)
+    positive = y[train].sum(axis=0)
+    negative = len(train) - positive
+    pos_weight = torch.tensor(np.clip(negative / np.maximum(positive, 1), 1.0, 12.0),
+                              dtype=torch.float32, device=device)
     opt = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     loader = DataLoader(TensorDataset(torch.from_numpy(x[train]),
                                       torch.from_numpy(y[train])),
                         batch_size=64, shuffle=True)
@@ -154,30 +170,32 @@ def main():
         model.train()
         for bx, by in loader:
             bx, by = bx.to(device), by.to(device)
+            # Small log-energy perturbation and feature noise improve gain tolerance.
+            bx = bx + (torch.rand(len(bx), 1, 1, 1, device=device) - 0.5) * 0.8
             bx = bx + torch.randn_like(bx) * 0.025
             opt.zero_grad(set_to_none=True)
             loss_fn(model(bx), by).backward()
             opt.step()
-        _, _, score = evaluate(model, x[valid], y[valid], device)
+        _, score = evaluate(model, x[valid], y[valid], device)
         if score > best:
             best = score
             state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     model.load_state_dict(state)
-    matrix, metrics, macro_f1 = evaluate(model, x[valid], y[valid], device)
+    metrics, macro_f1 = evaluate(model, x[valid], y[valid], device)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     model.eval()
     torch.onnx.export(model.cpu(), torch.zeros(1, 1, MELS, FRAMES), str(args.output),
-                      input_names=["logmel"], output_names=["logits"], opset_version=17,
-                      dynamic_axes={"logmel": {0: "batch"}, "logits": {0: "batch"}},
+                      input_names=["logmel"], output_names=["event_logits"], opset_version=17,
+                      dynamic_axes={"logmel": {0: "batch"}, "event_logits": {0: "batch"}},
                       dynamo=False)
     result = {
-        "labels": list(LABELS), "sample_rate": SR, "mel_bins": MELS,
-        "context_ms": FRAMES * HOP * 1000 / SR,
+        "labels": list(LABELS), "output_activation": "sigmoid per label",
+        "sample_rate": SR, "mel_bins": MELS, "context_ms": FRAMES * HOP * 1000 / SR,
         "train_recordings": sorted(set(groups[train].tolist())),
         "validation_recordings": sorted(set(groups[valid].tolist())),
         "validation_windows": int(len(valid)), "macro_f1": macro_f1,
-        "per_class": metrics, "confusion_matrix_true_rows_predicted_columns": matrix.tolist(),
-        "warning": "Do not deploy without independent real mixed speech+click recordings."
+        "per_label": metrics,
+        "warning": "Do not deploy without independent real speech+keyboard and speech+mouse validation."
     }
     args.output.with_suffix(".metrics.json").write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
