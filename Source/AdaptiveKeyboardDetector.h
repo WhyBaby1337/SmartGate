@@ -289,8 +289,13 @@ public:
         // contact strike rises far above recent background; random peaks in a
         // sustained noise-like sibilant do not. This preserves same-sample
         // response without adding a confirmation delay to the audio path.
+        // A rising fricative can have noisy sample peaks while its
+        // short-term high-band bed is still building. Requiring a larger
+        // peak-to-envelope ratio avoids treating those early /s/-like peaks
+        // as isolated switch contacts; true broadband clicks still stand
+        // well above the local bed and remain covered by the transient tests.
         const float onsetNovelty = unit(
-            (magnitude - 5.0f * highBandEnvelope_) / 0.015f);
+            (magnitude - 7.0f * highBandEnvelope_) / 0.015f);
         highBandEnvelope_ = magnitude + envelopeCoefficient_
             * (highBandEnvelope_ - magnitude);
         const float confidence = unit(localTransient * onsetNovelty
