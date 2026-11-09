@@ -60,6 +60,52 @@ examples per output label, reports per-label precision/recall/F1, and exports ON
 
 The event CNN is only an auxiliary detector. The actual product goal requires a separate supervised speech-isolation model that estimates clean speech from mixtures, trained against synchronized clean-speech targets. See [SPEECH_ISOLATION_ARCHITECTURE.md](SPEECH_ISOLATION_ARCHITECTURE.md) for the signal path, dataset strategy, latency constraints and acceptance tests. Event classification alone cannot remove a click that overlaps speech.
 
+
+## Paired speech-mixture generation
+
+The speech-isolation model must learn from paired files: the input mixture and the clean
+speech target must have identical sample timing and duration. Use
+`build_speech_mixtures.py` to create deterministic training examples from synchronized
+source-session stems.
+
+Input manifest example (paths are relative to the manifest):
+```json
+{
+  "sources": [
+    {
+      "id": "session_a",
+      "speech": "stems/session_a_speech.wav",
+      "keyboard": "stems/session_a_keyboard.wav",
+      "mouse": "stems/session_a_mouse.wav",
+      "background": "stems/session_a_room.wav"
+    },
+    {
+      "id": "session_b",
+      "speech": "stems/session_b_speech.wav",
+      "keyboard": "stems/session_b_keyboard.wav",
+      "mouse": "stems/session_b_mouse.wav"
+    }
+  ]
+}
+```
+
+Run:
+```bash
+python build_speech_mixtures.py --manifest stems.json --output-dir generated --count 5000 --seconds 2 --seed 1337
+```
+
+Each JSONL row points to a stereo 48 kHz mixture and its synchronized clean-speech target.
+Keyboard and mouse are independently sampled into mixtures, with randomized relative levels;
+some examples contain speech alone, non-speech events, or background. The generator uses
+one source-session bundle per example and writes its `source_id` into the index. Split by
+source/session IDs before training: never randomly split generated clips, or near-identical
+source material can leak across evaluation sets.
+
+This generator is a first data-preparation component, not a trained separator. Its quality
+depends on genuinely isolated, correctly synchronized stems. Do not treat arbitrary
+unrelated recordings as aligned stems. For final evaluation, hold out complete sessions,
+speakers, rooms and devices, and include real simultaneous speech+keyboard/mouse recordings.
+
 ## Not ready for live audio yet
 
 This is a research/training scaffold, not a production inference path. The current dataset
