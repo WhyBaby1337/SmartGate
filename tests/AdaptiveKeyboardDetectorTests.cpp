@@ -846,6 +846,10 @@ void runAdaptiveKeyboardDetectorTests() {
                     + 0.40f * std::sin(
                         2.0f * 3.14159265f * profile.frequencyB * time
                         + 1.5707963f));
+                // Model the short broadband contact attack that excites the
+                // resonant tail; a steady-state sine burst is not a switch click.
+                if (age == 0)
+                    click += 3.0f * profile.amplitude;
             }
             const float output = profileSuppressor.process(
                 voice + click, 0.35f, 0.75f);
