@@ -168,11 +168,16 @@ public:
         if (pendingOnsetSamples_ > 36) {
             const float earlyDecay = pendingOnsetEarlySecond_
                 / std::max(pendingOnsetEarlyFirst_, 1.0e-12f);
-            if (earlyDecay < 0.84f && periodicity < 0.96f) {
+            if (earlyDecay < 0.70f && periodicity < 0.96f) {
                 // Very short, strongly decaying resonances need an earlier
                 // decision than the longer phase-stable ring confirmation.
+                // A modest dip in two short noise windows is not enough:
+                // random peaks during a naturally rising fricative can make
+                // adjacent averages differ by that much. Require a pronounced
+                // decay before taking this early path; the longer ring window
+                // remains responsible for ordinary resonant switch tails.
                 onsetConfidence = pendingOnsetConfidence_
-                    * unit((0.84f - earlyDecay) / 0.08f);
+                    * unit((0.70f - earlyDecay) / 0.10f);
                 pendingOnsetSamples_ = 0;
                 pendingOnsetConfidence_ = 0.0f;
                 pendingOnsetFirstPeak_ = 0.0f;
