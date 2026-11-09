@@ -98,7 +98,10 @@ public:
         // the rising quarter-cycle of a sustained /s/ or /sh/ tone.
         const bool onsetCandidate = magnitudeRise > 0.006f
             && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.75f;
-        const float onsetDrop = unit((0.55f - magnitudeFallRatio) / 0.25f);
+        // The first resonant cycle of a switch ring may decay by less than
+        // 45% in one 48 kHz sample. Confirm a pronounced peak drop without
+        // requiring an unrealistically deep single-sample collapse.
+        const float onsetDrop = unit((0.90f - magnitudeFallRatio) / 0.25f);
         const float onsetConfidence = previousOnsetConfidence_ * onsetDrop;
         previousOnsetConfidence_ = onsetCandidate ? level * onsetNovelty : 0.0f;
 
