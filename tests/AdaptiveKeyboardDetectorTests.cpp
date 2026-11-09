@@ -827,6 +827,13 @@ void runAdaptiveKeyboardDetectorTests() {
             minimumRisingSibilantGain = std::min(minimumRisingSibilantGain,
                 risingSibilantGuard.getHighBandGain());
         }
+        std::fprintf(stderr,
+            "Rising mouse sibilant %.0f Hz: minGain=%.6f candidates=%u pending=%d decay=%.6f confidence=%.6f\\n",
+            rate, static_cast<double>(minimumRisingSibilantGain),
+            risingSibilantGuard.getOnsetCandidateCount(),
+            risingSibilantGuard.getPendingOnsetSamples(),
+            static_cast<double>(risingSibilantGuard.getLastDecayRatio()),
+            static_cast<double>(risingSibilantGuard.getLastConfidence()));
         requireKeyboard(minimumRisingSibilantGain > 0.95f,
             "A naturally rising noise-like fricative onset must remain transparent to mouse suppression at every host rate");
     }
