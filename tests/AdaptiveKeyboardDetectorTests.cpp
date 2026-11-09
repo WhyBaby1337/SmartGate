@@ -823,9 +823,10 @@ void runAdaptiveKeyboardDetectorTests() {
         { 4200.0f,  6900.0f, 0.060f,  84.0f, 240},
         { 5600.0f,  8200.0f, 0.050f, 110.0f, 300},
         { 7600.0f, 10400.0f, 0.045f,  42.0f, 150},
-        // A much quieter contact strike checks that suppression is not tuned
-        // only for obvious, high-amplitude switch sounds.
-        { 3900.0f,  5800.0f, 0.025f,  70.0f, 210}
+        // Quiet contact strikes check that suppression is not tuned only
+        // for obvious, high-amplitude switch sounds.
+        { 3900.0f,  5800.0f, 0.025f,  70.0f, 210},
+        { 4700.0f,  6400.0f, 0.018f,  62.0f, 180}
     };
 
     // Verify that the real frame classifier recognizes these switch attacks
