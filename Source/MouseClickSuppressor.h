@@ -19,10 +19,13 @@ public:
         releaseCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.0025 * rate)));
         envelopeCoefficient_ = static_cast<float>(std::exp(-1.0 / (0.010 * rate)));
         holdSamples_ = std::max(1, static_cast<int>(std::lround(0.0030 * rate)));
-        // Keep the two-window decay confirmation at the same wall-clock
-        // duration across host sample rates (16 samples per window at 48 kHz).
+        // Use enough samples per window to average several cycles of
+        // speech-band high-frequency energy. Very short windows can make a
+        // sustained sibilant look like a decaying click when its phase lands
+        // differently at 44.1 kHz. Keep the observation time sample-rate
+        // invariant (48 samples per window at 48 kHz).
         decayWindowSamples_ = std::max(1, static_cast<int>(
-            std::lround(rate * (16.0 / 48000.0))));
+            std::lround(rate * (48.0 / 48000.0))));
         reset();
     }
 
