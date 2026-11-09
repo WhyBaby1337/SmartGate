@@ -57,13 +57,13 @@ class SeparatorTrainingTests(unittest.TestCase):
             manifest = self._make_dataset(root)
             rows = [json.loads(line) for line in manifest.read_text().splitlines()]
             rows[1]["id"] = rows[0]["id"]
-            manifest.write_text("\\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+            manifest.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Duplicate mixture id"):
                 load_rows(manifest)
 
             rows[1]["id"] = "unique_id"
             rows[1]["source_id"] = ""
-            manifest.write_text("\\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+            manifest.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "non-empty string"):
                 load_rows(manifest)
 
@@ -76,7 +76,7 @@ class SeparatorTrainingTests(unittest.TestCase):
             bad_audio[10] = np.nan
             sf.write(root / "bad_mix.wav", bad_audio, 48000)
             rows[0]["mixture"] = "bad_mix.wav"
-            manifest.write_text("\\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+            manifest.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
             loaded = load_rows(manifest)
             with self.assertRaisesRegex(ValueError, "Invalid or too-short audio pair"):
                 PairedMixtures(loaded[:1], root)[0]
