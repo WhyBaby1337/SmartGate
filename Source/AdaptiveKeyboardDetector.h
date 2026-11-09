@@ -193,8 +193,6 @@ public:
         midLowPassState_ = 0.0;
         previousMidBand_ = 0.0f;
         previousHighBand_ = 0.0f;
-        previousHighMagnitude_ = 0.0f;
-        previousOnsetConfidence_ = 0.0f;
         highBandEnvelope_ = 0.0f;
         midBandGain_ = 1.0f;
         highBandGain_ = 1.0f;
@@ -219,8 +217,6 @@ public:
         if (amount <= 0.0f) {
             previousMidBand_ = mid;
             previousHighBand_ = high;
-            previousHighMagnitude_ = std::abs(high);
-            previousOnsetConfidence_ = 0.0f;
             highBandEnvelope_ = std::abs(high);
             midBandGain_ = 1.0f;
             highBandGain_ = 1.0f;
@@ -232,11 +228,7 @@ public:
         previousMidBand_ = mid;
         const float magnitude = std::abs(high);
         const float edge = std::abs(high - previousHighBand_);
-        const float magnitudeRise = std::max(0.0f, magnitude - previousHighMagnitude_);
-        const float magnitudeFallRatio = magnitude
-            / std::max(previousHighMagnitude_, 1.0e-6f);
         previousHighBand_ = high;
-        previousHighMagnitude_ = magnitude;
 
         // Only attenuate the 1.2-2.4 kHz band when aligned classifier context
         // and a sample-local impulsive event agree. This band can carry the
@@ -274,25 +266,16 @@ public:
         const float impulsiveness = unit((edge - edgeFloor) / edgeSpan);
         const float localTransient = level * impulsiveness;
 
-        // Confirm an isolated attack by its immediate peak-then-drop shape.
-        // A noise-like sibilant has many sharp sample edges, but its peaks sit
-        // on a sustained high-band bed; they should not repeatedly retrigger.
+        // Compare the local peak against a slow high-band bed. A mechanical
+        // contact strike rises far above recent background; random peaks in a
+        // sustained noise-like sibilant do not. This preserves same-sample
+        // response without adding a confirmation delay to the audio path.
         const float onsetNovelty = unit(
             (magnitude - 5.0f * highBandEnvelope_) / 0.015f);
         highBandEnvelope_ = magnitude + envelopeCoefficient_
             * (highBandEnvelope_ - magnitude);
-        const bool onsetCandidate = magnitudeRise > 0.012f
-            && level > 0.3f && impulsiveness > 0.005f && onsetNovelty > 0.95f;
-        const float onsetDrop = unit((0.55f - magnitudeFallRatio) / 0.25f);
-        const float confirmedConfidence = unit(previousOnsetConfidence_ * onsetDrop
-                                               * (1.0f + 0.15f * frameContext));
-        // Keep the established immediate response for unmistakably large
-        // broadband impacts. Quiet events use peak-drop confirmation so
-        // noise-like speech peaks cannot retrigger the keyboard stage.
-        const float immediateConfidence = magnitude > 0.12f && magnitudeRise > 0.08f
-            ? unit(localTransient * (1.0f + 0.15f * frameContext)) : 0.0f;
-        const float confidence = std::max(confirmedConfidence, immediateConfidence);
-        previousOnsetConfidence_ = onsetCandidate ? level * onsetNovelty : 0.0f;
+        const float confidence = unit(localTransient * onsetNovelty
+                                      * (1.0f + 0.15f * frameContext));
         if (confidence > 0.0f) {
             // The UI amount is perceptual, not a linear amplitude multiplier.
             // A linear mapping made everyday values (0.15-0.30) barely audible
@@ -327,8 +310,6 @@ private:
     double midLowPassState_ = 0.0;
     float previousMidBand_ = 0.0f;
     float previousHighBand_ = 0.0f;
-    float previousHighMagnitude_ = 0.0f;
-    float previousOnsetConfidence_ = 0.0f;
     float highBandEnvelope_ = 0.0f;
     float envelopeCoefficient_ = 0.999f;
     float midBandGain_ = 1.0f;
